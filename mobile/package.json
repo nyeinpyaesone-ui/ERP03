@@ -30,7 +30,7 @@
     "react-native-paper": "^5.11.0",
     "@tanstack/react-query": "^5.17.0",
     "axios": "^1.6.0",
-    "zustand": "^4.4.0",
+    "zustand": "^5.0.14",
     "date-fns": "^4.4.0",
     "react-native-chart-kit": "^6.12.0",
     "react-native-svg": "15.15.5"
