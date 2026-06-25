@@ -1,0 +1,68 @@
+{
+  "dashboard": {
+    "title": "ERP SOLUTION System Overview",
+    "tags": ["erp_solution", "kubernetes"],
+    "timezone": "Asia/Yangon",
+    "panels": [
+      {
+        "title": "API Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{job=~"erp_solution-api"}[5m])) by (status)",
+            "legendFormat": "{{status}}"
+          }
+        ]
+      },
+      {
+        "title": "API Latency (P95)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=~"erp_solution-api"}[5m])) by (le))",
+            "legendFormat": "P95"
+          }
+        ]
+      },
+      {
+        "title": "Pod CPU Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(container_cpu_usage_seconds_total{namespace="erp_solution"}[5m])) by (pod)",
+            "legendFormat": "{{pod}}"
+          }
+        ]
+      },
+      {
+        "title": "Pod Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(container_memory_working_set_bytes{namespace="erp_solution"}) by (pod)",
+            "legendFormat": "{{pod}}"
+          }
+        ]
+      },
+      {
+        "title": "Database Connections",
+        "type": "singlestat",
+        "targets": [
+          {
+            "expr": "pg_stat_activity_count{namespace="erp_solution"}"
+          }
+        ]
+      },
+      {
+        "title": "Redis Memory Usage",
+        "type": "singlestat",
+        "targets": [
+          {
+            "expr": "redis_memory_used_bytes{namespace="erp_solution"} / redis_memory_max_bytes{namespace="erp_solution"} * 100"
+          }
+        ]
+      }
+    ]
+  }
+}
+

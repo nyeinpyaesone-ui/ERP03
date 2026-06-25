@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ../
+      dockerfile: k8s/docker/Dockerfile.api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=erp_solution_development
+      - DB_USER=erp_solution_user
+      - DB_PASSWORD=dev_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=dev_jwt_secret_not_for_production
+      - API_BASE_URL=http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../uploads:/app/uploads
+    networks:
+      - erp_solution-network
+
+  web:
+    build:
+      context: ../
+      dockerfile: k8s/docker/Dockerfile.web
+    ports:
+      - "3001:80"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1
+    networks:
+      - erp_solution-network
+
+  worker:
+    build:
+      context: ../
+      dockerfile: k8s/docker/Dockerfile.worker
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=erp_solution_development
+      - DB_USER=erp_solution_user
+      - DB_PASSWORD=dev_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - WORKER_CONCURRENCY=2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - erp_solution-network
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=erp_solution_user
+      - POSTGRES_PASSWORD=dev_password
+      - POSTGRES_DB=erp_solution_development
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./base/postgres.yaml:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp_solution_user -d erp_solution_development"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - erp_solution-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - erp_solution-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@erp-domain.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    depends_on:
+      - postgres
+    networks:
+      - erp_solution-network
+
+  redisinsight:
+    image: redis/redisinsight:latest
+    ports:
+      - "5540:5540"
+    depends_on:
+      - redis
+    networks:
+      - erp_solution-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  erp_solution-network:
+    driver: bridge
+

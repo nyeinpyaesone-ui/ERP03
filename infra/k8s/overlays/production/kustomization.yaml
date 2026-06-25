@@ -1,0 +1,116 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: erp_solution
+
+resources:
+  - ../base
+
+commonLabels:
+  environment: production
+
+replicas:
+  - name: erp_solution-api
+    count: 5
+  - name: erp_solution-web
+    count: 3
+  - name: erp_solution-worker
+    count: 3
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: erp_solution-config
+    patch: |-
+      - op: replace
+        path: /data/APP_ENV
+        value: production
+      - op: replace
+        path: /data/DB_NAME
+        value: erp_solution_production
+      - op: replace
+        path: /data/API_BASE_URL
+        value: https://api.erp-domain.com
+      - op: replace
+        path: /data/API_RATE_LIMIT
+        value: "5000"
+      - op: replace
+        path: /data/ENABLE_AI_COPILOT
+        value: "true"
+      - op: replace
+        path: /data/ENABLE_PUSH_NOTIFICATIONS
+        value: "true"
+
+  - target:
+      kind: Ingress
+      name: erp_solution-ingress
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: api.erp-domain.com
+      - op: replace
+        path: /spec/rules/1/host
+        value: admin.erp-domain.com
+      - op: replace
+        path: /spec/rules/2/host
+        value: store.erp-domain.com
+      - op: replace
+        path: /spec/tls/0/hosts
+        value:
+          - api.erp-domain.com
+          - admin.erp-domain.com
+          - store.erp-domain.com
+          - erp-domain.com
+      - op: replace
+        path: /spec/tls/0/secretName
+        value: erp_solution-tls
+      - op: add
+        path: /metadata/annotations/nginx.ingress.kubernetes.io~1rate-limit
+        value: "5000"
+      - op: add
+        path: /metadata/annotations/nginx.ingress.kubernetes.io~1rate-limit-window
+        value: "1m"
+
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: erp_solution-api-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 5
+      - op: replace
+        path: /spec/maxReplicas
+        value: 50
+
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: erp_solution-web-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 20
+
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: erp_solution-worker-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 20
+
+images:
+  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-api
+    newTag: v3.0.0
+  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-web
+    newTag: v3.0.0
+  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-worker
+    newTag: v3.0.0
+
+---
+

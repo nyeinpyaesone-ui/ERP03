@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: erp_solution-uploads
+  namespace: erp_solution
+  labels:
+    app.kubernetes.io/name: erp_solution
+    app.kubernetes.io/component: storage
+    app.kubernetes.io/part-of: erp_solution
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: efs-sc
+  resources:
+    requests:
+      storage: 50Gi
+

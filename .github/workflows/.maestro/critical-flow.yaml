@@ -1,0 +1,21 @@
+appId: com.ai.erp
+---
+- launchApp
+- tapOn: "Email"
+- inputText: "test@company.com"
+- tapOn: "Password"
+- inputText: "SecurePass123!"
+- tapOn: "Sign In"
+- assertVisible: "Dashboard"
+- tapOn: "Invoices"
+- assertVisible: "All Invoices"
+- tapOn: "Add Invoice"
+- tapOn: "Customer"
+- inputText: "Myanmar Trading Co."
+- tapOn: "Amount"
+- inputText: "500000"
+- tapOn: "Create Invoice"
+- assertVisible: "Invoice created successfully"
+- tapOn: "Back"
+- assertVisible: "All Invoices"
+

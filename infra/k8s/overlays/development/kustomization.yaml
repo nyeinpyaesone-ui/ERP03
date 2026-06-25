@@ -1,0 +1,82 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: erp_solution-dev
+
+resources:
+  - ../base
+
+namePrefix: dev-
+nameSuffix: -dev
+
+commonLabels:
+  environment: development
+
+replicas:
+  - name: erp_solution-api
+    count: 1
+  - name: erp_solution-web
+    count: 1
+  - name: erp_solution-worker
+    count: 1
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: erp_solution-config
+    patch: |-
+      - op: replace
+        path: /data/APP_ENV
+        value: development
+      - op: replace
+        path: /data/DB_NAME
+        value: erp_solution_development
+      - op: replace
+        path: /data/API_BASE_URL
+        value: https://dev-api.erp-domain.com
+      - op: replace
+        path: /data/ENABLE_AI_COPILOT
+        value: "true"
+
+  - target:
+      kind: Ingress
+      name: erp_solution-ingress
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: dev-api.erp-domain.com
+      - op: replace
+        path: /spec/rules/1/host
+        value: dev-admin.erp-domain.com
+      - op: replace
+        path: /spec/rules/2/host
+        value: dev-store.erp-domain.com
+      - op: replace
+        path: /spec/tls/0/hosts
+        value:
+          - dev-api.erp-domain.com
+          - dev-admin.erp-domain.com
+          - dev-store.erp-domain.com
+      - op: replace
+        path: /spec/tls/0/secretName
+        value: dev-erp_solution-tls
+
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: erp_solution-api-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 3
+
+images:
+  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-api
+    newTag: develop
+  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-web
+    newTag: develop
+  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-worker
+    newTag: develop
+

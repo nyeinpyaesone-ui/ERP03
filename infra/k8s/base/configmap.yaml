@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: erp_solution-config
+  namespace: erp_solution
+  labels:
+    app.kubernetes.io/name: erp_solution
+    app.kubernetes.io/component: config
+data:
+  # Application
+  APP_ENV: "production"
+  APP_PORT: "3000"
+  APP_LOG_LEVEL: "info"
+
+  # Database
+  DB_HOST: "erp_solution-postgres"
+  DB_PORT: "5432"
+  DB_NAME: "erp_solution_production"
+  DB_POOL_MIN: "5"
+  DB_POOL_MAX: "20"
+
+  # Redis
+  REDIS_HOST: "erp_solution-redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+
+  # API
+  API_BASE_URL: "https://api.erp-domain.com"
+  API_VERSION: "v1"
+  API_RATE_LIMIT: "1000"
+  API_RATE_LIMIT_WINDOW: "900"
+
+  # Features
+  ENABLE_AI_COPILOT: "true"
+  ENABLE_BIOMETRIC: "true"
+  ENABLE_PUSH_NOTIFICATIONS: "true"
+  ENABLE_OTA_UPDATES: "true"
+
+  # Myanmar
+  DEFAULT_CURRENCY: "MMK"
+  DEFAULT_LANGUAGE: "my"
+  SUPPORTED_LANGUAGES: "en,my"
+
+  # Security
+  CORS_ORIGINS: "https://erp-domain.com,https://admin.erp-domain.com,https://store.erp-domain.com"
+  JWT_EXPIRY: "86400"
+  REFRESH_TOKEN_EXPIRY: "604800"
+
+  # File Storage
+  STORAGE_PROVIDER: "s3"
+  S3_REGION: "ap-southeast-1"
+  S3_BUCKET: "erp_solution-production"
+  MAX_UPLOAD_SIZE: "10485760"
+
+  # Email
+  SMTP_HOST: "smtp.sendgrid.net"
+  SMTP_PORT: "587"
+  SMTP_FROM: "noreply@erp-domain.com"
+  SMTP_FROM_NAME: "ERP SOLUTION"
+
+  # External Services
+  SENTRY_DSN: "https://sentry-dsn@sentry.io/123456"
+  EXPO_PROJECT_ID: "your-expo-project-id"
+
+  # Manufacturing
+  MRP_HORIZON_DAYS: "90"
+  MRP_CALCULATION_INTERVAL: "3600"
+
+  # POS
+  POS_RECEIPT_PRINTER_ENABLED: "true"
+  POS_BARCODE_SCANNER_ENABLED: "true"
+  POS_CASH_DRAWER_ENABLED: "true"
+

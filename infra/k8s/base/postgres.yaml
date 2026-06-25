@@ -1,0 +1,191 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: erp_solution-postgres
+  namespace: erp_solution
+  labels:
+    app.kubernetes.io/name: erp_solution-postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: erp_solution
+spec:
+  serviceName: erp_solution-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: erp_solution-postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: erp_solution-postgres
+        app.kubernetes.io/component: database
+        app.kubernetes.io/part-of: erp_solution
+    spec:
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - name: postgres
+          containerPort: 5432
+          protocol: TCP
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: erp_solution-config
+              key: DB_NAME
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: erp_solution-secrets
+              key: DB_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: erp_solution-secrets
+              key: DB_PASSWORD
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - $(POSTGRES_USER)
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - $(POSTGRES_USER)
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        - name: init-scripts
+          mountPath: /docker-entrypoint-initdb.d
+        - name: postgres-config
+          mountPath: /etc/postgresql/postgresql.conf
+          subPath: postgresql.conf
+      volumes:
+      - name: init-scripts
+        configMap:
+          name: erp_solution-postgres-init
+      - name: postgres-config
+        configMap:
+          name: erp_solution-postgres-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app.kubernetes.io/name: erp_solution-postgres
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 100Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: erp_solution-postgres
+  namespace: erp_solution
+  labels:
+    app.kubernetes.io/name: erp_solution-postgres
+    app.kubernetes.io/component: database
+spec:
+  type: ClusterIP
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: erp_solution-postgres
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: erp_solution-postgres-init
+  namespace: erp_solution
+data:
+  01-init.sql: |
+    -- Create extensions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+    CREATE EXTENSION IF NOT EXISTS "btree_gin";
+
+    -- Create schemas
+    CREATE SCHEMA IF NOT EXISTS accounting;
+    CREATE SCHEMA IF NOT EXISTS inventory;
+    CREATE SCHEMA IF NOT EXISTS manufacturing;
+    CREATE SCHEMA IF NOT EXISTS hr;
+    CREATE SCHEMA IF NOT EXISTS ecommerce;
+    CREATE SCHEMA IF NOT EXISTS pos;
+
+    -- Set default privileges
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO erp_solution_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA accounting GRANT ALL ON TABLES TO erp_solution_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA inventory GRANT ALL ON TABLES TO erp_solution_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA manufacturing GRANT ALL ON TABLES TO erp_solution_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA hr GRANT ALL ON TABLES TO erp_solution_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA ecommerce GRANT ALL ON TABLES TO erp_solution_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA pos GRANT ALL ON TABLES TO erp_solution_user;
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: erp_solution-postgres-config
+  namespace: erp_solution
+data:
+  postgresql.conf: |
+    listen_addresses = '*'
+    max_connections = 200
+    shared_buffers = 512MB
+    effective_cache_size = 1536MB
+    maintenance_work_mem = 128MB
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    work_mem = 2621kB
+    min_wal_size = 1GB
+    max_wal_size = 4GB
+    max_worker_processes = 4
+    max_parallel_workers_per_gather = 2
+    max_parallel_workers = 4
+    max_parallel_maintenance_workers = 2
+    log_statement = 'mod'
+    log_duration = on
+    log_min_duration_statement = 1000
+    log_checkpoints = on
+    log_connections = on
+    log_disconnections = on
+    log_lock_waits = on
+    log_temp_files = 0
+    log_autovacuum_min_duration = 0
+    log_error_verbosity = default
+    log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+    log_timezone = 'Asia/Yangon'
+    timezone = 'Asia/Yangon'
+    lc_messages = 'en_US.UTF-8'
+    lc_monetary = 'en_US.UTF-8'
+    lc_numeric = 'en_US.UTF-8'
+    lc_time = 'en_US.UTF-8'
+

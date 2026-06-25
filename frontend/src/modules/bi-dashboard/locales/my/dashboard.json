@@ -1,0 +1,28 @@
+{
+  "dashboard": {
+    "title": "ဘီဇနက်လုပ်ငန်း",
+    "askAI": "AI ကိုမေးပါ",
+    "kpi": {
+      "revenue": "ရောင်းရငွေ",
+      "profitMargin": "အမြတ်ရာခိုင်နှုန်း",
+      "customerAcquisition": "ဖောက်သည်အသစ်",
+      "inventoryTurnover": "ကုန်လက်ကျန်လည်ပတ်နှုန်း",
+      "averageOrderValue": "ဘောင်ချာပျမ်းမျှ",
+      "collectionPeriod": "ငွေကောက်ခံချိန်"
+    },
+    "charts": {
+      "revenue": "ရောင်းရငွေသမိုင်း",
+      "forecast": "ရောင်းရမှန်းချိန် (AI)",
+      "inventory": "ကုန်လက်ကျန်တန်ဖိုး",
+      "inventoryDist": "ကုန်လက်ကျန်အခြေအနေ",
+      "customers": "ဖောက်သည်အသစ်ရရှိမှု"
+    }
+  },
+  "revenue": {
+    "title": "ရောင်းရငွေခွဲခြမ်းစိတ်ဖြာခြင်း"
+  },
+  "inventory": {
+    "analytics": "ကုန်လက်ကျန်ခွဲခြမ်းစိတ်ဖြာခြင်း"
+  }
+}
+
