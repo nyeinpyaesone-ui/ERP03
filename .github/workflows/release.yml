@@ -22,7 +22,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Build and push backend
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./backend
           push: true
@@ -31,7 +31,7 @@ jobs:
             ${{ vars.DOCKER_USER }}/erp-solution-backend:latest
 
       - name: Build and push frontend
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./frontend
           push: true
