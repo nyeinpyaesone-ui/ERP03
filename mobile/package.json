@@ -9,7 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "expo": "~56.0.12",
+    "expo": "~57.0.1",
     "expo-status-bar": "~56.0.4",
     "expo-secure-store": "~56.0.4",
     "expo-local-authentication": "~56.0.4",
