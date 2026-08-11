@@ -3,7 +3,7 @@ name: Release Images
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v*.*.*'
   workflow_dispatch:
 
 permissions:
@@ -26,13 +26,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate Docker01 configuration
+        env:
+          DOCKER_USER: ${{ secrets.D2_USER }}
+          DOCKER_PASS: ${{ secrets.D2_PASS }}
+          ERP_CORE_URL: ${{ vars.ERP_CORE }}
+          FRONTEND_URL: ${{ vars.FRONTEND }}
+          BACKEND_URL: ${{ vars.BACKEND }}
+        run: |
+          set -euo pipefail
+          test -n "$DOCKER_USER"
+          test -n "$DOCKER_PASS"
+          for value in "$ERP_CORE_URL" "$FRONTEND_URL" "$BACKEND_URL"; do
+            case "$value" in
+              https://hub.docker.com/repository/docker/*/) ;;
+              *) echo "Invalid Docker01 Docker Hub repository URL" >&2; exit 1 ;;
+            esac
+          done
+          test "${ERP_CORE_URL#https://hub.docker.com/repository/docker/}" = "powerrangeranikg/erp03/"
+          test "${FRONTEND_URL#https://hub.docker.com/repository/docker/}" = "powerrangeranikg/frontend/"
+          test "${BACKEND_URL#https://hub.docker.com/repository/docker/}" = "powerrangeranikg/backend/"
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.D2_USER }}
           password: ${{ secrets.D2_PASS }}
 
-      - name: Resolve Docker image names from Docker01 variables
+      - name: Resolve Docker image names
         id: images
         env:
           ERP_CORE_URL: ${{ vars.ERP_CORE }}
@@ -40,12 +61,6 @@ jobs:
           BACKEND_URL: ${{ vars.BACKEND }}
         run: |
           set -euo pipefail
-          for value in "$ERP_CORE_URL" "$FRONTEND_URL" "$BACKEND_URL"; do
-            case "$value" in
-              https://hub.docker.com/repository/docker/*/) ;;
-              *) echo "Invalid Docker Hub repository URL: $value" >&2; exit 1 ;;
-            esac
-          done
           erp03="${ERP_CORE_URL#https://hub.docker.com/repository/docker/}"
           erp03="${erp03%/}"
           frontend="${FRONTEND_URL#https://hub.docker.com/repository/docker/}"
