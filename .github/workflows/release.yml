@@ -25,14 +25,30 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Validate release image configuration
+        shell: bash
+        env:
+          ERP_CORE: ${{ vars.ERP_CORE }}
+          BACKEND: ${{ vars.BACKEND }}
+          FRONTEND: ${{ vars.FRONTEND }}
+        run: |
+          set -euo pipefail
+          for value in "$ERP_CORE" "$BACKEND" "$FRONTEND"; do
+            test -n "$value"
+            case "$value" in
+              https://hub.docker.com/repository/docker/*) ;;
+              *) echo "Invalid Docker Hub repository URL configured" >&2; exit 1 ;;
+            esac
+          done
+
       - name: Build and push backend
         uses: docker/build-push-action@v6
         with:
           context: ./backend
           push: true
           tags: |
-            ${{ secrets.D2_USER }}/backend:${{ github.ref_name }}
-            ${{ secrets.D2_USER }}/backend:latest
+            ${{ vars.BACKEND }}:${{ github.ref_name }}
+            ${{ vars.BACKEND }}:latest
 
       - name: Build and push frontend
         uses: docker/build-push-action@v6
@@ -41,5 +57,5 @@ jobs:
           file: ./backend/frontend-react/Dockerfile
           push: true
           tags: |
-            ${{ secrets.D2_USER }}/frontend:${{ github.ref_name }}
-            ${{ secrets.D2_USER }}/frontend:latest
+            ${{ vars.FRONTEND }}:${{ github.ref_name }}
+            ${{ vars.FRONTEND }}:latest
