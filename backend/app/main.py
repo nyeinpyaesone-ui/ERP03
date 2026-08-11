@@ -1,7 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from time import perf_counter
 
 from app.database import engine, Base
 from app.routers import (
@@ -11,6 +13,17 @@ from app.routers import (
     bulk_import_export, migrations
 )
 from app.config import settings
+
+HTTP_REQUESTS = Counter(
+    "http_requests_total",
+    "Total HTTP requests",
+    ["method", "path", "status"],
+)
+HTTP_REQUEST_DURATION = Histogram(
+    "http_request_duration_seconds",
+    "HTTP request duration in seconds",
+    ["method", "path"],
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,6 +36,15 @@ app = FastAPI(
     version=settings.APP_VERSION,
     lifespan=lifespan
 )
+
+@app.middleware("http")
+async def metrics_middleware(request, call_next):
+    start = perf_counter()
+    response = await call_next(request)
+    path = request.url.path
+    HTTP_REQUESTS.labels(request.method, path, str(response.status_code)).inc()
+    HTTP_REQUEST_DURATION.labels(request.method, path).observe(perf_counter() - start)
+    return response
 
 app.add_middleware(
     CORSMiddleware,
@@ -77,3 +99,6 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
+@app.get("/metrics", include_in_schema=False)
+async def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
