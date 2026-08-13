@@ -3,7 +3,7 @@
 # Pinned for reproducible CI/builds.
 
 fastapi==0.115.6
-uvicorn[standard]==0.34.0
+uvicorn[standard]==0.52.1
 SQLAlchemy==2.0.37
 psycopg2-binary==2.9.10
 pydantic==2.10.5
@@ -16,7 +16,7 @@ passlib[bcrypt]==1.7.4
 bcrypt==4.2.1
 redis==5.2.1
 httpx==0.28.1
-stripe==11.6.0
+stripe==15.4.0
 alembic==1.14.0
 aiofiles==24.1.0
 prometheus-client==0.21.1
