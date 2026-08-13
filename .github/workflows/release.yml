@@ -1,17 +1,26 @@
-name: Release
+name: Release Images
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v[0-9]+\.[0-9]+\.[0-9]+'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  docker:
+  publish:
+    name: Build and publish immutable release images
     runs-on: ubuntu-latest
     environment: Docker01
-    permissions:
-      contents: read
-
+    outputs:
+      frontend_digest: ${{ steps.frontend.outputs.digest }}
+      backend_digest: ${{ steps.backend.outputs.digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -22,40 +31,72 @@ jobs:
           username: ${{ secrets.D2_USER }}
           password: ${{ secrets.D2_PASS }}
 
+      - name: Resolve Docker image names from Docker01 variables
+        id: images
+        env:
+          FRONTEND_URL: ${{ vars.FRONTEND }}
+          BACKEND_URL: ${{ vars.BACKEND }}
+        run: |
+          set -euo pipefail
+          for value in "$FRONTEND_URL" "$BACKEND_URL"; do
+            case "$value" in
+              https://hub.docker.com/repository/docker/*/) ;;
+              *) echo "Invalid Docker Hub repository URL: $value" >&2; exit 1 ;;
+            esac
+          done
+          frontend="${FRONTEND_URL#https://hub.docker.com/repository/docker/}"
+          frontend="${frontend%/}"
+          backend="${BACKEND_URL#https://hub.docker.com/repository/docker/}"
+          backend="${backend%/}"
+          {
+            echo "frontend=$frontend"
+            echo "backend=$backend"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Validate release image configuration
-        shell: bash
-        env:
-          ERP_CORE: ${{ vars.ERP_CORE }}
-          BACKEND: ${{ vars.BACKEND }}
-          FRONTEND: ${{ vars.FRONTEND }}
-        run: |
-          set -euo pipefail
-          for value in "$ERP_CORE" "$BACKEND" "$FRONTEND"; do
-            test -n "$value"
-            case "$value" in
-              https://hub.docker.com/repository/docker/*) ;;
-              *) echo "Invalid Docker Hub repository URL configured" >&2; exit 1 ;;
-            esac
-          done
+      - name: Publish frontend image
+        id: frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.images.outputs.frontend }}:${{ github.ref_name }}
+          provenance: true
+          sbom: true
 
-      - name: Build and push backend
+      - name: Publish backend image
+        id: backend
         uses: docker/build-push-action@v6
         with:
           context: ./backend
+          file: ./backend/Dockerfile
           push: true
-          tags: |
-            ${{ vars.BACKEND }}:${{ github.ref_name }}
-            ${{ vars.BACKEND }}:latest
+          tags: ${{ steps.images.outputs.backend }}:${{ github.ref_name }}
+          provenance: true
+          sbom: true
 
-      - name: Build and push frontend
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend/frontend-react
-          file: ./backend/frontend-react/Dockerfile
-          push: true
-          tags: |
-            ${{ vars.FRONTEND }}:${{ github.ref_name }}
-            ${{ vars.FRONTEND }}:latest
+  staging-gate:
+    name: Staging approval gate
+    needs: publish
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Record release digests
+        run: |
+          echo "Frontend digest: ${{ needs.publish.outputs.frontend_digest }}"
+          echo "Backend digest: ${{ needs.publish.outputs.backend_digest }}"
+          echo "Staging deployment endpoint is intentionally not guessed."
+
+  production-gate:
+    name: Production approval gate
+    needs: staging-gate
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Confirm production promotion boundary
+        run: |
+          echo "Production protection rules passed."
+          echo "Production deployment remains disabled until the approved deployment mechanism is configured."
