@@ -31,7 +31,7 @@ jobs:
           username: ${{ secrets.D2_USER }}
           password: ${{ secrets.D2_PASS }}
 
-      - name: Resolve Docker image names from Docker01 variables
+      - name: Resolve Docker image names
         id: images
         env:
           FRONTEND_URL: ${{ vars.FRONTEND }}
@@ -60,8 +60,8 @@ jobs:
         id: frontend
         uses: docker/build-push-action@v6
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
+          context: ./backend/frontend-react
+          file: ./backend/frontend-react/Dockerfile
           push: true
           tags: ${{ steps.images.outputs.frontend }}:${{ github.ref_name }}
           provenance: true
@@ -88,7 +88,7 @@ jobs:
         run: |
           echo "Frontend digest: ${{ needs.publish.outputs.frontend_digest }}"
           echo "Backend digest: ${{ needs.publish.outputs.backend_digest }}"
-          echo "Staging deployment endpoint is intentionally not guessed."
+          echo "Configure the staging environment's deployment integration to consume these immutable digests."
 
   production-gate:
     name: Production approval gate
@@ -98,5 +98,5 @@ jobs:
     steps:
       - name: Confirm production promotion boundary
         run: |
-          echo "Production protection rules passed."
-          echo "Production deployment remains disabled until the approved deployment mechanism is configured."
+          echo "Production environment approval passed."
+          echo "Deployment must consume the exact approved image digests from the release job."
