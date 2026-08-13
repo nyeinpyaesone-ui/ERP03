@@ -12,7 +12,7 @@
     "expo": "~57.0.1",
     "expo-status-bar": "~57.0.1",
     "expo-secure-store": "~57.0.0",
-    "expo-local-authentication": "~56.0.4",
+    "expo-local-authentication": "~57.0.2",
     "expo-notifications": "~57.0.2",
     "expo-camera": "~56.0.8",
     "expo-image-picker": "~57.0.1",
