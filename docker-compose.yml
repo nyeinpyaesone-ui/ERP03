@@ -3,9 +3,9 @@ services:
     image: postgres:15.18-alpine3.24
     container_name: erp_solution-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:-erp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-erp_solution}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -31,9 +31,9 @@ services:
       dockerfile: Dockerfile
     container_name: erp_solution-backend
     environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_URL: ${DATABASE_URL:-}
       REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      SECRET_KEY: ${SECRET_KEY:-}
       ENVIRONMENT: development
       DEBUG: "true"
     ports:
