@@ -44,7 +44,7 @@ jobs:
         run: python -c "from app.config import settings; assert settings.DATABASE_URL.startswith('postgresql://'); assert len(settings.SECRET_KEY) >= 32"
 
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '20.20.2'
           package-manager-cache: false
