@@ -69,6 +69,17 @@ jobs:
           SECRET_KEY: ci-only-secret-key-012345678901234567890123
         run: docker compose -f docker-compose.yml config --quiet
 
+      - name: Validate production Compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p secrets
+          trap 'rm -rf secrets' EXIT
+          printf '%s\n' 'ci-only-password' > secrets/postgres_password.txt
+          printf '%s\n' 'postgresql://erp:ci-only-password@postgres:5432/erp_solution' > secrets/database_url.txt
+          printf '%s\n' 'ci-only-secret-key-012345678901234567890123' > secrets/secret_key.txt
+          docker compose -f docker-compose.yml -f compose.production.yml config --quiet
+
       - name: Build backend image
         uses: docker/build-push-action@v6
         with:
