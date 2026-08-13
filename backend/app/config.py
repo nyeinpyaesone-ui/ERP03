@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
 
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
+
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
@@ -59,8 +61,8 @@ class Settings(BaseSettings):
             self.SECRET_KEY = secret_key
         if not self.DATABASE_URL:
             raise ValueError("DATABASE_URL or DATABASE_URL_FILE is required")
-        if not self.SECRET_KEY:
-            raise ValueError("SECRET_KEY or SECRET_KEY_FILE is required")
+        if len(self.SECRET_KEY) < 32:
+            raise ValueError("SECRET_KEY must contain at least 32 characters")
 
 
 @lru_cache()
