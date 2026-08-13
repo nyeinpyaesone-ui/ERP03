@@ -19,4 +19,4 @@ httpx==0.28.1
 stripe==15.4.0
 alembic==1.14.0
 aiofiles==24.1.0
-prometheus-client==0.21.1
+prometheus-client==0.26.0
