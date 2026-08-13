@@ -2,6 +2,7 @@ services:
   postgres:
     restart: unless-stopped
     environment:
+      POSTGRES_PASSWORD: null
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     secrets:
       - postgres_password
@@ -12,6 +13,8 @@ services:
   backend:
     restart: unless-stopped
     environment:
+      DATABASE_URL: null
+      SECRET_KEY: null
       DATABASE_URL_FILE: /run/secrets/database_url
       SECRET_KEY_FILE: /run/secrets/secret_key
       ENVIRONMENT: production
