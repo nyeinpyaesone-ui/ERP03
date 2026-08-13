@@ -1,9 +1,19 @@
 # Runtime secrets
 
-Production secret files are intentionally not committed. Create these files on the deployment host or provide equivalent CI/CD secret injection:
+Production secret files are intentionally not committed.
 
-- `postgres_password.txt`
-- `database_url.txt`
-- `secret_key.txt`
+Create on the deployment host:
 
-Never commit real credentials. Keep `secrets/*` ignored by Git.
+- `secrets/postgres_password.txt` — PostgreSQL password only.
+- `secrets/database_url.txt` — complete SQLAlchemy PostgreSQL URL using the same database credentials.
+- `secrets/secret_key.txt` — application signing key, minimum 32 characters; generate with `openssl rand -hex 32` or stronger.
+
+Production startup:
+
+```bash
+docker compose -f docker-compose.yml -f compose.production.yml up -d --build
+```
+
+The production overlay removes development bind mounts/reload mode, does not publish PostgreSQL directly, and injects `DATABASE_URL` and `SECRET_KEY` through Docker secrets.
+
+Never commit real credentials, `.env`, or files under `secrets/`.
