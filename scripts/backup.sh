@@ -1,68 +1,52 @@
 #!/usr/bin/env bash
 ###############################################################################
-# ERP SOLUTION — Backup Script
+# ERP03 — Safe PostgreSQL backup
 # Usage: ./scripts/backup.sh [output_dir]
+# Required: pg_dump (or docker compose service "postgres")
+# Optional: GPG_RECIPIENT for client-side encryption of the database dump.
 ###############################################################################
-
-set -e
+set -Eeuo pipefail
 
 OUTPUT_DIR="${1:-./backups}"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_NAME="erp_backup_${TIMESTAMP}"
-BACKUP_PATH="${OUTPUT_DIR}/${BACKUP_NAME}"
-
-echo "=========================================="
-echo "  ERP SOLUTION Backup"
-echo "=========================================="
-echo "  Destination: ${BACKUP_PATH}"
-echo ""
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+BACKUP_PATH="${OUTPUT_DIR}/erp03_${TIMESTAMP}"
+DB_USER="${DB_USER:-erp}"
+DB_NAME="${DB_NAME:-erp_solution}"
+GPG_RECIPIENT="${GPG_RECIPIENT:-}"
 
 mkdir -p "${BACKUP_PATH}"
 
-# Backup source code (excluding .git and node_modules)
-echo "[1/4] Backing up source code..."
-tar -czf "${BACKUP_PATH}/source_code.tar.gz"     --exclude='.git'     --exclude='node_modules'     --exclude='venv'     --exclude='__pycache__'     --exclude='*.pyc'     .
-echo "  ✓ Source code backed up"
-
-# Backup database (if running)
-echo "[2/4] Backing up database..."
-if docker-compose ps postgres &>/dev/null; then
-    docker-compose exec -T postgres pg_dump -U erp erp_solution > "${BACKUP_PATH}/database.sql"
-    echo "  ✓ Database backed up"
+if docker compose ps postgres >/dev/null 2>&1; then
+  echo "Backing up PostgreSQL from compose service..."
+  docker compose exec -T postgres pg_dump -U "${DB_USER}" "${DB_NAME}" > "${BACKUP_PATH}/database.sql"
+elif command -v pg_dump >/dev/null 2>&1; then
+  : "${DATABASE_URL:?DATABASE_URL is required when pg_dump is used directly}"
+  echo "Backing up PostgreSQL using pg_dump..."
+  pg_dump "${DATABASE_URL}" > "${BACKUP_PATH}/database.sql"
 else
-    echo "  ! PostgreSQL not running, skipping database backup"
+  echo "ERROR: PostgreSQL is unavailable (no compose postgres service and no pg_dump)." >&2
+  exit 1
 fi
 
-# Backup environment files
-echo "[3/4] Backing up environment files..."
-if [ -f "backend/.env" ]; then
-    cp backend/.env "${BACKUP_PATH}/backend.env"
+if [[ -n "${GPG_RECIPIENT}" ]]; then
+  command -v gpg >/dev/null 2>&1 || { echo "ERROR: gpg is required for encrypted backups." >&2; exit 1; }
+  gpg --batch --yes --trust-model always --recipient "${GPG_RECIPIENT}" \
+      --output "${BACKUP_PATH}/database.sql.gpg" --encrypt "${BACKUP_PATH}/database.sql"
+  rm -f "${BACKUP_PATH}/database.sql"
+  DB_ARTIFACT="database.sql.gpg"
+else
+  echo "WARNING: GPG_RECIPIENT is not set; database dump is NOT encrypted." >&2
+  DB_ARTIFACT="database.sql"
 fi
-if [ -f "frontend/.env" ]; then
-    cp frontend/.env "${BACKUP_PATH}/frontend.env"
-fi
-echo "  ✓ Environment files backed up"
 
-# Create backup manifest
-echo "[4/4] Creating backup manifest..."
-cat > "${BACKUP_PATH}/manifest.txt" << EOF
-ERP SOLUTION Backup
-======================
-Date: $(date)
-Version: $(git describe --tags --always 2>/dev/null || echo "unknown")
-Commit: $(git rev-parse HEAD 2>/dev/null || echo "unknown")
-Branch: $(git branch --show-current 2>/dev/null || echo "unknown")
+cat > "${BACKUP_PATH}/manifest.txt" <<EOF
+ERP03 backup
+Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+Version: $(git describe --tags --always 2>/dev/null || echo unknown)
+Commit: $(git rev-parse HEAD 2>/dev/null || echo unknown)
+Database artifact: ${DB_ARTIFACT}
 
-Contents:
-- source_code.tar.gz (full source)
-- database.sql (PostgreSQL dump)
-- backend.env (backend configuration)
-- frontend.env (frontend configuration)
+Secrets and .env files are intentionally NOT included.
 EOF
-echo "  ✓ Manifest created"
 
-echo ""
-echo "=========================================="
-echo "  Backup Complete!"
-echo "  Location: ${BACKUP_PATH}"
-echo "=========================================="
+printf 'Backup complete: %s\n' "${BACKUP_PATH}"
