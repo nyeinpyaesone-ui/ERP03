@@ -46,4 +46,3 @@ export const getEnvVars = (): EnvConfig => {
 };
 
 export const env = getEnvVars();
-

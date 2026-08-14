@@ -19,12 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: Docker01
     outputs:
-      erp03_digest: ${{ steps.erp03.outputs.digest }}
       frontend_digest: ${{ steps.frontend.outputs.digest }}
       backend_digest: ${{ steps.backend.outputs.digest }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate Docker01 configuration
         env:
@@ -56,7 +55,6 @@ jobs:
       - name: Resolve Docker image names
         id: images
         env:
-          ERP_CORE_URL: ${{ vars.ERP_CORE }}
           FRONTEND_URL: ${{ vars.FRONTEND }}
           BACKEND_URL: ${{ vars.BACKEND }}
         run: |
@@ -68,31 +66,19 @@ jobs:
           backend="${BACKEND_URL#https://hub.docker.com/repository/docker/}"
           backend="${backend%/}"
           {
-            echo "erp03=$erp03"
             echo "frontend=$frontend"
             echo "backend=$backend"
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Publish ERP Core image
-        id: erp03
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ steps.images.outputs.erp03 }}:${{ github.ref_name }}
-          provenance: true
-          sbom: true
+        uses: docker/setup-buildx-action@v4
 
       - name: Publish frontend image
         id: frontend
         uses: docker/build-push-action@v6
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
+          context: ./backend/frontend-react
+          file: ./backend/frontend-react/Dockerfile
           push: true
           tags: ${{ steps.images.outputs.frontend }}:${{ github.ref_name }}
           provenance: true
@@ -117,10 +103,9 @@ jobs:
     steps:
       - name: Record release digests
         run: |
-          echo "ERP Core digest: ${{ needs.publish.outputs.erp03_digest }}"
           echo "Frontend digest: ${{ needs.publish.outputs.frontend_digest }}"
           echo "Backend digest: ${{ needs.publish.outputs.backend_digest }}"
-          echo "Staging deployment endpoint is intentionally not guessed."
+          echo "Configure the staging environment's deployment integration to consume these immutable digests."
 
   production-gate:
     name: Production approval gate
@@ -130,5 +115,5 @@ jobs:
     steps:
       - name: Confirm production promotion boundary
         run: |
-          echo "Production protection rules passed."
-          echo "Production deployment remains disabled until the approved deployment mechanism is configured."
+          echo "Production environment approval passed."
+          echo "Deployment must consume the exact approved image digests from the release job."

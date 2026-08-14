@@ -17,7 +17,6 @@ frontend
 mobile
 backend-v1.8
 backend-v2.1
-.git
 .github
 *.log
 uploads/*
