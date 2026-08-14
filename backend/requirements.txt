@@ -7,9 +7,9 @@ uvicorn[standard]==0.52.1
 SQLAlchemy==2.0.37
 psycopg2-binary==2.9.12
 pydantic==2.13.4
-pydantic-settings==2.7.1
+pydantic-settings==2.15.0
 python-dotenv==1.0.1
-python-multipart==0.0.20
+python-multipart==0.0.32
 email-validator==2.3.0
 python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
@@ -18,5 +18,5 @@ redis==5.2.1
 httpx==0.28.1
 stripe==15.4.0
 alembic==1.14.0
-aiofiles==24.1.0
+aiofiles==25.1.0
 prometheus-client==0.26.0
