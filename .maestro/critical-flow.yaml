@@ -1,10 +1,11 @@
 appId: com.ai.erp
 ---
+# Critical UI flow. Use only with a dedicated test environment/account.
 - launchApp
 - tapOn: "Email"
-- inputText: "test@company.com"
+- inputText: "test@example.invalid"
 - tapOn: "Password"
-- inputText: "SecurePass123!"
+- inputText: "TEST_ONLY_PASSWORD"
 - tapOn: "Sign In"
 - assertVisible: "Dashboard"
 - tapOn: "Invoices"
@@ -18,4 +19,3 @@ appId: com.ai.erp
 - assertVisible: "Invoice created successfully"
 - tapOn: "Back"
 - assertVisible: "All Invoices"
-

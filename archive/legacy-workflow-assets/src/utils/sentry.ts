@@ -21,7 +21,3 @@ export const captureException = (error: Error, context?: Record<string, any>) =>
 export const setUserContext = (userId: string, email: string, role: string) => {
   Sentry.setUser({ id: userId, email, role });
 };
-
----
-
-
