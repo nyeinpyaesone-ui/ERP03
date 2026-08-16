@@ -268,35 +268,52 @@ async def deep_health_check(db: Session = Depends(get_db)):
         
         checks["table_queries"] = table_checks
         
-        # Check 2: Read/write test
+        # Check 2: Read/write test - SQLite compatible version
         try:
-            # Create a test entry in a temporary table or use pg_test_fsync
-            db.execute(text("SELECT pg_is_in_recovery()"))
-            checks["read_write"] = {"status": "ok", "is_replica": False}
+            # Use SQLite-compatible read/write test
+            db.execute(text("SELECT 1"))
+            is_sqlite = "sqlite" in str(db.bind.engine.dialect.name).lower()
+            
+            if not is_sqlite:
+                # PostgreSQL-specific check
+                result = db.execute(text("SELECT pg_is_in_recovery()"))
+                is_replica = result.fetchone()[0]
+                checks["read_write"] = {"status": "ok", "is_replica": is_replica}
+            else:
+                # SQLite just confirms it can read/write
+                checks["read_write"] = {"status": "ok", "is_sqlite": True}
         except Exception as e:
             checks["read_write"] = {"status": "error", "error": str(e)}
             overall_healthy = False
         
-        # Check 3: Sequence counters
+        # Check 3: Sequence counters (PostgreSQL only)
         sequence_checks = {}
-        sequences = ["users_id_seq", "companies_id_seq", "invoices_id_seq"]
-        for seq in sequences:
-            try:
-                result = db.execute(text(f"SELECT last_value FROM {seq}"))
-                last_value = result.fetchone()[0]
-                sequence_checks[seq] = {"status": "ok", "last_value": last_value}
-            except Exception as e:
-                sequence_checks[seq] = {"status": "warning", "error": str(e)}
+        is_sqlite = "sqlite" in str(db.bind.engine.dialect.name).lower()
+        if not is_sqlite:
+            sequences = ["users_id_seq", "companies_id_seq", "invoices_id_seq"]
+            for seq in sequences:
+                try:
+                    result = db.execute(text(f"SELECT last_value FROM {seq}"))
+                    last_value = result.fetchone()[0]
+                    sequence_checks[seq] = {"status": "ok", "last_value": last_value}
+                except Exception as e:
+                    sequence_checks[seq] = {"status": "warning", "error": str(e)}
+        else:
+            sequence_checks["note"] = "SQLite uses AUTOINCREMENT, no sequences"
         
         checks["sequences"] = sequence_checks
         
         # Check 4: Database size
         try:
-            result = db.execute(text("""
-                SELECT pg_size_pretty(pg_database_size(current_database())) as size
-            """))
-            db_size = result.fetchone()[0]
-            checks["database_size"] = db_size
+            is_sqlite = "sqlite" in str(db.bind.engine.dialect.name).lower()
+            if not is_sqlite:
+                result = db.execute(text("""
+                    SELECT pg_size_pretty(pg_database_size(current_database())) as size
+                """))
+                db_size = result.fetchone()[0]
+                checks["database_size"] = db_size
+            else:
+                checks["database_size"] = "N/A (SQLite)"
         except Exception as e:
             checks["database_size"] = {"error": str(e)}
         
