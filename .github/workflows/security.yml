@@ -11,7 +11,7 @@ on:
     branches: [main]
   schedule:
     - cron: '0 0 * * 0'
-  workflow_dispatch:   # added for manual trigger
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -23,25 +23,26 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: actions/dependency-review-action@29a786fbc64a2138a29d614ef883983e4cf631e6 # v4.8.0
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/dependency-review-action@29a786fbc64a2138a29d614ef883983e4cf631e6
 
   codeql:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: github/codeql-action/init@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4.35.4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: github/codeql-action/init@68bde559dea0fdcac2102bfdf6230c5f70eb485e
         with:
           languages: python, javascript
-      - uses: github/codeql-action/autobuild@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4.35.4
-      - uses: github/codeql-action/analyze@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4.35.4
+          # Don't run autobuild for JS – we'll just analyze the source
+          build-mode: none
+      - uses: github/codeql-action/analyze@68bde559dea0fdcac2102bfdf6230c5f70eb485e
 
   gitleaks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@65aa59d8c2e97dee44bf56a0c23e2079719c7d6f # v2.3.0 (correct SHA)
+      - uses: gitleaks/gitleaks-action@1938557f6a58837331b99822ab17b8e536e7bef9  # commit SHA of the tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
