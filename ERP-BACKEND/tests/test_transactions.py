@@ -428,12 +428,6 @@ class TestDataIntegrityAfterFailures:
     
     def test_unique_constraint_enforcement(self, client, db_session, authenticated_headers):
         """Test unique constraints are enforced across failures"""
-        # Create employee with unique email
-        employee1_data = {
-            "first_name": "Unique",
-            "last_name": "Employee1",
-            "email": "unique.employee@test.com",
-            "department": "Engineering"
         # Create employee with unique employee_code (required field)
         employee1_data = {
             "employee_code": "UNIQUE-EMP-001",

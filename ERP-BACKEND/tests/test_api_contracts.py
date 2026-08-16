@@ -436,22 +436,23 @@ class TestHealthEndpoints:
     
     def test_health_db(self, client):
         """Test database health endpoint."""
-        response = client.get("/health/db")
+        # Health endpoints are under /api/v1/health prefix
+        response = client.get("/api/v1/health/db")
         assert response.status_code in [200, 503]
     
     def test_health_migrations(self, client):
         """Test migrations health endpoint."""
-        response = client.get("/health/migrations")
+        response = client.get("/api/v1/health/migrations")
         assert response.status_code in [200, 503]
     
     def test_health_ready(self, client):
         """Test readiness endpoint."""
-        response = client.get("/health/ready")
+        response = client.get("/api/v1/health/ready")
         assert response.status_code in [200, 503]
     
     def test_health_live(self, client):
         """Test liveness endpoint."""
-        response = client.get("/health/live")
+        response = client.get("/api/v1/health/live")
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "alive"
