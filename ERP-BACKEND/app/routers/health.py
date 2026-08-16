@@ -35,7 +35,18 @@ def get_alembic_config() -> Config:
 
 
 def get_migration_status(db: Session) -> Dict[str, Any]:
-    """Get current migration status."""
+    """
+    Determine whether the database is synchronized with the latest Alembic migration.
+    
+    Parameters:
+    	db (Session): Database session used to read the current migration revision.
+    
+    Returns:
+    	Dict[str, Any]: Migration status containing current and head revisions, synchronization status, pending migration count, and up to ten pending migrations.
+    
+    Raises:
+    	Exception: Re-raises errors encountered while determining migration status.
+    """
     try:
         alembic_cfg = get_alembic_config()
         script = ScriptDirectory.from_config(alembic_cfg)
@@ -71,7 +82,15 @@ def get_migration_status(db: Session) -> Dict[str, Any]:
 
 
 def check_schema_integrity(db: Session) -> Dict[str, Any]:
-    """Check database schema integrity."""
+    """
+    Compare the database schema with the expected application tables.
+    
+    Parameters:
+        db (Session): Database session associated with the health check.
+    
+    Returns:
+        Dict[str, Any]: Schema statistics, missing and extra tables, inspection issues, and a validity flag based on missing expected tables.
+    """
     try:
         inspector = inspect(engine)
         
@@ -130,12 +149,15 @@ def check_schema_integrity(db: Session) -> Dict[str, Any]:
 @router.get("/db")
 async def check_database_connectivity(db: Session = Depends(get_db)):
     """
-    Basic database connectivity check.
+    Check database connectivity and report connection statistics.
     
-    Verifies:
-    - Database connection pool is available
-    - Simple query executes successfully
-    - Response time is acceptable
+    Returns:
+        dict: Health status, query response time, PostgreSQL connection counts,
+            and the current timestamp.
+    
+    Raises:
+        HTTPException: If the connectivity check or connection-statistics query
+            fails.
     """
     start_time = datetime.now(timezone.utc)
     
@@ -177,12 +199,13 @@ async def check_database_connectivity(db: Session = Depends(get_db)):
 @router.get("/migrations")
 async def check_migrations(db: Session = Depends(get_db)):
     """
-    Check migration status.
+    Report whether database migrations are current.
     
-    Verifies:
-    - All migrations are applied
-    - No pending migrations
-    - No migration conflicts
+    Returns:
+    	dict: Health status and migration details, including pending migrations when applicable.
+    
+    Raises:
+    	HTTPException: If migration status cannot be determined.
     """
     try:
         migration_status = get_migration_status(db)
@@ -209,12 +232,13 @@ async def check_migrations(db: Session = Depends(get_db)):
 @router.get("/schema")
 async def check_schema_integrity_endpoint(db: Session = Depends(get_db)):
     """
-    Check database schema integrity.
+    Check the database schema integrity.
     
-    Verifies:
-    - All expected tables exist
-    - Critical indexes exist
-    - Foreign key constraints are valid
+    Returns:
+    	dict: Schema status with a healthy or unhealthy status and integrity details.
+    
+    Raises:
+    	HTTPException: If the schema check fails.
     """
     try:
         schema_status = check_schema_integrity(db)
@@ -241,13 +265,18 @@ async def check_schema_integrity_endpoint(db: Session = Depends(get_db)):
 @router.get("/db/deep")
 async def deep_health_check(db: Session = Depends(get_db)):
     """
-    Deep database health check.
+    Perform comprehensive database health diagnostics.
     
-    Performs comprehensive checks:
-    - Test queries on major tables
-    - Read/write permission verification
-    - Sequence counter validation
-    - Disk space check (if available)
+    Checks major-table accessibility, database read capability, PostgreSQL recovery state,
+    sequence values, and database size. Individual check failures produce a degraded result
+    when applicable.
+    
+    Returns:
+        Dict[str, Any]: A health payload containing the overall status, diagnostic results,
+        and an UTC timestamp.
+    
+    Raises:
+        HTTPException: If the overall health-check operation fails.
     """
     checks: Dict[str, Any] = {}
     overall_healthy = True
@@ -333,12 +362,10 @@ async def deep_health_check(db: Session = Depends(get_db)):
 @router.get("/ready")
 async def readiness_check(db: Session = Depends(get_db)):
     """
-    Kubernetes readiness probe endpoint.
+    Check database connectivity and migration status for Kubernetes readiness.
     
-    Returns healthy only if:
-    - Database is connected
-    - Migrations are up to date
-    - Schema is valid
+    Returns:
+    	tuple: A readiness payload and HTTP status code. The status is 200 when the database is reachable and migrations are current, or 503 otherwise.
     """
     try:
         # Quick connectivity check

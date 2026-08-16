@@ -20,8 +20,13 @@ from app.main import app
 
 @pytest.fixture
 def client(db_session):
-    """Create test client with database override."""
+    """
+    Provide a test client configured to use the supplied database session.
+    """
     def override_get_db():
+        """
+        Provide the test database session for dependency overrides.
+        """
         try:
             yield db_session
         finally:
@@ -51,10 +56,23 @@ def test_user(db_session):
 
 @pytest.fixture
 def authenticated_headers(client, test_user):
-    """Get authentication headers for test user."""
+    """
+    Configure the application to use the specified user for authenticated test requests.
+    
+    Parameters:
+    	test_user: User returned by the authentication dependency override.
+    
+    Returns:
+    	dict: Empty request headers, because authentication is handled by the dependency override.
+    """
     from app.auth import get_current_user
     
     def override_get_current_user():
+        """Provide the test user for authentication dependency overrides.
+        
+        Returns:
+        	test_user: The authenticated test user.
+        """
         return test_user
     
     app.dependency_overrides[get_current_user] = override_get_current_user
@@ -66,7 +84,9 @@ class TestMultiEntityTransactions:
     """Test transactions spanning multiple entities/modules"""
     
     def test_create_company_with_contact_transaction(self, client, db_session, authenticated_headers):
-        """Test atomic creation of company and related contact"""
+        """
+        Verify that a company and its related contact are created and persisted successfully.
+        """
         # Create company
         company_data = {
             "name": "Transactional Corp",
@@ -143,7 +163,7 @@ class TestMultiEntityTransactions:
         assert company.name == "Rollback Test Inc"
     
     def test_invoice_payment_atomic_transaction(self, client, db_session, authenticated_headers):
-        """Test that invoice creation and payment are atomic"""
+        """Verify that an invoice is created with the expected total for a company."""
         # First create a company for the invoice
         company_data = {
             "name": "Invoice Customer Ltd",
@@ -200,7 +220,9 @@ class TestFailureInjection:
         assert response.status_code in [200, 500, 503]
     
     def test_constraint_violation_rollback(self, client, db_session, authenticated_headers):
-        """Test rollback on constraint violation"""
+        """
+        Verify that a duplicate product SKU is rejected without persisting an additional product.
+        """
         initial_product_count = db_session.query(Product).count()
         
         # Create first product

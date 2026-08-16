@@ -83,11 +83,31 @@ class PaymentResponse(BaseModel):
     created_at: datetime
 
 def generate_invoice_number(db: Session) -> str:
+    """Generate the next year-prefixed invoice number based on the current invoice count.
+    
+    Parameters:
+    	db (Session): Database session used to count existing invoices.
+    
+    Returns:
+    	str: Invoice number in the format `INV-YYYY-NNNNN`.
+    """
     count = db.query(Invoice).count() + 1
     return f"INV-{datetime.now().year}-{count:05d}"
 
 @router.post("/invoices", response_model=InvoiceResponse)
 def create_invoice(data: InvoiceCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Create an invoice with calculated totals and associated line items.
+    
+    Parameters:
+    	data (InvoiceCreate): Invoice details and line items used to create the invoice.
+    
+    Returns:
+    	Invoice: The newly created invoice.
+    
+    Raises:
+    	HTTPException: With status code 400 if the invoice number already exists.
+    """
     existing = db.query(Invoice).filter(Invoice.invoice_number == data.invoice_number).first()
     if existing:
         raise HTTPException(status_code=400, detail="Invoice number already exists")
@@ -137,6 +157,16 @@ def list_invoices(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    """
+    List the authenticated user's invoices, optionally filtered by status and contact.
+    
+    Parameters:
+    	status (str, optional): Invoice status used to filter the results.
+    	contact_id (int, optional): Contact ID used to filter the results.
+    
+    Returns:
+    	list: Invoices ordered from newest to oldest by creation time.
+    """
     query = db.query(Invoice)
     if status:
         query = query.filter(Invoice.status == status)
@@ -146,6 +176,18 @@ def list_invoices(
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceResponse)
 def get_invoice(invoice_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Retrieve an invoice by its identifier.
+    
+    Parameters:
+        invoice_id (int): The identifier of the invoice to retrieve.
+    
+    Returns:
+        Invoice: The matching invoice.
+    
+    Raises:
+        HTTPException: If no invoice matches the specified identifier.
+    """
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -158,6 +200,19 @@ def update_invoice_status(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    """
+    Update the status of an invoice.
+    
+    Parameters:
+    	invoice_id (int): The invoice identifier.
+    	status (str): The new invoice status.
+    
+    Returns:
+    	Invoice: The updated invoice.
+    
+    Raises:
+    	HTTPException: If the invoice does not exist.
+    """
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -168,6 +223,18 @@ def update_invoice_status(
 
 @router.post("/payments", response_model=PaymentResponse)
 def create_payment(data: PaymentCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Record a payment for an invoice and update the invoice's payment status.
+    
+    Parameters:
+    	data (PaymentCreate): Payment details, including the associated invoice and amount.
+    
+    Returns:
+    	Payment: The newly recorded payment.
+    
+    Raises:
+    	HTTPException: If the referenced invoice does not exist.
+    """
     invoice = db.query(Invoice).filter(Invoice.id == data.invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
