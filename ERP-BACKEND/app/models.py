@@ -452,3 +452,47 @@ class Setting(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+
+# Search-related models
+class SearchIndex(Base):
+    __tablename__ = "search_index"
+
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String(100), nullable=False, index=True)
+    entity_id = Column(Integer, nullable=False)
+    title = Column(String(500), nullable=False)
+    content = Column(Text, nullable=True)
+    searchable_text = Column(Text, nullable=False)
+    meta_data = Column(JSONB, nullable=True)  # Renamed from metadata (reserved word)
+    tags = Column(JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class SearchQuery(Base):
+    __tablename__ = "search_queries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    query = Column(String(500), nullable=False)
+    filters = Column(JSONB, nullable=True)
+    results_count = Column(Integer, nullable=False, server_default="0")
+    execution_time_ms = Column(Integer, nullable=False, server_default="0")
+    clicked_results = Column(JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class SearchSuggestion(Base):
+    __tablename__ = "search_suggestions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    query_text = Column(String(500), nullable=False, index=True)
+    suggestion_type = Column(String(100), nullable=True)
+    entity_type = Column(String(100), nullable=True)
+    entity_id = Column(Integer, nullable=True)
+    frequency = Column(Integer, nullable=False, server_default="1")
+    last_used = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
