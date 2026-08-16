@@ -1,0 +1,47 @@
+
+name: Security
+
+on:
+  pull_request:
+    paths:
+      - 'ERP-BACKEND/**'
+      - 'AI-BACKEND/**'
+      - '**/package*.json'
+      - '**/requirements*.txt'
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * 0'
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/dependency-review-action@29a786fbc64a2138a29d614ef883983e4cf631e6
+
+  codeql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: python, javascript
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@8c2d79dc9a43c0f0bf9c7fcf6bfbf3b2615de7da
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
