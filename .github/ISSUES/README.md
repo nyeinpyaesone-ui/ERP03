@@ -1,104 +1,109 @@
 # Issues #55-#59 Tracking Dashboard
 
-**Created:** 2026-08-16  
-**Status:** 📋 Awaiting Requirements Definition  
-**Milestone Target:** M1 - ERP Core Stabilization  
+**Created:** 2026-08-16
+**Status:** 🚧 Ready for Implementation
+**Milestone Target:** M1 - ERP Core Stabilization
 
 ---
 
 ## Summary
 
-This document tracks the initialization and requirement gathering status for issues #55 through #59 in the ERP03 project backlog.
+This document tracks the implementation status for issues #55 through #59 in the ERP03 project backlog. These issues represent the critical M1 blocking requirements for ERP Core Stabilization.
 
-| Issue | Status | Priority | Module | Milestone | Description |
-|-------|--------|----------|--------|-----------|-------------|
-| #55 | 📋 Awaiting Requirements | TBD | TBD | M1 | To be defined |
-| #56 | 📋 Awaiting Requirements | TBD | TBD | M1 | To be defined |
-| #57 | 📋 Awaiting Requirements | TBD | TBD | M1 | To be defined |
-| #58 | 📋 Awaiting Requirements | TBD | TBD | M1 | To be defined |
-| #59 | 📋 Awaiting Requirements | TBD | TBD | M1 | To be defined |
+| Issue | Title | Status | Priority | Module | Owner | Est. Effort |
+|-------|-------|--------|----------|--------|-------|-------------|
+| #55 | API Contract Tests for Critical Write Paths | 🚧 Ready | 🔴 High | ERP-BACKEND | Backend Team | 10 days |
+| #56 | Transaction/Rollback Tests | 🚧 Ready | 🔴 High | ERP-BACKEND | Backend Team | 10 days |
+| #57 | Database Readiness Checks | 🚧 Ready | 🔴 High | ERP-BACKEND/INFRA | Backend Team | 10 days |
+| #58 | API Error Handling Standardization | 🚧 Ready | 🔴 High | ERP-BACKEND | Backend Team | 10 days |
+| #59 | Audit Log Completeness Verification | 🚧 Ready | 🔴 High | ERP-BACKEND | Backend Team | 10 days |
 
----
-
-## Current State
-
-### What's Done ✅
-- Issue tracking files created in `.github/ISSUES/`
-- Standard issue template structure established
-- Milestone task template added to `.github/ISSUE_TEMPLATE/`
-- Definition of Done criteria standardized
-
-### What's Needed 📋
-1. **Stakeholder Input Required**
-   - Detailed description for each issue
-   - Business value or problem statement
-   - Technical constraints or dependencies
-   - Priority ranking relative to other M1 tasks
-
-2. **Module Assignment**
-   - Determine which boundary each issue belongs to:
-     - ERP-BACKEND
-     - AI-BACKEND
-     - INTEGRATION
-     - INFRASTRUCTURE
-     - Frontend
-     - Documentation
-
-3. **Milestone Alignment**
-   - Confirm if M1 (ERP Core Stabilization) is appropriate
-   - Or reassign to M2-M6 based on requirements
+**Total Estimated Effort:** 50 days (can be parallelized)
 
 ---
 
-## Next Steps
+## Overview
 
-### Immediate Actions Required
-1. **Review existing documentation**
-   - Check `ROADMAP.md` for M1 requirements
-   - Review `docs/PROJECT_PLAN.md` for implementation details
-   - Consult any existing backlog or project management tools
+### Business Context
 
-2. **Gather requirements from stakeholders**
-   - Product owners
-   - Technical leads
-   - End users (if applicable)
+These five issues collectively satisfy the **M1 Exit Gate** requirements from the ROADMAP.md:
 
-3. **Populate issue templates**
-   - Add detailed descriptions to each issue file
-   - Define acceptance criteria
-   - Identify dependencies
+> **Exit gate:** `ERP-BACKEND` passes its critical suite without `AI-BACKEND`.
 
-4. **Prioritize and schedule**
-   - Rank issues by business value
-   - Estimate effort
-   - Assign to development sprints
+Each issue addresses a specific M1 requirement:
 
----
+| M1 Requirement | Covered By |
+|----------------|------------|
+| API contract tests for critical write paths | Issue #55 |
+| Transaction/rollback tests | Issue #56 |
+| Database/infrastructure readiness checks | Issue #57 |
+| Structured errors with correlation IDs | Issue #58 |
+| Audit trail completeness | Issue #59 |
 
-## Standard Implementation Routine
+### Module Boundaries
 
-Each issue should follow this workflow once requirements are defined:
+All issues are scoped to the **ERP-BACKEND** boundary as defined in ROADMAP.md:
 
-1. **Requirement** — business outcome + constraints
-2. **Contract** — inputs, outputs, ownership, permissions, errors, versioning
-3. **Design** — service/module/database boundaries
-4. **Implementation** — smallest production-capable slice
-5. **Unit tests** — business rules
-6. **Integration tests** — DB/APIs/queues/external boundaries
-7. **Security tests** — auth, authorization, secrets, data exposure
-8. **Operational tests** — health, restart, migration, backup/restore, observability
-9. **Staging qualification** — exact release candidate
-10. **Evidence** — record build/test/deployment results
-11. **Acceptance** — satisfy milestone exit gate
-12. **Release** — tag only after required gates pass
+```
+ERP-BACKEND  <── authenticated contracts/events ──>  AI-BACKEND
+     │                                                   │
+     ▼                                                   ▼
+ERP database                                      AI state/models
+(transactional truth)                              (derived state)
+```
+
+**Key Principle:** ERP remains authoritative for transactions, permissions, workflow state, auditability, and persistence. AI must never become a second ERP database or bypass ERP authorization.
 
 ---
 
-## Definition of Done
+## Implementation Strategy
+
+### Parallel Execution Plan
+
+These issues can be executed in parallel by a team of 3-5 developers:
+
+```
+Week 1-2:
+  Developer 1: Issue #55 (API Contract Tests) - Phase 1-3
+  Developer 2: Issue #56 (Transaction Tests) - Phase 1-3
+  Developer 3: Issue #57 (DB Readiness) - Phase 1-3
+  Developer 4: Issue #58 (Error Handling) - Phase 1-3
+  Developer 5: Issue #59 (Audit Logging) - Phase 1-3
+
+Week 3-4:
+  All developers complete remaining phases
+  Integration testing
+  Documentation finalization
+```
+
+### Dependencies Matrix
+
+| Issue | Blocks | Blocked By |
+|-------|--------|------------|
+| #55 | #56, #58 | None |
+| #56 | None | #55 (partially) |
+| #57 | None | None |
+| #58 | #59 | None |
+| #59 | None | #58 (partially) |
+
+### Critical Path
+
+```
+#55 → #56 → M1 Complete
+#57 → M1 Complete
+#58 → #59 → M1 Complete
+```
+
+**Minimum time with 3 developers:** ~3 weeks
+**Minimum time with 5 developers:** ~2 weeks
+
+---
+
+## Definition of Done (Common)
 
 A task is Done only when:
 
-- [ ] Code is in the correct ownership boundary
+- [x] Code is in the correct ownership boundary
 - [ ] Tests cover changed behavior
 - [ ] No secret or production data is committed
 - [ ] Migrations are reproducible (if applicable)
@@ -110,17 +115,32 @@ A task is Done only when:
 
 ---
 
+## M1 Exit Criteria Checklist
+
+When all five issues are complete, verify:
+
+- [ ] Critical ERP transactions work end-to-end
+- [ ] ERP owns the single authoritative transactional write path
+- [ ] Authenticated and authorized writes are enforced
+- [ ] Failed transactions roll back without partial state
+- [ ] Clean install and upgrade migrations succeed
+- [ ] Critical paths expose request/correlation IDs and structured errors
+- [ ] **ERP-BACKEND passes its critical suite without AI-BACKEND**
+
+---
+
 ## Related Documentation
 
-- [`ROADMAP.md`](../ROADMAP.md) - Product roadmap and milestones
-- [`.github/ISSUE_TEMPLATE/milestone_task.md`](./ISSUE_TEMPLATE/milestone_task.md) - Milestone task template
+- [`ROADMAP.md`](../../ROADMAP.md) - Product roadmap and milestones
+- [`ERP-BACKEND/README.md`](../../ERP-BACKEND/README.md) - ERP backend documentation
 - Individual issue files:
-  - [Issue #55](./issue_55.md)
-  - [Issue #56](./issue_56.md)
-  - [Issue #57](./issue_57.md)
-  - [Issue #58](./issue_58.md)
-  - [Issue #59](./issue_59.md)
+  - [Issue #55](./issue_55.md) - API Contract Tests
+  - [Issue #56](./issue_56.md) - Transaction/Rollback Tests
+  - [Issue #57](./issue_57.md) - Database Readiness Checks
+  - [Issue #58](./issue_58.md) - API Error Handling
+  - [Issue #59](./issue_59.md) - Audit Log Verification
 
 ---
 
 *Last updated: 2026-08-16*
+*Next review: After Week 1 sprint checkpoint*
