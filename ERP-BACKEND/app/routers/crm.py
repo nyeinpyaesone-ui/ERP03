@@ -47,6 +47,24 @@ class ContactCreate(BaseModel):
     source: Optional[str] = None
     notes: Optional[str] = None
 
+class ContactResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    first_name: str
+    last_name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    title: Optional[str] = None
+    company_id: Optional[int] = None
+    status: str
+    source: Optional[str] = None
+    notes: Optional[str] = None
+    assigned_to: Optional[int] = None
+    lifetime_value: float = 0.0
+    created_at: datetime
+    updated_at: datetime
+
 class DealCreate(BaseModel):
     title: str
     contact_id: Optional[int] = None
@@ -64,6 +82,23 @@ class DealUpdate(BaseModel):
     probability: Optional[int] = None
     expected_close_date: Optional[date] = None
     actual_close_date: Optional[date] = None
+
+class DealResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    title: str
+    contact_id: Optional[int] = None
+    company_id: Optional[int] = None
+    value: float
+    stage: str
+    probability: int
+    expected_close_date: Optional[date] = None
+    actual_close_date: Optional[date] = None
+    assigned_to: Optional[int] = None
+    description: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
 
 # Companies
 @router.post("/companies", response_model=CompanyResponse)
@@ -116,16 +151,16 @@ def delete_company(company_id: int, db: Session = Depends(get_db), current_user 
     return {"message": "Company deleted"}
 
 # Contacts
-@router.post("/contacts")
+@router.post("/contacts", response_model=ContactResponse)
 def create_contact(data: ContactCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    contact = Contact(**data.dict(), assigned_to=current_user.id)
+    contact = Contact(**data.model_dump(), assigned_to=current_user.id)
     db.add(contact)
     db.commit()
     db.refresh(contact)
     log_activity(db, user_id=current_user.id, action="contact_created", entity_type="contact", entity_id=contact.id)
     return contact
 
-@router.get("/contacts")
+@router.get("/contacts", response_model=List[ContactResponse])
 def list_contacts(
     skip: int = 0,
     limit: int = 100,
@@ -144,21 +179,22 @@ def list_contacts(
         )
     return query.offset(skip).limit(limit).all()
 
-@router.get("/contacts/{contact_id}")
+@router.get("/contacts/{contact_id}", response_model=ContactResponse)
 def get_contact(contact_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     contact = db.query(Contact).filter(Contact.id == contact_id).first()
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
     return contact
 
-@router.put("/contacts/{contact_id}")
+@router.put("/contacts/{contact_id}", response_model=ContactResponse)
 def update_contact(contact_id: int, data: ContactCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     contact = db.query(Contact).filter(Contact.id == contact_id).first()
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
-    for key, value in data.dict().items():
+    for key, value in data.model_dump().items():
         setattr(contact, key, value)
-    contact.updated_at = datetime.utcnow()
+    from datetime import timezone
+    contact.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(contact)
     return contact
@@ -173,16 +209,16 @@ def delete_contact(contact_id: int, db: Session = Depends(get_db), current_user 
     return {"message": "Contact deleted"}
 
 # Deals / Pipeline
-@router.post("/deals")
+@router.post("/deals", response_model=DealResponse)
 def create_deal(data: DealCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    deal = Deal(**data.dict(), assigned_to=current_user.id)
+    deal = Deal(**data.model_dump(), assigned_to=current_user.id)
     db.add(deal)
     db.commit()
     db.refresh(deal)
     log_activity(db, user_id=current_user.id, action="deal_created", entity_type="deal", entity_id=deal.id)
     return deal
 
-@router.get("/deals")
+@router.get("/deals", response_model=List[DealResponse])
 def list_deals(
     skip: int = 0,
     limit: int = 100,
@@ -209,20 +245,20 @@ def get_pipeline(db: Session = Depends(get_db), current_user = Depends(get_curre
         }
     return pipeline
 
-@router.get("/deals/{deal_id}")
+@router.get("/deals/{deal_id}", response_model=DealResponse)
 def get_deal(deal_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     deal = db.query(Deal).filter(Deal.id == deal_id).first()
     if not deal:
         raise HTTPException(status_code=404, detail="Deal not found")
     return deal
 
-@router.put("/deals/{deal_id}")
+@router.put("/deals/{deal_id}", response_model=DealResponse)
 def update_deal(deal_id: int, data: DealUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     deal = db.query(Deal).filter(Deal.id == deal_id).first()
     if not deal:
         raise HTTPException(status_code=404, detail="Deal not found")
 
-    update_data = data.dict(exclude_unset=True)
+    update_data = data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(deal, key, value)
 
@@ -241,7 +277,8 @@ def update_deal(deal_id: int, data: DealUpdate, db: Session = Depends(get_db), c
     if deal.stage == "closed_won" and not deal.actual_close_date:
         deal.actual_close_date = date.today()
 
-    deal.updated_at = datetime.utcnow()
+    from datetime import timezone
+    deal.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(deal)
     log_activity(db, user_id=current_user.id, action="deal_updated", entity_type="deal", entity_id=deal.id, details={"stage": deal.stage})

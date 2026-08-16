@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from app.database import get_db
@@ -29,6 +29,28 @@ class ProductCreate(BaseModel):
     weight: Optional[float] = None
     dimensions: Optional[str] = None
 
+class ProductResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    sku: str
+    name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    unit_price: float
+    cost_price: Optional[float] = None
+    quantity_in_stock: int
+    reorder_level: int
+    reorder_quantity: int
+    supplier: Optional[str] = None
+    supplier_contact: Optional[str] = None
+    status: str
+    barcode: Optional[str] = None
+    weight: Optional[float] = None
+    dimensions: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
 class MovementCreate(BaseModel):
     product_id: int
     movement_type: str
@@ -37,20 +59,33 @@ class MovementCreate(BaseModel):
     reference: Optional[str] = None
     notes: Optional[str] = None
 
-@router.post("/products")
+class MovementResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    product_id: int
+    movement_type: str
+    quantity: int
+    unit_cost: Optional[float] = None
+    reference: Optional[str] = None
+    notes: Optional[str] = None
+    created_by: Optional[int] = None
+    created_at: datetime
+
+@router.post("/products", response_model=ProductResponse)
 def create_product(data: ProductCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     existing = db.query(Product).filter(Product.sku == data.sku).first()
     if existing:
         raise HTTPException(status_code=400, detail="SKU already exists")
 
-    product = Product(**data.dict())
+    product = Product(**data.model_dump())
     db.add(product)
     db.commit()
     db.refresh(product)
     log_activity(db, user_id=current_user.id, action="product_created", entity_type="product", entity_id=product.id)
     return product
 
-@router.get("/products")
+@router.get("/products", response_model=List[ProductResponse])
 def list_products(
     category: Optional[str] = None,
     status: Optional[str] = None,
@@ -70,21 +105,21 @@ def list_products(
         query = query.filter(Product.name.ilike(f"%{search}%"))
     return query.all()
 
-@router.get("/products/{product_id}")
+@router.get("/products/{product_id}", response_model=ProductResponse)
 def get_product(product_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return product
 
-@router.put("/products/{product_id}")
+@router.put("/products/{product_id}", response_model=ProductResponse)
 def update_product(product_id: int, data: ProductCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    for key, value in data.dict().items():
+    for key, value in data.model_dump().items():
         setattr(product, key, value)
-    product.updated_at = datetime.utcnow()
+    product.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(product)
     return product
@@ -98,13 +133,13 @@ def delete_product(product_id: int, db: Session = Depends(get_db), current_user 
     db.commit()
     return {"message": "Product deleted"}
 
-@router.post("/movements")
+@router.post("/movements", response_model=MovementResponse)
 def create_movement(data: MovementCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     product = db.query(Product).filter(Product.id == data.product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    movement = InventoryMovement(**data.dict(), created_by=current_user.id)
+    movement = InventoryMovement(**data.model_dump(), created_by=current_user.id)
 
     # Update stock
     if data.movement_type == "in":
@@ -116,14 +151,14 @@ def create_movement(data: MovementCreate, db: Session = Depends(get_db), current
     elif data.movement_type == "adjustment":
         product.quantity_in_stock = data.quantity
 
-    product.updated_at = datetime.utcnow()
+    product.updated_at = datetime.now(timezone.utc)
     db.add(movement)
     db.commit()
     db.refresh(movement)
     log_activity(db, user_id=current_user.id, action="inventory_moved", entity_type="inventory_movement", entity_id=movement.id)
     return movement
 
-@router.get("/movements")
+@router.get("/movements", response_model=List[MovementResponse])
 def list_movements(product_id: Optional[int] = None, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     query = db.query(InventoryMovement)
     if product_id:
