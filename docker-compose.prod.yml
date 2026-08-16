@@ -38,7 +38,7 @@ services:
     networks: [erp-network]
 
   erp-backend:
-    image: powerrangeranikg/erp-solution-backend:latest
+    image: powerrangeranikg/erp03-backend:latest
     container_name: erp-backend
     restart: unless-stopped
     environment:
@@ -57,7 +57,7 @@ services:
     networks: [erp-network]
 
   frontend:
-    image: powerrangeranikg/erp-solution-frontend:latest
+    image: powerrangeranikg/erp03-frontend:latest
     container_name: erp-frontend
     restart: unless-stopped
     environment:

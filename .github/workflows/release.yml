@@ -8,8 +8,8 @@ on:
 
 env:
   REGISTRY: docker.io
-  BACKEND_IMAGE: powerrangeranikg/erp-solution-backend
-  FRONTEND_IMAGE: powerrangeranikg/erp-solution-frontend
+  BACKEND_IMAGE: powerrangeranikg/erp03-backend
+  FRONTEND_IMAGE: powerrangeranikg/erp03-frontend
   # optionally AI_IMAGE: powerrangeranikg/erp03-ai
 
 concurrency:
