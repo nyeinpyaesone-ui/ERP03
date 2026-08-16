@@ -54,8 +54,14 @@ def db_session(test_engine):
 
 @pytest.fixture
 def client(db_session):
-    """Create test client with database override."""
+    """Provide a test client configured to use the supplied database session."""
     def override_get_db():
+        """
+        Provide the test database session for dependency overrides.
+        
+        Yields:
+            The active test database session.
+        """
         try:
             yield db_session
         finally:
@@ -85,9 +91,15 @@ def test_user(db_session):
 
 @pytest.fixture
 def auth_headers(client, test_user):
-    """Get authentication headers for test user."""
+    """
+    Configure authentication to use the test user and provide authorization headers.
+    
+    Returns:
+        dict: Headers containing a bearer token for authenticated test requests.
+    """
     # Mock authentication by overriding the dependency
     def override_get_current_user():
+        """Return the test user used by the authentication dependency override."""
         return test_user
     
     app.dependency_overrides[get_current_user] = override_get_current_user
