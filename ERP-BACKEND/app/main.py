@@ -20,7 +20,7 @@ from app.config import settings
 
 
 # Check if running in test mode
-IS_TEST_MODE = os.getenv("TESTING", "false").lower() == "true" or "pytest" in os.modules
+IS_TEST_MODE = os.getenv("TESTING", "false").lower() == "true" or os.getenv("TEST_MODE", "false").lower() == "true"
 
 
 class JsonFormatter(logging.Formatter):

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from app.database import get_db
 from app.models import Project, Task
@@ -21,6 +21,22 @@ class ProjectCreate(BaseModel):
     budget: Optional[float] = None
     client_id: Optional[int] = None
 
+class ProjectResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    name: str
+    description: Optional[str] = None
+    status: str
+    priority: str
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    budget: Optional[float] = None
+    manager_id: Optional[int] = None
+    client_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
 class TaskCreate(BaseModel):
     project_id: int
     title: str
@@ -32,16 +48,33 @@ class TaskCreate(BaseModel):
     estimated_hours: Optional[float] = None
     parent_task_id: Optional[int] = None
 
-@router.post("/projects")
+class TaskResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    project_id: int
+    title: str
+    description: Optional[str] = None
+    status: str
+    priority: str
+    assigned_to: Optional[int] = None
+    due_date: Optional[date] = None
+    estimated_hours: Optional[float] = None
+    actual_hours: Optional[float] = None
+    parent_task_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
+@router.post("/projects", response_model=ProjectResponse)
 def create_project(data: ProjectCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    project = Project(**data.dict(), manager_id=current_user.id)
+    project = Project(**data.model_dump(), manager_id=current_user.id)
     db.add(project)
     db.commit()
     db.refresh(project)
     log_activity(db, user_id=current_user.id, action="project_created", entity_type="project", entity_id=project.id)
     return project
 
-@router.get("/projects")
+@router.get("/projects", response_model=List[ProjectResponse])
 def list_projects(
     status: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -52,43 +85,43 @@ def list_projects(
         query = query.filter(Project.status == status)
     return query.all()
 
-@router.get("/projects/{project_id}")
+@router.get("/projects/{project_id}", response_model=ProjectResponse)
 def get_project(project_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
 
-@router.put("/projects/{project_id}")
+@router.put("/projects/{project_id}", response_model=ProjectResponse)
 def update_project(project_id: int, data: ProjectCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    for key, value in data.dict().items():
+    for key, value in data.model_dump().items():
         setattr(project, key, value)
-    project.updated_at = datetime.utcnow()
+    project.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(project)
     return project
 
-@router.post("/tasks")
+@router.post("/tasks", response_model=TaskResponse)
 def create_task(data: TaskCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     project = db.query(Project).filter(Project.id == data.project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    task = Task(**data.dict())
+    task = Task(**data.model_dump())
     db.add(task)
     db.commit()
     db.refresh(task)
     log_activity(db, user_id=current_user.id, action="task_created", entity_type="task", entity_id=task.id)
     return task
 
-@router.get("/projects/{project_id}/tasks")
+@router.get("/projects/{project_id}/tasks", response_model=List[TaskResponse])
 def list_project_tasks(project_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     return db.query(Task).filter(Task.project_id == project_id).all()
 
-@router.put("/tasks/{task_id}")
+@router.put("/tasks/{task_id}", response_model=TaskResponse)
 def update_task(task_id: int, data: dict, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
@@ -96,7 +129,7 @@ def update_task(task_id: int, data: dict, db: Session = Depends(get_db), current
     for key, value in data.items():
         if hasattr(task, key):
             setattr(task, key, value)
-    task.updated_at = datetime.utcnow()
+    task.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(task)
     return task

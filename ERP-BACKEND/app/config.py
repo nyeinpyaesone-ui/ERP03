@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE: int = 50 * 1024 * 1024
     WS_HEARTBEAT_INTERVAL: int = 30
 
+    # Test mode flag (set by conftest.py during testing)
+    TEST_MODE: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,
@@ -53,6 +56,14 @@ class Settings(BaseSettings):
     )
 
     def model_post_init(self, __context):
+        # Skip validation in test mode
+        if self.TEST_MODE:
+            if not self.DATABASE_URL:
+                self.DATABASE_URL = "sqlite:///:memory:"
+            if not self.SECRET_KEY or len(self.SECRET_KEY) < 32:
+                self.SECRET_KEY = "test_secret_key_for_testing_purposes_only_1234567890"
+            return
+        
         database_url = _read_secret("DATABASE_URL")
         secret_key = _read_secret("SECRET_KEY")
         if database_url:

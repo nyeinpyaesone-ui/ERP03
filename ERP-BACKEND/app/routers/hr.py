@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import Optional
-from datetime import date, datetime
+from pydantic import BaseModel, ConfigDict
+from typing import Optional, List
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from app.database import get_db
@@ -18,6 +18,16 @@ class DepartmentCreate(BaseModel):
     manager_id: Optional[int] = None
     budget: Optional[float] = None
 
+class DepartmentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    name: str
+    description: Optional[str] = None
+    manager_id: Optional[int] = None
+    budget: Optional[float] = None
+    created_at: datetime
+
 class EmployeeCreate(BaseModel):
     employee_code: str
     job_title: str
@@ -31,33 +41,52 @@ class EmployeeCreate(BaseModel):
     phone: Optional[str] = None
     date_of_birth: Optional[date] = None
 
-@router.post("/departments")
+class EmployeeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    user_id: Optional[int] = None
+    employee_code: str
+    department_id: Optional[int] = None
+    job_title: str
+    salary: Optional[float] = None
+    hire_date: date
+    status: str
+    employment_type: str
+    address: Optional[str] = None
+    emergency_contact: Optional[str] = None
+    phone: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    created_at: datetime
+    updated_at: datetime
+
+@router.post("/departments", response_model=DepartmentResponse)
 def create_department(data: DepartmentCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    dept = Department(**data.dict())
+    dept = Department(**data.model_dump())
     db.add(dept)
     db.commit()
     db.refresh(dept)
     log_activity(db, user_id=current_user.id, action="department_created", entity_type="department", entity_id=dept.id)
     return dept
 
-@router.get("/departments")
+@router.get("/departments", response_model=List[DepartmentResponse])
 def list_departments(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     return db.query(Department).all()
 
-@router.post("/employees")
+@router.post("/employees", response_model=EmployeeResponse)
 def create_employee(data: EmployeeCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     existing = db.query(Employee).filter(Employee.employee_code == data.employee_code).first()
     if existing:
         raise HTTPException(status_code=400, detail="Employee code already exists")
 
-    emp = Employee(**data.dict())
+    emp = Employee(**data.model_dump())
     db.add(emp)
     db.commit()
     db.refresh(emp)
     log_activity(db, user_id=current_user.id, action="employee_created", entity_type="employee", entity_id=emp.id)
     return emp
 
-@router.get("/employees")
+@router.get("/employees", response_model=List[EmployeeResponse])
 def list_employees(
     status: Optional[str] = None,
     department_id: Optional[int] = None,
@@ -71,21 +100,21 @@ def list_employees(
         query = query.filter(Employee.department_id == department_id)
     return query.all()
 
-@router.get("/employees/{employee_id}")
+@router.get("/employees/{employee_id}", response_model=EmployeeResponse)
 def get_employee(employee_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     emp = db.query(Employee).filter(Employee.id == employee_id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
     return emp
 
-@router.put("/employees/{employee_id}")
+@router.put("/employees/{employee_id}", response_model=EmployeeResponse)
 def update_employee(employee_id: int, data: EmployeeCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     emp = db.query(Employee).filter(Employee.id == employee_id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
-    for key, value in data.dict().items():
+    for key, value in data.model_dump().items():
         setattr(emp, key, value)
-    emp.updated_at = datetime.utcnow()
+    emp.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(emp)
     return emp
