@@ -7,7 +7,6 @@ from time import perf_counter
 
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 from app.database import engine, Base
@@ -133,8 +132,6 @@ app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(websocket.router, prefix="/api/v1/ws", tags=["WebSocket"])
 app.include_router(bulk_import_export.router, prefix="/api/v1/bulk", tags=["Bulk Import/Export"])
 app.include_router(migrations.router, prefix="/api/v1/migrations", tags=["Migrations"])
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.get("/")
