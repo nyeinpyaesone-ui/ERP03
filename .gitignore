@@ -1,4 +1,12 @@
 ```
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+target/
+
 # Python
 __pycache__/
 *.pyc
@@ -8,31 +16,28 @@ __pycache__/
 env/
 venv/
 .venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-*.pot
-*.pyc
-*.pyo
-.pytest_cache/
-.mypy_cache/
-
-# Testing
-.eggs/
-EGG-INFO/
-
-# Environment
+.ENV
 .env
 .env.local
 .env.*
-!.env.example
+.python-version
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage/
+htmlcov/
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
 # IDE
 .vscode/
@@ -40,7 +45,65 @@ EGG-INFO/
 *.swp
 *.swo
 
-# OS
-.DS_Store
-Thumbs.db
+# Environment specific
+.env
+.env.local
+*.env.*
+
+# Compiled files
+*.class
+*.o
+*.obj
+*.out
+*.exe
+*.dll
+*.so
+*.a
+*.dylib
+*.jar
+*.war
+*.zip
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+*.gz
+*.bz2
+*.xz
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+
+# Testing
+*.coverage
+coverage/
+htmlcov/
+.nyc_output/
+
+# Distribution / packaging
+.Python
+__pycache__/
+*.py[cod]
+*$py.class
+*$pyc.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.ENV
+.env
+.env.local
+.env.*
+.python-version
+.venv/
+env/
+ENV/
 ```
