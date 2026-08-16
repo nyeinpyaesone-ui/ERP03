@@ -25,6 +25,15 @@ IS_TEST_MODE = os.getenv("TESTING", "false").lower() == "true" or os.getenv("TES
 
 class JsonFormatter(logging.Formatter):
     def format(self, record):
+        """
+        Serialize a log record as a JSON string with standard fields and optional request metadata.
+        
+        Parameters:
+        	record (logging.LogRecord): The log record to serialize.
+        
+        Returns:
+        	str: A JSON representation of the log record.
+        """
         payload = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created)),
             "level": record.levelname,
@@ -63,6 +72,11 @@ HTTP_REQUEST_DURATION = Histogram(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Only create tables if not in test mode (tests handle their own DB setup)
+    """
+    Manage application startup and shutdown lifecycle events.
+    
+    Creates database tables during startup when the application is not running in test mode.
+    """
     if not IS_TEST_MODE:
         Base.metadata.create_all(bind=engine)
     yield

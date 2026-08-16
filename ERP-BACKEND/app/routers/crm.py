@@ -103,6 +103,15 @@ class DealResponse(BaseModel):
 # Companies
 @router.post("/companies", response_model=CompanyResponse)
 def create_company(data: CompanyCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Create a company and record its creation activity.
+    
+    Parameters:
+    	data (CompanyCreate): Company details used to create the record.
+    
+    Returns:
+    	Company: The newly created company.
+    """
     company = Company(**data.model_dump())
     db.add(company)
     db.commit()
@@ -118,6 +127,17 @@ def list_companies(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    """
+    List companies with optional name search and pagination.
+    
+    Parameters:
+        skip (int): Number of companies to skip.
+        limit (int): Maximum number of companies to return.
+        search (Optional[str]): Case-insensitive text to match against company names.
+    
+    Returns:
+        list[Company]: Companies matching the search and pagination criteria.
+    """
     query = db.query(Company)
     if search:
         query = query.filter(Company.name.ilike(f"%{search}%"))
@@ -125,6 +145,18 @@ def list_companies(
 
 @router.get("/companies/{company_id}", response_model=CompanyResponse)
 def get_company(company_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Retrieve a company by its identifier.
+    
+    Parameters:
+    	company_id (int): The identifier of the company to retrieve.
+    
+    Returns:
+    	Company: The matching company record.
+    
+    Raises:
+    	HTTPException: If no company matches the identifier.
+    """
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -132,6 +164,16 @@ def get_company(company_id: int, db: Session = Depends(get_db), current_user = D
 
 @router.put("/companies/{company_id}", response_model=CompanyResponse)
 def update_company(company_id: int, data: CompanyCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Update a company's stored details.
+    
+    Parameters:
+    	company_id (int): Identifier of the company to update.
+    	data (CompanyCreate): Replacement company details.
+    
+    Returns:
+    	Company: The updated company.
+    """
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -143,6 +185,15 @@ def update_company(company_id: int, data: CompanyCreate, db: Session = Depends(g
 
 @router.delete("/companies/{company_id}")
 def delete_company(company_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Delete a company by its identifier.
+    
+    Parameters:
+    	company_id (int): Identifier of the company to delete.
+    
+    Returns:
+    	dict: Confirmation message indicating that the company was deleted.
+    """
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -153,6 +204,15 @@ def delete_company(company_id: int, db: Session = Depends(get_db), current_user 
 # Contacts
 @router.post("/contacts", response_model=ContactResponse)
 def create_contact(data: ContactCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Create a contact assigned to the authenticated user.
+    
+    Parameters:
+    	data (ContactCreate): Contact details used to create the record.
+    
+    Returns:
+    	Contact: The newly created contact.
+    """
     contact = Contact(**data.model_dump(), assigned_to=current_user.id)
     db.add(contact)
     db.commit()
@@ -169,6 +229,16 @@ def list_contacts(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    """
+    List contacts with optional status filtering and name or email search.
+    
+    Parameters:
+    	status (Optional[str]): Contact status used to filter results.
+    	search (Optional[str]): Text matched case-insensitively against the contact's full name or email.
+    
+    Returns:
+    	list[Contact]: Contacts matching the filters and pagination settings.
+    """
     query = db.query(Contact)
     if status:
         query = query.filter(Contact.status == status)
@@ -181,6 +251,17 @@ def list_contacts(
 
 @router.get("/contacts/{contact_id}", response_model=ContactResponse)
 def get_contact(contact_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """Retrieve a contact by its identifier.
+    
+    Parameters:
+    	contact_id (int): The identifier of the contact to retrieve.
+    
+    Returns:
+    	Contact: The requested contact.
+    
+    Raises:
+    	HTTPException: If the contact does not exist.
+    """
     contact = db.query(Contact).filter(Contact.id == contact_id).first()
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
@@ -188,6 +269,19 @@ def get_contact(contact_id: int, db: Session = Depends(get_db), current_user = D
 
 @router.put("/contacts/{contact_id}", response_model=ContactResponse)
 def update_contact(contact_id: int, data: ContactCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Update a contact with the supplied details.
+    
+    Parameters:
+    	contact_id (int): The identifier of the contact to update.
+    	data (ContactCreate): The contact details to apply.
+    
+    Returns:
+    	Contact: The updated contact.
+    
+    Raises:
+    	HTTPException: If the contact does not exist.
+    """
     contact = db.query(Contact).filter(Contact.id == contact_id).first()
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
@@ -201,6 +295,14 @@ def update_contact(contact_id: int, data: ContactCreate, db: Session = Depends(g
 
 @router.delete("/contacts/{contact_id}")
 def delete_contact(contact_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """Delete a contact by its identifier.
+    
+    Parameters:
+        contact_id (int): Identifier of the contact to delete.
+    
+    Returns:
+        dict: A confirmation message indicating that the contact was deleted.
+    """
     contact = db.query(Contact).filter(Contact.id == contact_id).first()
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
@@ -211,6 +313,15 @@ def delete_contact(contact_id: int, db: Session = Depends(get_db), current_user 
 # Deals / Pipeline
 @router.post("/deals", response_model=DealResponse)
 def create_deal(data: DealCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Create a deal assigned to the authenticated user.
+    
+    Parameters:
+    	data (DealCreate): Deal details used to create the record.
+    
+    Returns:
+    	Deal: The newly created deal.
+    """
     deal = Deal(**data.model_dump(), assigned_to=current_user.id)
     db.add(deal)
     db.commit()
@@ -226,6 +337,15 @@ def list_deals(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    """
+    List deals with optional stage filtering and pagination.
+    
+    Parameters:
+    	stage (Optional[str]): Deal stage used to filter the results.
+    
+    Returns:
+    	list[Deal]: The matching deals.
+    """
     query = db.query(Deal)
     if stage:
         query = query.filter(Deal.stage == stage)
@@ -233,6 +353,12 @@ def list_deals(
 
 @router.get("/deals/pipeline")
 def get_pipeline(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Group deals by pipeline stage with counts, total values, and deal records.
+    
+    Returns:
+    	pipeline (dict): Mapping of each pipeline stage to its deal count, total value, and deals.
+    """
     stages = ["prospect", "qualification", "proposal", "negotiation", "closed_won", "closed_lost"]
     pipeline = {}
     for stage in stages:
@@ -247,6 +373,17 @@ def get_pipeline(db: Session = Depends(get_db), current_user = Depends(get_curre
 
 @router.get("/deals/{deal_id}", response_model=DealResponse)
 def get_deal(deal_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """Retrieve a deal by its identifier.
+    
+    Parameters:
+        deal_id (int): Identifier of the deal to retrieve.
+    
+    Returns:
+        Deal: The matching deal.
+    
+    Raises:
+        HTTPException: If the deal does not exist.
+    """
     deal = db.query(Deal).filter(Deal.id == deal_id).first()
     if not deal:
         raise HTTPException(status_code=404, detail="Deal not found")
@@ -254,6 +391,19 @@ def get_deal(deal_id: int, db: Session = Depends(get_db), current_user = Depends
 
 @router.put("/deals/{deal_id}", response_model=DealResponse)
 def update_deal(deal_id: int, data: DealUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Update a deal and apply stage-based closing details.
+    
+    Parameters:
+        deal_id (int): Identifier of the deal to update.
+        data (DealUpdate): Fields to change on the deal.
+    
+    Raises:
+        HTTPException: If the deal does not exist.
+    
+    Returns:
+        Deal: The updated deal.
+    """
     deal = db.query(Deal).filter(Deal.id == deal_id).first()
     if not deal:
         raise HTTPException(status_code=404, detail="Deal not found")

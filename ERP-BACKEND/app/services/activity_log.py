@@ -21,23 +21,22 @@ def log_activity(
     status: str = "SUCCESS"
 ):
     """
-    Log an activity to the database with full audit trail.
+    Record an audit event for an operation on an entity.
     
-    Args:
-        db: Database session
-        user_id: ID of the user performing the action
-        action: Action code (e.g., "COMPANY_CREATED", "INVOICE_UPDATED")
-        entity_type: Type of entity affected (e.g., "Company", "Invoice")
-        entity_id: ID of the entity affected
-        details: Additional details including before/after state
-        ip_address: IP address of the requester
-        user_agent: User agent string
-        correlation_id: Request correlation ID for tracing
-        request_id: Unique request ID
-        status: Status of the operation (SUCCESS, FAILURE, ROLLBACK)
+    Parameters:
+        user_id (Optional[int]): ID of the user who performed the operation.
+        action (str): Code identifying the operation.
+        entity_type (Optional[str]): Type of the affected entity.
+        entity_id (Optional[int]): ID of the affected entity.
+        details (Optional[Dict[str, Any]]): Additional event data, including state changes.
+        ip_address (Optional[str]): IP address associated with the request.
+        user_agent (Optional[str]): User-agent string associated with the request.
+        correlation_id (Optional[str]): Identifier used to correlate related operations.
+        request_id (Optional[str]): Identifier for the request that triggered the operation.
+        status (str): Operation status, such as ``"SUCCESS"``, ``"FAILURE"``, or ``"ROLLBACK"``.
     
     Returns:
-        The created ActivityLog record
+        ActivityLog: The persisted audit record.
     """
     log = ActivityLog(
         user_id=user_id,
@@ -68,11 +67,15 @@ def log_before_after(
     **kwargs
 ):
     """
-    Log an activity with before/after state for complete audit trail.
+    Create an audit log entry containing entity state and detected field changes.
     
     Args:
-        before_state: State of entity before the change
-        after_state: State of entity after the change
+        before_state: Entity state before the operation.
+        after_state: Entity state after the operation.
+        **kwargs: Additional arguments forwarded to the activity log operation.
+    
+    Returns:
+        The created activity log record.
     """
     changes = {}
     if before_state and after_state:

@@ -74,6 +74,16 @@ class MovementResponse(BaseModel):
 
 @router.post("/products", response_model=ProductResponse)
 def create_product(data: ProductCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Create a product and record its creation activity.
+    
+    Parameters:
+        data (ProductCreate): Product details, including its SKU.
+        current_user: Authenticated user creating the product.
+    
+    Returns:
+        Product: The newly created product.
+    """
     existing = db.query(Product).filter(Product.sku == data.sku).first()
     if existing:
         raise HTTPException(status_code=400, detail="SKU already exists")
@@ -94,6 +104,18 @@ def list_products(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    """
+    List products with optional category, status, low-stock, and name filters.
+    
+    Parameters:
+        category (Optional[str]): Restrict results to a product category.
+        status (Optional[str]): Restrict results to a product status.
+        low_stock (bool): Restrict results to products at or below their reorder level.
+        search (Optional[str]): Restrict results to products whose names contain this text.
+    
+    Returns:
+        list[Product]: Matching products.
+    """
     query = db.query(Product)
     if category:
         query = query.filter(Product.category == category)
@@ -107,6 +129,15 @@ def list_products(
 
 @router.get("/products/{product_id}", response_model=ProductResponse)
 def get_product(product_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Retrieve a product by its identifier.
+    
+    Parameters:
+    	product_id (int): The product identifier.
+    
+    Returns:
+    	Product: The matching product record.
+    """
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -114,6 +145,19 @@ def get_product(product_id: int, db: Session = Depends(get_db), current_user = D
 
 @router.put("/products/{product_id}", response_model=ProductResponse)
 def update_product(product_id: int, data: ProductCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Update an existing product with the supplied fields.
+    
+    Parameters:
+    	product_id (int): Identifier of the product to update.
+    	data (ProductCreate): Product fields and values to apply.
+    
+    Returns:
+    	Product: The updated product.
+    
+    Raises:
+    	HTTPException: If the product does not exist.
+    """
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -126,6 +170,15 @@ def update_product(product_id: int, data: ProductCreate, db: Session = Depends(g
 
 @router.delete("/products/{product_id}")
 def delete_product(product_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Delete a product by its identifier.
+    
+    Parameters:
+        product_id (int): Identifier of the product to delete.
+    
+    Returns:
+        dict: Confirmation message indicating that the product was deleted.
+    """
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -135,6 +188,18 @@ def delete_product(product_id: int, db: Session = Depends(get_db), current_user 
 
 @router.post("/movements", response_model=MovementResponse)
 def create_movement(data: MovementCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Create an inventory movement and update the associated product's stock.
+    
+    Parameters:
+        data (MovementCreate): Movement details, including the product, movement type, and quantity.
+    
+    Returns:
+        InventoryMovement: The created inventory movement.
+    
+    Raises:
+        HTTPException: If the product does not exist or an outgoing movement exceeds available stock.
+    """
     product = db.query(Product).filter(Product.id == data.product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -160,6 +225,15 @@ def create_movement(data: MovementCreate, db: Session = Depends(get_db), current
 
 @router.get("/movements", response_model=List[MovementResponse])
 def list_movements(product_id: Optional[int] = None, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    List inventory movements, optionally filtered by product.
+    
+    Parameters:
+        product_id (Optional[int]): Product identifier used to filter the movements.
+    
+    Returns:
+        List[InventoryMovement]: Inventory movements ordered from newest to oldest.
+    """
     query = db.query(InventoryMovement)
     if product_id:
         query = query.filter(InventoryMovement.product_id == product_id)

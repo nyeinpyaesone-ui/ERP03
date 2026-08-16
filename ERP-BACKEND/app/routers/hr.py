@@ -62,6 +62,15 @@ class EmployeeResponse(BaseModel):
 
 @router.post("/departments", response_model=DepartmentResponse)
 def create_department(data: DepartmentCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Create a department from the supplied data.
+    
+    Parameters:
+    	data (DepartmentCreate): Department details used to create the record.
+    
+    Returns:
+    	Department: The newly created department.
+    """
     dept = Department(**data.model_dump())
     db.add(dept)
     db.commit()
@@ -71,10 +80,20 @@ def create_department(data: DepartmentCreate, db: Session = Depends(get_db), cur
 
 @router.get("/departments", response_model=List[DepartmentResponse])
 def list_departments(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """Return all departments accessible to the authenticated user."""
     return db.query(Department).all()
 
 @router.post("/employees", response_model=EmployeeResponse)
 def create_employee(data: EmployeeCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Create an employee record after confirming that its employee code is unique.
+    
+    Parameters:
+    	data (EmployeeCreate): Employee details used to create the record.
+    
+    Returns:
+    	Employee: The persisted employee record.
+    """
     existing = db.query(Employee).filter(Employee.employee_code == data.employee_code).first()
     if existing:
         raise HTTPException(status_code=400, detail="Employee code already exists")
@@ -93,6 +112,16 @@ def list_employees(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    """
+    List employees with optional status and department filters.
+    
+    Parameters:
+    	status (str, optional): Employee status used to filter the results.
+    	department_id (int, optional): Department ID used to filter the results.
+    
+    Returns:
+    	list[Employee]: Employees matching the supplied filters.
+    """
     query = db.query(Employee)
     if status:
         query = query.filter(Employee.status == status)
@@ -102,6 +131,18 @@ def list_employees(
 
 @router.get("/employees/{employee_id}", response_model=EmployeeResponse)
 def get_employee(employee_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Retrieve an employee by ID.
+    
+    Parameters:
+        employee_id (int): The ID of the employee to retrieve.
+    
+    Returns:
+        Employee: The matching employee record.
+    
+    Raises:
+        HTTPException: If no employee exists with the specified ID.
+    """
     emp = db.query(Employee).filter(Employee.id == employee_id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
@@ -109,6 +150,16 @@ def get_employee(employee_id: int, db: Session = Depends(get_db), current_user =
 
 @router.put("/employees/{employee_id}", response_model=EmployeeResponse)
 def update_employee(employee_id: int, data: EmployeeCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Update an employee's information and record the modification time.
+    
+    Parameters:
+        employee_id (int): The identifier of the employee to update.
+        data (EmployeeCreate): The employee fields to apply.
+    
+    Returns:
+        Employee: The updated employee record.
+    """
     emp = db.query(Employee).filter(Employee.id == employee_id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")

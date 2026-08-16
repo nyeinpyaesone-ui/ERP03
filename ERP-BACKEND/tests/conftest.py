@@ -20,7 +20,9 @@ from sqlalchemy.pool import StaticPool
 
 @pytest.fixture(scope="session", autouse=True)
 def set_test_mode():
-    """Set TEST_MODE environment variable for all tests."""
+    """
+    Enable test mode for the test session and remove its environment variable during cleanup.
+    """
     os.environ['TEST_MODE'] = 'True'
     # Force reload of settings if already loaded
     from app.config import settings
