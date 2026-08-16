@@ -4,13 +4,12 @@ services:
     environment:
       POSTGRES_PASSWORD: null
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-    secrets:
-      - postgres_password
+    secrets: [postgres_password]
     ports: []
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  backend:
+  erp-backend:
     restart: unless-stopped
     environment:
       DATABASE_URL: null
@@ -19,9 +18,7 @@ services:
       SECRET_KEY_FILE: /run/secrets/secret_key
       ENVIRONMENT: production
       DEBUG: "false"
-    secrets:
-      - database_url
-      - secret_key
+    secrets: [database_url, secret_key]
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     volumes: []
 

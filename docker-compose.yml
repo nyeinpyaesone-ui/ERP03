@@ -25,9 +25,9 @@ services:
       - redis_data:/data
     command: ["redis-server", "--appendonly", "yes"]
 
-  backend:
+  erp-backend:
     build:
-      context: ./backend
+      context: ./ERP-BACKEND
       dockerfile: Dockerfile
     container_name: erp_solution-backend
     environment:
@@ -44,18 +44,18 @@ services:
       redis:
         condition: service_started
     volumes:
-      - ./backend:/app
+      - ./ERP-BACKEND:/app
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   frontend:
     build:
-      context: ./backend/frontend-react
+      context: ./ERP-BACKEND/frontend-react
       dockerfile: Dockerfile
     container_name: erp-frontend
     ports:
       - "3000:80"
     depends_on:
-      - backend
+      - erp-backend
 
   ollama:
     image: ollama/ollama:0.32.5

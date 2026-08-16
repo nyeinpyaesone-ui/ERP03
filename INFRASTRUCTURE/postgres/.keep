@@ -1,0 +1,5 @@
+# Architecture boundary
+
+This directory is an explicit architectural boundary from the ERP/AI system blueprint.
+
+Keep dependencies flowing inward and keep ERP system-of-record logic isolated from AI orchestration. See `/ARCHITECTURE.md` for the authoritative boundary map.
