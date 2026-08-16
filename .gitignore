@@ -1,26 +1,3 @@
-# Environment and runtime secrets
-.env
-.env.*
-!.env.example
-secrets/*
-!secrets/README.md
-
-# Python
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-
-# Node
-node_modules/
-dist/
-
-# Runtime data
-uploads/
-static/generated/
-*.log
-
-# IDE / OS
-.vscode/
-.idea/
-.DS_Store
+```
+ERP03
+```
