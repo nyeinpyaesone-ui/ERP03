@@ -14,7 +14,12 @@ from typing import Optional, Dict, Any, List, TypeVar, Generic
 from datetime import timedelta
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from ..contracts.schemas import (
+# Import schemas with absolute path to avoid relative import issues
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from contracts.schemas import (
     BaseResponse,
     ErrorResponse,
     UserSchema,
