@@ -59,8 +59,6 @@ jobs:
           BACKEND_URL: ${{ vars.BACKEND }}
         run: |
           set -euo pipefail
-          erp03="${ERP_CORE_URL#https://hub.docker.com/repository/docker/}"
-          erp03="${erp03%/}"
           frontend="${FRONTEND_URL#https://hub.docker.com/repository/docker/}"
           frontend="${frontend%/}"
           backend="${BACKEND_URL#https://hub.docker.com/repository/docker/}"
@@ -77,19 +75,19 @@ jobs:
         id: frontend
         uses: docker/build-push-action@v6
         with:
-          context: ./backend/frontend-react
-          file: ./backend/frontend-react/Dockerfile
+          context: ./ERP-BACKEND/frontend-react
+          file: ./ERP-BACKEND/frontend-react/Dockerfile
           push: true
           tags: ${{ steps.images.outputs.frontend }}:${{ github.ref_name }}
           provenance: true
           sbom: true
 
-      - name: Publish backend image
+      - name: Publish ERP backend image
         id: backend
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
-          file: ./backend/Dockerfile
+          context: ./ERP-BACKEND
+          file: ./ERP-BACKEND/Dockerfile
           push: true
           tags: ${{ steps.images.outputs.backend }}:${{ github.ref_name }}
           provenance: true
@@ -104,8 +102,8 @@ jobs:
       - name: Record release digests
         run: |
           echo "Frontend digest: ${{ needs.publish.outputs.frontend_digest }}"
-          echo "Backend digest: ${{ needs.publish.outputs.backend_digest }}"
-          echo "Configure the staging environment's deployment integration to consume these immutable digests."
+          echo "ERP backend digest: ${{ needs.publish.outputs.backend_digest }}"
+          echo "Configure staging deployment to consume these immutable digests."
 
   production-gate:
     name: Production approval gate

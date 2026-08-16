@@ -1,18 +1,19 @@
-name: Docker Image CI
+name: Container Build Validation
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag my-image-name:$(date +%s)
+      - uses: actions/checkout@v4
+
+      - name: Build ERP backend image
+        run: docker build ./ERP-BACKEND -f ./ERP-BACKEND/Dockerfile -t erp03-backend:ci
+
+      - name: Build ERP frontend image
+        run: docker build ./ERP-BACKEND/frontend-react -f ./ERP-BACKEND/frontend-react/Dockerfile -t erp03-frontend:ci

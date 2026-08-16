@@ -13,7 +13,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 from app.database import engine, Base
 from app.routers import (
     auth, crm, hr, inventory, finance, projects,
-    ai, documents, reports, workflows, payments,
+    documents, reports, workflows, payments,
     integrations, analytics, admin, websocket,
     bulk_import_export, migrations
 )
@@ -65,9 +65,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Enterprise Resource Planning with AI-powered features",
+    description="Enterprise Resource Planning system of record",
     version=settings.APP_VERSION,
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 
@@ -123,7 +123,6 @@ app.include_router(hr.router, prefix="/api/v1/hr", tags=["HR"])
 app.include_router(inventory.router, prefix="/api/v1/inventory", tags=["Inventory"])
 app.include_router(finance.router, prefix="/api/v1/finance", tags=["Finance"])
 app.include_router(projects.router, prefix="/api/v1/projects", tags=["Projects"])
-app.include_router(ai.router, prefix="/api/v1/ai", tags=["AI"])
 app.include_router(documents.router, prefix="/api/v1/documents", tags=["Documents"])
 app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
 app.include_router(workflows.router, prefix="/api/v1/workflows", tags=["Workflows"])
@@ -144,25 +143,25 @@ async def root():
         "name": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "status": "running",
+        "system": "ERP System of Record",
+        "ai_boundary": "external",
         "features": [
             "Core ERP (CRM, HR, Inventory, Finance, Projects)",
-            "AI Chat & RAG",
             "Document Management",
             "Reports & Analytics",
             "Workflow Automation",
-            "Stripe Payments",
+            "Payments",
             "WebSocket Real-time",
             "PWA with Offline Support",
-            "AI Forecasting",
             "Bulk Import/Export",
-            "Alembic Migrations"
-        ]
+            "Alembic Migrations",
+        ],
     }
 
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "service": "erp-backend"}
 
 
 @app.get("/metrics", include_in_schema=False)

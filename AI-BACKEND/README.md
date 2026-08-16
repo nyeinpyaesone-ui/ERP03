@@ -1,34 +1,14 @@
-# AI Backend — AI / Agent System
+# AI Backend
 
-`AI-BACKEND/` is a separate AI/agent runtime outside the ERP system of record.
+AI / agent system boundary for ERP03.
 
-## Owns
+## Rules
 
-- AI API routes
-- orchestrator and task planning
-- specialist agents
-- model/LLM routing
-- tool execution
-- memory and retrieval
-- AI policies and safety controls
-- AI-specific events and audit records
+- No direct access to ERP SQLAlchemy models or the ERP database.
+- No ERP transaction ownership.
+- Consume ERP data and commands through `INTEGRATION/` contracts and the ERP API boundary.
+- LLM providers, orchestration, agents, memory, policies, tools, and AI events belong here.
 
-## Hard boundary
+## Migration state
 
-AI must not import ERP ORM models, repositories, database sessions, migrations, or internal business services.
-
-ERP interaction must use `INTEGRATION/` contracts through authenticated API calls or approved events.
-
-## Migration status
-
-The existing AI implementation inside `backend/app/routers/ai.py` and `backend/app/services/llm_service.py` is transitional legacy code. It must be extracted into this boundary before those files are removed.
-
-Migration order:
-
-1. define integration contracts;
-2. implement AI service behind the contracts;
-3. migrate callers and tests;
-4. remove ERP-side AI wiring;
-5. delete the legacy AI files.
-
-See `docs/architecture/BOUNDARIES.md`.
+The former in-process AI/LLM implementation was removed from the ERP runtime in this architecture migration. Its Git history remains available through the pre-migration archive branch. The new AI runtime must be introduced behind the integration boundary before AI endpoints are re-enabled in production.
