@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime, Date,
-    Numeric, ForeignKey, Index, Float, LargeBinary
+    Numeric, ForeignKey, Index, Float, LargeBinary, UniqueConstraint
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -455,7 +455,7 @@ class Setting(Base):
 
 # Search-related models
 class SearchIndex(Base):
-    __tablename__ = "search_index"
+    __tablename__ = "search_indexes"
 
     id = Column(Integer, primary_key=True, index=True)
     entity_type = Column(String(100), nullable=False, index=True)
@@ -467,6 +467,10 @@ class SearchIndex(Base):
     tags = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('entity_type', 'entity_id', name='uq_search_index_entity'),
+    )
 
 
 class SearchQuery(Base):

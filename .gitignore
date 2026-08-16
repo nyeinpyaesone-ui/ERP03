@@ -26,11 +26,13 @@ wheels/
 .env.local
 .env.*
 
-# Tests
-.pytest_cache/
+# Testing
 .coverage
+coverage.json
 htmlcov/
-coverage/
+.coverage.*
+.cache
+.pytest_cache/
 
 # IDE
 .vscode/

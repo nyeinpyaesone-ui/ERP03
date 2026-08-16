@@ -322,7 +322,7 @@ class TestCheckDataPolicy:
             is_active=True,
             priority=1
         )
-        mock_db.query.return_value.filter.return_value.order_by.return_by.return_value.all.return_value = [policy]
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [policy]
         
         record = {"id": 1, "status": "active"}
         result = check_data_policy(sample_user, "contacts", record, mock_db)
@@ -351,11 +351,8 @@ class TestRequirePermission:
             
             # Note: This would normally be called by FastAPI's Depends
             # Here we just verify it doesn't raise
-            try:
-                result = checker(request=request, current_user=sample_user, db=mock_db)
-                assert result == sample_user
-            except Exception:
-                pass  # May fail due to async context, but logic is tested
+            result = checker(request=request, current_user=sample_user, db=mock_db)
+            assert result == sample_user
 
     @pytest.mark.asyncio
     async def test_require_permission_denied(self, sample_user, mock_db):
