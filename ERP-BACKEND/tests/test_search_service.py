@@ -84,25 +84,36 @@ class TestIndexEntity:
         assert indexed_entity.tags == ["contact", "lead"]
 
     def test_index_entity_update_existing(self, mock_db):
-        """Test updating an existing indexed entity."""
+        """Test updating an existing indexed entity via fallback path."""
+        from sqlalchemy.exc import IntegrityError
+        
         service = SearchService(db=mock_db)
         
-        # Mock existing index entry
-        existing_index = MagicMock(spec=MockSearchIndex)
+        # Simulate IntegrityError to trigger fallback query-and-update path
+        mock_db.execute.side_effect = IntegrityError('test', 'params', 'orig')
+
+        # Mock existing index entry with required attributes
+        existing_index = MagicMock()
+        existing_index.title = "Old Title"
+        existing_index.content = "Old Content"
+        existing_index.searchable_text = "old text"
+        existing_index.meta_data = {}
+        existing_index.tags = []
+        existing_index.updated_at = None
         mock_db.query.return_value.filter.return_value.first.return_value = existing_index
-        
+
         service.index_entity(
             entity_type="contact",
             entity_id=1,
             title="Jane Doe",
             content="Updated content"
         )
-        
+
         # Verify update was performed (not add)
         mock_db.add.assert_not_called()
-        mock_db.commit.assert_called_once()
-        
-        # Verify attributes were updated
+        mock_db.commit.assert_called()
+
+        # Verify attributes were updated in fallback path
         assert existing_index.title == "Jane Doe"
         assert existing_index.content == "Updated content"
         assert "Jane Doe" in existing_index.searchable_text
@@ -110,9 +121,14 @@ class TestIndexEntity:
 
     def test_index_entity_with_metadata_values(self, mock_db):
         """Test indexing entity with various metadata value types."""
-        service = SearchService(db=mock_db)
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        from sqlalchemy.exc import IntegrityError
         
+        service = SearchService(db=mock_db)
+        # Setup mock for fallback path - new entity so first() returns None
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        # Mock execute to raise IntegrityError to trigger fallback path
+        mock_db.execute.side_effect = IntegrityError("test", {}, {})
+
         service.index_entity(
             entity_type="product",
             entity_id=1,
@@ -125,10 +141,12 @@ class TestIndexEntity:
                 "active": True  # bool (should be excluded as per isinstance check)
             }
         )
-        
+
+        # Verify add was called in fallback path
+        mock_db.add.assert_called_once()
         indexed_entity = mock_db.add.call_args[0][0]
         searchable = indexed_entity.searchable_text
-        
+
         assert "99.99" in searchable
         assert "10" in searchable
         assert "ABC123" in searchable
@@ -138,23 +156,26 @@ class TestIndexEntity:
 
     def test_index_entity_empty_metadata_and_tags(self, mock_db):
         """Test indexing entity with empty metadata and tags."""
-        service = SearchService(db=mock_db)
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        from sqlalchemy.exc import IntegrityError
         
+        service = SearchService(db=mock_db)
+        # Setup mock for fallback path - new entity so first() returns None
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        # Mock execute to raise IntegrityError to trigger fallback path
+        mock_db.execute.side_effect = IntegrityError("test", {}, {})
+
         service.index_entity(
             entity_type="company",
             entity_id=1,
             title="Test Company",
             content="Content"
         )
-        
+
+        # Verify add was called in fallback path
+        mock_db.add.assert_called_once()
         indexed_entity = mock_db.add.call_args[0][0]
         assert indexed_entity.meta_data == {}
         assert indexed_entity.tags == []
-
-
-class TestRemoveFromIndex:
-    """Tests for remove_from_index method."""
 
     def test_remove_from_index_success(self, mock_db):
         """Test removing an entity from the index."""
