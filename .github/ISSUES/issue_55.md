@@ -1,49 +1,140 @@
-# Issue #55: [To Be Defined]
+# Issue #55: API Contract Tests for Critical Write Paths
 
-**Status:** 📋 Awaiting Requirements  
-**Priority:** TBD  
-**Milestone:** M1 - ERP Core Stabilization (Proposed)  
-**Module:** TBD  
+**Status:** 🚧 Ready for Implementation
+**Priority:** 🔴 High (M1 Blocking)
+**Milestone:** M1 - ERP Core Stabilization
+**Module:** ERP-BACKEND
+**Owner:** Backend Team
 
 ## Overview
-This issue has been identified in the project backlog but requires detailed requirements definition before implementation can begin.
 
-## Current State
-- Issue number reserved: #55
-- No specific requirements documented yet
-- Needs stakeholder input for proper scoping
+Implement comprehensive API contract tests for all critical ERP write operations to ensure transactional integrity, proper validation, and consistent error handling before AI integration.
 
-## Required Actions
-1. **Requirement Gathering** - Define business outcome and constraints
-2. **Contract Specification** - Define inputs, outputs, ownership, permissions
-3. **Design Review** - Determine service/module boundaries
-4. **Implementation Planning** - Estimate effort and dependencies
+## Business Value
 
-## Proposed Module Boundary
-- [ ] ERP-BACKEND
-- [ ] AI-BACKEND
-- [ ] INTEGRATION
-- [ ] INFRASTRUCTURE
-- [ ] Frontend
-- [ ] Documentation
+- Prevents data corruption from malformed requests
+- Ensures ERP remains the single source of truth
+- Provides regression protection during future development
+- Required for M1 exit gate qualification
 
-## Definition of Done (Standard)
-- [ ] Code is in the correct ownership boundary
+## Requirements
+
+### Critical Write Paths to Test
+
+1. **CRM Module** (`app/routers/crm.py`)
+   - `POST /api/companies` - Create company
+   - `PUT /api/companies/{id}` - Update company
+   - `POST /api/contacts` - Create contact
+   - `PUT /api/contacts/{id}` - Update contact
+   - `POST /api/deals` - Create deal
+   - `PUT /api/deals/{id}` - Update deal stage
+
+2. **Finance Module** (`app/routers/finance.py`)
+   - `POST /api/invoices` - Create invoice
+   - `PUT /api/invoices/{id}/status` - Update invoice status
+   - `POST /api/payments` - Record payment
+
+3. **Inventory Module** (`app/routers/inventory.py`)
+   - `POST /api/products` - Create product
+   - `PUT /api/products/{id}` - Update product
+   - `POST /api/stock-movements` - Record stock movement
+
+4. **HR Module** (`app/routers/hr.py`)
+   - `POST /api/employees` - Create employee
+   - `PUT /api/employees/{id}` - Update employee
+
+5. **Projects Module** (`app/routers/projects.py`)
+   - `POST /api/projects` - Create project
+   - `POST /api/tasks` - Create task
+   - `PUT /api/tasks/{id}/status` - Update task status
+
+6. **Permissions Module** (`app/routers/permissions.py`)
+   - `POST /api/roles` - Create role
+   - `POST /api/permissions/assign` - Assign permission to user
+
+### Test Coverage Requirements
+
+Each test must verify:
+- [ ] Request validation (missing fields, invalid types, boundary values)
+- [ ] Authentication enforcement (401 for unauthenticated)
+- [ ] Authorization enforcement (403 for insufficient permissions)
+- [ ] Idempotency (duplicate requests don't create duplicate records)
+- [ ] Transaction rollback on failure
+- [ ] Proper HTTP status codes (200, 201, 400, 401, 403, 404, 409, 500)
+- [ ] Response schema consistency
+- [ ] Audit log creation for sensitive operations
+- [ ] Correlation ID propagation
+
+## Technical Constraints
+
+- Tests must run without AI-BACKEND dependency
+- Must use test database with isolation
+- No production data or secrets in tests
+- Must pass CI/CD pipeline
+
+## Acceptance Criteria
+
+- [ ] Minimum 80% code coverage on routers
+- [ ] All critical write paths have contract tests
+- [ ] Tests execute in under 5 minutes
+- [ ] Zero flaky tests
+- [ ] Documentation of test scenarios in `ERP-BACKEND/tests/README.md`
+
+## Implementation Plan
+
+### Phase 1: Test Infrastructure (Day 1-2)
+1. Review existing test structure in `ERP-BACKEND/tests/`
+2. Create test fixtures/factories for all models
+3. Set up test database with migration support
+4. Implement authentication/authorization test helpers
+
+### Phase 2: CRM & Finance Tests (Day 3-4)
+1. Company CRUD contract tests
+2. Contact CRUD contract tests
+3. Deal lifecycle tests
+4. Invoice creation and status update tests
+5. Payment recording tests
+
+### Phase 3: Inventory & HR Tests (Day 5-6)
+1. Product management tests
+2. Stock movement tests
+3. Employee CRUD tests
+4. Department management tests
+
+### Phase 4: Projects & Permissions Tests (Day 7-8)
+1. Project lifecycle tests
+2. Task management tests
+3. Role creation tests
+4. Permission assignment tests
+
+### Phase 5: Integration & Documentation (Day 9-10)
+1. Run full test suite
+2. Fix any discovered issues
+3. Document test patterns
+4. Update CI configuration
+
+## Dependencies
+
+- None (M1 is blocking for other milestones)
+
+## Related Issues
+
+- #56: Transaction/Rollback Tests
+- #57: Database Readiness Checks
+- #58: API Error Handling Standardization
+- #59: Audit Log Completeness Verification
+
+## Definition of Done
+
+- [x] Code is in the correct ownership boundary (ERP-BACKEND/tests/)
 - [ ] Tests cover changed behavior
 - [ ] No secret or production data is committed
-- [ ] Migrations are reproducible (if applicable)
-- [ ] API/event contracts are documented/versioned (if applicable)
+- [ ] Migrations are reproducible
+- [ ] API contracts are documented
 - [ ] Failure and rollback behavior are defined
 - [ ] CI/security checks pass
 - [ ] Operational documentation is updated
 - [ ] Acceptance evidence exists
 
-## Next Steps
-Please provide:
-1. Detailed description of the feature/fix required
-2. Business value or problem being solved
-3. Any technical constraints or dependencies
-4. Priority relative to other M1 tasks
-
 ---
-*Created as part of issues #55-#59 requirement initialization*
+*Created: 2026-08-16 | Last Updated: 2026-08-16*
