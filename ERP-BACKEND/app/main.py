@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -13,10 +14,13 @@ from app.database import engine, Base
 from app.routers import (
     auth, crm, hr, inventory, finance, projects,
     documents, reports, workflows, payments,
-    integrations, analytics, admin, websocket,
-    bulk_import_export, migrations
+    integrations, analytics, admin, websocket, health
 )
 from app.config import settings
+
+
+# Check if running in test mode
+IS_TEST_MODE = os.getenv("TESTING", "false").lower() == "true" or "pytest" in os.modules
 
 
 class JsonFormatter(logging.Formatter):
@@ -58,7 +62,9 @@ HTTP_REQUEST_DURATION = Histogram(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    # Only create tables if not in test mode (tests handle their own DB setup)
+    if not IS_TEST_MODE:
+        Base.metadata.create_all(bind=engine)
     yield
 
 
@@ -130,8 +136,11 @@ app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["In
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(websocket.router, prefix="/api/v1/ws", tags=["WebSocket"])
-app.include_router(bulk_import_export.router, prefix="/api/v1/bulk", tags=["Bulk Import/Export"])
-app.include_router(migrations.router, prefix="/api/v1/migrations", tags=["Migrations"])
+app.include_router(health.router, tags=["Health Checks"])
+
+# Register exception handlers for standardized error responses
+from app.middleware.error_handler import register_exception_handlers
+register_exception_handlers(app)
 
 
 @app.get("/")
