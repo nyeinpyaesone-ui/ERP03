@@ -6,11 +6,14 @@ on:
   pull_request:
     branches: ["main"]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
 
       - name: Build ERP backend image
         run: docker build ./ERP-BACKEND -f ./ERP-BACKEND/Dockerfile -t erp03-backend:ci
