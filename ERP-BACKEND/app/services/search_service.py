@@ -39,7 +39,7 @@ class SearchService:
             existing.title = title
             existing.content = content
             existing.searchable_text = searchable
-            existing.metadata = metadata or {}
+            existing.meta_data = metadata or {}
             existing.tags = tags or []
             existing.updated_at = datetime.utcnow()
         else:
@@ -217,7 +217,7 @@ class SearchService:
                 elif key.startswith("metadata."):
                     meta_key = key.replace("metadata.", "")
                     base_query = base_query.filter(
-                        SearchIndex.metadata[meta_key].astext == str(value)
+                        SearchIndex.meta_data[meta_key].astext == str(value)
                     )
 
         # Get total count
@@ -237,7 +237,7 @@ class SearchService:
                 "entity_id": r.entity_id,
                 "title": r.title,
                 "content_preview": r.content[:200] if r.content else "",
-                "metadata": r.metadata or {},
+                "metadata": r.meta_data or {},
                 "tags": r.tags or [],
                 "updated_at": r.updated_at.isoformat() if r.updated_at else None
             })
