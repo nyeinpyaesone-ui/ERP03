@@ -40,7 +40,86 @@ Deliver a dependable ERP System of Record first, then add AI through explicit co
 9. Every destructive migration has a recovery strategy.
 10. Every release has reproducible build/test/deployment evidence.
 
-## 3. Milestone and target matrix
+## 3. Diagram-to-repository target mapping
+
+The supplied architecture diagrams describe an ERP runtime made of **framework → core/engine → business modules → data/persistence → integration → operations**, with AI outside the ERP core. The current repository has the outer boundaries but the ERP internal layers are still partially combined inside `ERP-BACKEND/app/`.
+
+### Target ERP internal structure
+
+```text
+ERP-BACKEND/
+├── app/
+│   ├── api/              # HTTP/API boundary
+│   │   ├── routes/       # module endpoints
+│   │   └── middleware/   # auth, request context, error handling
+│   ├── core/             # ERP core/engine
+│   │   ├── registry/     # module/model registration
+│   │   ├── transactions/ # transaction/unit-of-work policy
+│   │   ├── workflow/     # workflow/state transitions
+│   │   ├── rules/        # deterministic business rules
+│   │   ├── permissions/  # authorization policy
+│   │   ├── audit/        # change/audit policy
+│   │   └── reporting/    # deterministic reporting/query services
+│   ├── domain/           # business entities/value objects/policies
+│   ├── services/         # application/use-case services
+│   ├── repositories/     # controlled persistence interfaces
+│   ├── models/           # persistence models
+│   └── database/         # DB/session/migration integration
+├── alembic/              # schema migrations
+└── frontend-react/       # ERP UI
+```
+
+### Target business-module ownership
+
+Business modules remain ERP-owned and should use the same core services rather than implementing independent transaction engines:
+
+```text
+Foundation / Companies
+Finance
+Sales / CRM
+Purchasing
+Inventory / Warehouse
+Manufacturing
+Projects
+HR / Payroll
+Quality
+Maintenance
+Analytics / Reporting
+```
+
+The actual module inventory must be derived from current routes/models before renaming or physically moving files. **Do not create empty architectural folders merely to match a diagram.** Extract a layer only when there is real code and a testable dependency boundary for it.
+
+### Target platform/integration ownership
+
+```text
+INTEGRATION/
+├── contracts/            # versioned public contracts
+├── erp-client/           # ERP client for external consumers
+├── event-bus/             # transport abstraction
+└── authentication/       # service-to-service auth
+
+INFRASTRUCTURE/
+├── postgres/              # ERP persistence runtime
+├── redis/                 # cache/queue runtime where required
+├── ollama/                # model runtime
+└── deployment/            # deployment configuration
+```
+
+AI remains outside the ERP core:
+
+```text
+AI-BACKEND/
+├── api/
+├── orchestrator/
+├── agents/
+├── models/
+├── tools/
+├── memory/
+├── policies/
+└── events/
+```
+
+## 4. Milestone and target matrix
 
 | ID | Target | Status | Primary qualification |
 |---|---|---|---|
@@ -52,7 +131,7 @@ Deliver a dependable ERP System of Record first, then add AI through explicit co
 | M5 | Production qualification | Planned | Security, backup, migration, deployment, observability pass |
 | M6 | v1.0 product release | Gated | All release gates + operational acceptance pass |
 
-## 4. Step-by-step implementation procedure
+## 5. Step-by-step implementation procedure
 
 ### Step 1 — Baseline inventory
 
@@ -81,8 +160,9 @@ Deliver a dependable ERP System of Record first, then add AI through explicit co
 - Do not place model/LLM calls inside ERP business transactions.
 
 **Code/service output**
-- `ERP-BACKEND/app/routers/`
+- `ERP-BACKEND/app/routers/` or target `app/api/routes/`
 - `ERP-BACKEND/app/services/`
+- domain/core components as they become real code
 - database/model layer
 - Alembic migrations
 
@@ -265,9 +345,9 @@ backup/restore evidence where applicable
 release approval
 ```
 
-The repository's release workflow already builds ERP backend/frontend images from the active `ERP-BACKEND` paths and uses immutable image digests as the promotion boundary; staging and production remain approval gates. The workflow must be treated as a release mechanism, not proof that a release has already passed.
+The repository's release workflow builds ERP backend/frontend images from the active `ERP-BACKEND` paths and uses immutable image digests as the promotion boundary; staging and production remain approval gates. The workflow is a release mechanism, not proof that a release has already passed.
 
-## 5. Product qualification gates
+## 6. Product qualification gates
 
 ### Gate A — Architecture
 - [ ] No ERP↔AI direct database dependency.
@@ -309,7 +389,7 @@ The repository's release workflow already builds ERP backend/frontend images fro
 - [ ] Version/tag created only after acceptance.
 - [ ] Deployment artifact/digest recorded.
 
-## 6. Issue/commit routine
+## 7. Issue/commit routine
 
 Use small atomic changes:
 
@@ -328,7 +408,7 @@ Commit examples:
 
 Do not mix unrelated migrations, AI features, infrastructure changes, and product features in one commit unless they form one inseparable deployment unit.
 
-## 7. Data management rules
+## 8. Data management rules
 
 - Git stores source/configuration templates, not production data.
 - Production secrets belong in deployment secret stores.
@@ -339,7 +419,7 @@ Do not mix unrelated migrations, AI features, infrastructure changes, and produc
 - Schema changes require migration files and rollback/recovery consideration.
 - Destructive data changes require explicit backup/recovery evidence.
 
-## 8. Current blockers
+## 9. Current blockers
 
 1. ERP runtime needs independent functional/test qualification.
 2. Integration directories need real versioned contracts and authentication implementation.
@@ -348,7 +428,7 @@ Do not mix unrelated migrations, AI features, infrastructure changes, and produc
 5. GitHub currently reports no status checks for the latest architecture documentation commit; therefore CI health must not be described as verified until an actual workflow run is observed.
 6. No repository release tag currently exists.
 
-## 9. Release target
+## 10. Release target
 
 **v1.0 is a qualification target, not the current repository status.**
 
