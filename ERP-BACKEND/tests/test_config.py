@@ -17,13 +17,12 @@ class TestSettings:
                 'DATABASE_URL': 'postgresql://test:test@localhost/test',
                 'SECRET_KEY': 'test_secret_key_for_testing_purposes_only_123456'
             }, clear=False):
-                from pydantic_settings import BaseSettings
                 from app.config import Settings
                 
-                # Create a new settings instance to avoid cached one
-                settings = Settings.model_construct()
+                # Create a new settings instance to apply environment values and validation
+                settings = Settings()
                 
-                assert settings.APP_NAME == "ERP SOLUTION System" or True  # Default
+                assert settings.APP_NAME == "ERP SOLUTION System"
                 assert settings.ALGORITHM == "HS256"
                 assert settings.ACCESS_TOKEN_EXPIRE_MINUTES == 60 * 24
 
@@ -31,10 +30,17 @@ class TestSettings:
         """Test that DATABASE_URL is required."""
         from app.config import Settings
         
+        # Clear environment and cache to ensure fresh settings instance
+        # Also need to prevent .env file from being loaded
         with patch.dict(os.environ, {}, clear=True):
             with patch('app.config._read_secret', return_value=None):
+                # Need to clear the lru_cache to get a fresh Settings instance
+                from app.config import get_settings
+                get_settings.cache_clear()
+                
+                # Create settings without loading .env file
                 with pytest.raises(ValueError) as exc_info:
-                    Settings()
+                    Settings(_env_file=None)
                 
                 assert "DATABASE_URL" in str(exc_info.value)
 
@@ -83,9 +89,8 @@ class TestReadSecret:
         
         try:
             with patch.dict(os.environ, {'TEST_SECRET_FILE': secret_file}):
-                # Note: _read_secret looks for env var with _FILE suffix
                 result = _read_secret('TEST_SECRET')
-                assert result is None  # Because we're patching wrong env var name
+                assert result == "secret_value"
                 
             # Direct test
             os.environ['DIRECT_TEST_FILE'] = secret_file
@@ -95,6 +100,8 @@ class TestReadSecret:
             os.unlink(secret_file)
             if 'DIRECT_TEST_FILE' in os.environ:
                 del os.environ['DIRECT_TEST_FILE']
+            if 'TEST_SECRET_FILE' in os.environ:
+                del os.environ['TEST_SECRET_FILE']
 
     def test_read_secret_empty_file(self):
         """Test reading secret from empty file raises error."""

@@ -64,8 +64,10 @@ class TestLogActivity:
             action="test_action"
         )
         
-        assert result is not None
-        assert isinstance(result, ActivityLog) or hasattr(result, 'action')
+        # Capture the exact instance passed to mock_db.add
+        call_args = mock_db.add.call_args[0][0]
+        assert isinstance(call_args, ActivityLog)
+        assert result is call_args  # Verify it returns the same instance
 
     def test_log_activity_with_empty_details(self, mock_db):
         """Test logging activity with empty details dict."""

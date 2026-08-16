@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, and_, text
-from sqlalchemy.dialects.postgresql import array
+from sqlalchemy.dialects.postgresql import array, insert as postgresql_insert
 import httpx
 
 from app.models import SearchIndex, SearchQuery, SearchSuggestion, Contact, Company, Product, Employee, Project, Invoice, Document
@@ -21,7 +21,9 @@ class SearchService:
     # ==================== INDEXING ====================
 
     def index_entity(self, entity_type: str, entity_id: int, title: str, content: str, metadata: Dict[str, Any] = None, tags: List[str] = None):
-        """Index or update an entity in the search index."""
+        """Index or update an entity in the search index using atomic upsert."""
+        from sqlalchemy.exc import IntegrityError
+        
         # Build searchable text
         searchable = f"{title} {content}"
         if metadata:
@@ -29,32 +31,59 @@ class SearchService:
                 if isinstance(value, (str, int, float)):
                     searchable += f" {value}"
 
-        # Check if already indexed
-        existing = self.db.query(SearchIndex).filter(
-            SearchIndex.entity_type == entity_type,
-            SearchIndex.entity_id == entity_id
-        ).first()
-
-        if existing:
-            existing.title = title
-            existing.content = content
-            existing.searchable_text = searchable
-            existing.meta_data = metadata or {}
-            existing.tags = tags or []
-            existing.updated_at = datetime.utcnow()
-        else:
-            index = SearchIndex(
+        # Attempt upsert using PostgreSQL ON CONFLICT
+        try:
+            stmt = postgresql_insert(SearchIndex).values(
                 entity_type=entity_type,
                 entity_id=entity_id,
                 title=title,
                 content=content,
                 searchable_text=searchable,
-                metadata=metadata or {},
-                tags=tags or []
+                meta_data=metadata or {},
+                tags=tags or [],
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            ).on_conflict_do_update(
+                index_elements=['entity_type', 'entity_id'],
+                set_={
+                    'title': title,
+                    'content': content,
+                    'searchable_text': searchable,
+                    'meta_data': metadata or {},
+                    'tags': tags or [],
+                    'updated_at': datetime.utcnow()
+                }
             )
-            self.db.add(index)
+            self.db.execute(stmt)
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            # Fallback to query-and-update approach
+            existing = self.db.query(SearchIndex).filter(
+                SearchIndex.entity_type == entity_type,
+                SearchIndex.entity_id == entity_id
+            ).first()
 
-        self.db.commit()
+            if existing:
+                existing.title = title
+                existing.content = content
+                existing.searchable_text = searchable
+                existing.meta_data = metadata or {}
+                existing.tags = tags or []
+                existing.updated_at = datetime.utcnow()
+            else:
+                index = SearchIndex(
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    title=title,
+                    content=content,
+                    searchable_text=searchable,
+                    meta_data=metadata or {},
+                    tags=tags or []
+                )
+                self.db.add(index)
+
+            self.db.commit()
 
     def remove_from_index(self, entity_type: str, entity_id: int):
         """Remove an entity from the search index."""
@@ -216,9 +245,15 @@ class SearchService:
                     )
                 elif key.startswith("metadata."):
                     meta_key = key.replace("metadata.", "")
-                    base_query = base_query.filter(
-                        SearchIndex.meta_data[meta_key].astext == str(value)
-                    )
+                    # Use as_boolean() for boolean values, astext for others
+                    if isinstance(value, bool):
+                        base_query = base_query.filter(
+                            SearchIndex.meta_data[meta_key].as_boolean() == value
+                        )
+                    else:
+                        base_query = base_query.filter(
+                            SearchIndex.meta_data[meta_key].astext == str(value)
+                        )
 
         # Get total count
         total = base_query.count()
