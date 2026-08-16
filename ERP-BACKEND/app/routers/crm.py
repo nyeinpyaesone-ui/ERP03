@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
@@ -21,6 +21,20 @@ class CompanyCreate(BaseModel):
     website: Optional[str] = None
     address: Optional[str] = None
     phone: Optional[str] = None
+
+class CompanyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    name: str
+    industry: Optional[str] = None
+    size: Optional[str] = None
+    website: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    logo_url: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
 
 class ContactCreate(BaseModel):
     first_name: str
@@ -52,16 +66,16 @@ class DealUpdate(BaseModel):
     actual_close_date: Optional[date] = None
 
 # Companies
-@router.post("/companies")
+@router.post("/companies", response_model=CompanyResponse)
 def create_company(data: CompanyCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    company = Company(**data.dict())
+    company = Company(**data.model_dump())
     db.add(company)
     db.commit()
     db.refresh(company)
     log_activity(db, user_id=current_user.id, action="company_created", entity_type="company", entity_id=company.id)
     return company
 
-@router.get("/companies")
+@router.get("/companies", response_model=List[CompanyResponse])
 def list_companies(
     skip: int = 0,
     limit: int = 100,
@@ -74,19 +88,19 @@ def list_companies(
         query = query.filter(Company.name.ilike(f"%{search}%"))
     return query.offset(skip).limit(limit).all()
 
-@router.get("/companies/{company_id}")
+@router.get("/companies/{company_id}", response_model=CompanyResponse)
 def get_company(company_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     return company
 
-@router.put("/companies/{company_id}")
+@router.put("/companies/{company_id}", response_model=CompanyResponse)
 def update_company(company_id: int, data: CompanyCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    for key, value in data.dict().items():
+    for key, value in data.model_dump().items():
         setattr(company, key, value)
     db.commit()
     db.refresh(company)

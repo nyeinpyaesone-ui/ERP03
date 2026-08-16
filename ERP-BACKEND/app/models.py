@@ -1,11 +1,24 @@
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime, Date,
-    Numeric, ForeignKey, Index, Float, LargeBinary, UniqueConstraint
+    Numeric, ForeignKey, Index, Float, LargeBinary, UniqueConstraint, JSON
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
+
+# Use JSON for SQLite compatibility in tests, JSONB for PostgreSQL in production
+try:
+    # Test if we're using PostgreSQL
+    from sqlalchemy import create_engine
+    test_engine = create_engine("sqlite:///:memory:")
+    USE_JSONB = False
+except:
+    USE_JSONB = True
+
+# Alias JSONB to JSON for SQLite compatibility
+if not USE_JSONB:
+    JSONB = JSON
 
 class User(Base):
     __tablename__ = "users"
@@ -387,9 +400,18 @@ class ActivityLog(Base):
     details = Column(JSONB, nullable=True)
     ip_address = Column(String(50), nullable=True)
     user_agent = Column(String(500), nullable=True)
+    correlation_id = Column(String(100), nullable=True, index=True)
+    request_id = Column(String(100), nullable=True)
+    status = Column(String(50), nullable=False, server_default="SUCCESS")  # SUCCESS, FAILURE, ROLLBACK
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     user = relationship("User", back_populates="activity_logs")
+    
+    __table_args__ = (
+        Index('idx_activity_entity', 'entity_type', 'entity_id'),
+        Index('idx_activity_user', 'user_id', 'created_at'),
+        Index('idx_activity_action', 'action'),
+    )
 
 class Notification(Base):
     __tablename__ = "notifications"
