@@ -39,7 +39,7 @@ class CompanyResponse(BaseModel):
 class ContactCreate(BaseModel):
     first_name: str
     last_name: str
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     phone: Optional[str] = None
     title: Optional[str] = None
     company_id: Optional[int] = None

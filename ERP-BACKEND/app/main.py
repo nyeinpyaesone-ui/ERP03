@@ -136,7 +136,7 @@ app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["In
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(websocket.router, prefix="/api/v1/ws", tags=["WebSocket"])
-app.include_router(health.router, tags=["Health Checks"])
+app.include_router(health.router, prefix="/api/v1", tags=["Health Checks"])
 
 # Register exception handlers for standardized error responses
 from app.middleware.error_handler import register_exception_handlers
