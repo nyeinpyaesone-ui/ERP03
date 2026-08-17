@@ -103,6 +103,40 @@ class Deal(Base):
     contact = relationship("Contact", back_populates="deals")
     company = relationship("Company", back_populates="deals")
     assigned_user = relationship("User", back_populates="deals", foreign_keys=[assigned_to])
+    follow_ups = relationship("FollowUp", back_populates="deal", cascade="all, delete-orphan")
+
+class FollowUp(Base):
+    __tablename__ = "follow_ups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    entity_type = Column(String(50), nullable=False)  # deal, contact, company
+    entity_id = Column(Integer, nullable=False)  # ID of the related entity
+    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="CASCADE"), nullable=True)
+    contact_id = Column(Integer, ForeignKey("contacts.id", ondelete="CASCADE"), nullable=True)
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=True)
+    scheduled_for = Column(DateTime(timezone=True), nullable=False)
+    completed = Column(Boolean, nullable=False, server_default="false")
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    completed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reminder_sent = Column(Boolean, nullable=False, server_default="false")
+    priority = Column(String(50), nullable=False, server_default="medium")  # low, medium, high, urgent
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    deal = relationship("Deal", back_populates="follow_ups", foreign_keys=[deal_id])
+    contact = relationship("Contact", foreign_keys=[contact_id])
+    company = relationship("Company", foreign_keys=[company_id])
+    creator = relationship("User", foreign_keys=[created_by])
+    completer = relationship("User", foreign_keys=[completed_by])
+
+    __table_args__ = (
+        Index('idx_follow_up_entity', 'entity_type', 'entity_id'),
+        Index('idx_follow_up_scheduled', 'scheduled_for'),
+        Index('idx_follow_up_completed', 'completed'),
+    )
 
 class Department(Base):
     __tablename__ = "departments"
