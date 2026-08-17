@@ -1,6 +1,5 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.sql import func
-from sqlalchemy.dialects.postgresql import JSONB
 
 from app.database import Base
 
@@ -41,6 +40,6 @@ class IntegrationCommand(Base):
     requested_by = Column(String(255), nullable=False)
     payload_hash = Column(String(64), nullable=False)
     status_code = Column(Integer, nullable=False)
-    response = Column(JSONB, nullable=False)
+    response = Column(JSON, nullable=False)
     correlation_id = Column(String(128), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
