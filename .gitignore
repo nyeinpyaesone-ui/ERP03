@@ -1,8 +1,8 @@
-```
 # Environment variables
 .env
 .env.local
-.env.*
+*.env.*
+!.env.example
 
 # Python
 __pycache__/
@@ -43,9 +43,6 @@ istanbul*
 # Editors and IDEs
 .vscode/
 .idea/
-*.swp
-*.swo
-*.tmp
 
 # OS generated files
 .DS_Store
@@ -55,9 +52,6 @@ istanbul*
 .Trashes
 ehthumbs.db
 Thumbs.db
-
-# Logs
-*.log
 
 # Coverage reports
 coverage/
@@ -71,4 +65,3 @@ coverage.xml
 node_modules/
 target/
 .gradle/
-```

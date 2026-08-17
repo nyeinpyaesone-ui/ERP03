@@ -1,11 +1,24 @@
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime, Date,
-    Numeric, ForeignKey, Index, Float, LargeBinary
+    Numeric, ForeignKey, Index, Float, LargeBinary, UniqueConstraint, JSON
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
+
+# Use JSON for SQLite compatibility in tests, JSONB for PostgreSQL in production
+try:
+    # Test if we're using PostgreSQL
+    from sqlalchemy import create_engine
+    test_engine = create_engine("sqlite:///:memory:")
+    USE_JSONB = False
+except:
+    USE_JSONB = True
+
+# Alias JSONB to JSON for SQLite compatibility
+if not USE_JSONB:
+    JSONB = JSON
 
 class User(Base):
     __tablename__ = "users"
@@ -387,9 +400,18 @@ class ActivityLog(Base):
     details = Column(JSONB, nullable=True)
     ip_address = Column(String(50), nullable=True)
     user_agent = Column(String(500), nullable=True)
+    correlation_id = Column(String(100), nullable=True, index=True)
+    request_id = Column(String(100), nullable=True)
+    status = Column(String(50), nullable=False, server_default="SUCCESS")  # SUCCESS, FAILURE, ROLLBACK
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     user = relationship("User", back_populates="activity_logs")
+    
+    __table_args__ = (
+        Index('idx_activity_entity', 'entity_type', 'entity_id'),
+        Index('idx_activity_user', 'user_id', 'created_at'),
+        Index('idx_activity_action', 'action'),
+    )
 
 class Notification(Base):
     __tablename__ = "notifications"
@@ -451,4 +473,52 @@ class Setting(Base):
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# Search-related models
+class SearchIndex(Base):
+    __tablename__ = "search_indexes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String(100), nullable=False, index=True)
+    entity_id = Column(Integer, nullable=False)
+    title = Column(String(500), nullable=False)
+    content = Column(Text, nullable=True)
+    searchable_text = Column(Text, nullable=False)
+    meta_data = Column(JSONB, nullable=True)  # Renamed from metadata (reserved word)
+    tags = Column(JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('entity_type', 'entity_id', name='uq_search_index_entity'),
+    )
+
+
+class SearchQuery(Base):
+    __tablename__ = "search_queries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    query = Column(String(500), nullable=False)
+    filters = Column(JSONB, nullable=True)
+    results_count = Column(Integer, nullable=False, server_default="0")
+    execution_time_ms = Column(Integer, nullable=False, server_default="0")
+    clicked_results = Column(JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class SearchSuggestion(Base):
+    __tablename__ = "search_suggestions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    query_text = Column(String(500), nullable=False, index=True)
+    suggestion_type = Column(String(100), nullable=True)
+    entity_type = Column(String(100), nullable=True)
+    entity_id = Column(Integer, nullable=True)
+    frequency = Column(Integer, nullable=False, server_default="1")
+    last_used = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 

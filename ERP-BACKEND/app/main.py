@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -13,14 +14,26 @@ from app.database import engine, Base
 from app.routers import (
     auth, crm, hr, inventory, finance, projects,
     documents, reports, workflows, payments,
-    integrations, analytics, admin, websocket,
-    bulk_import_export, migrations
+    integrations, analytics, admin, websocket, health
 )
 from app.config import settings
 
 
+# Check if running in test mode
+IS_TEST_MODE = os.getenv("TESTING", "false").lower() == "true" or os.getenv("TEST_MODE", "false").lower() == "true"
+
+
 class JsonFormatter(logging.Formatter):
     def format(self, record):
+        """
+        Serialize a log record as a JSON string with standard fields and optional request metadata.
+        
+        Parameters:
+        	record (logging.LogRecord): The log record to serialize.
+        
+        Returns:
+        	str: A JSON representation of the log record.
+        """
         payload = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created)),
             "level": record.levelname,
@@ -58,7 +71,14 @@ HTTP_REQUEST_DURATION = Histogram(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    # Only create tables if not in test mode (tests handle their own DB setup)
+    """
+    Manage application startup and shutdown lifecycle events.
+    
+    Creates database tables during startup when the application is not running in test mode.
+    """
+    if not IS_TEST_MODE:
+        Base.metadata.create_all(bind=engine)
     yield
 
 
@@ -130,8 +150,11 @@ app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["In
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(websocket.router, prefix="/api/v1/ws", tags=["WebSocket"])
-app.include_router(bulk_import_export.router, prefix="/api/v1/bulk", tags=["Bulk Import/Export"])
-app.include_router(migrations.router, prefix="/api/v1/migrations", tags=["Migrations"])
+app.include_router(health.router, prefix="/api/v1", tags=["Health Checks"])
+
+# Register exception handlers for standardized error responses
+from app.middleware.error_handler import register_exception_handlers
+register_exception_handlers(app)
 
 
 @app.get("/")
