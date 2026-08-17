@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { env } from '../config/env';
+import { createApiClient } from '../../../shared/services/apiClient';
 import {
   StoreProduct,
   StoreCategory,
@@ -15,15 +16,10 @@ import {
   SearchFilters,
 } from '../types/ecommerce';
 
-const api = axios.create({
+// Create API client with module-specific configuration
+const api = createApiClient({
   baseURL: `${env.apiUrl}/ecommerce`,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-api.interceptors.request.use(async (config) => {
-  const token = await getAuthToken();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
+  moduleName: 'ecommerce',
 });
 
 // Product APIs
@@ -157,7 +153,6 @@ export const ecommerceKPIAPI = {
     api.get('/reports/sales', { params }).then((r) => r.data),
 };
 
-async function getAuthToken(): Promise<string | null> {
-  return null;
-}
+// Note: Authentication token handling is now managed by the shared apiClient
+// No need for local getAuthToken function
 

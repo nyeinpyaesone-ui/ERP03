@@ -1,66 +1,67 @@
-# Compiled and build artifacts
-*.pyc
-__pycache__/
-*.o
-*.obj
-*.so
-*.dll
-*.exe
-*.class
-*.out
-
-# Dependencies
-.venv/
-venv/
+# Environment variables
 .env
 .env.local
 *.env.*
+!.env.example
 
-# Logs and temp files
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.ENV
+.python-version
+.python_history
+*.pot
+*.pot.*
+*.mo
 *.log
 *.tmp
 *.swp
 *.swo
 
-# Editors
+# Build and distribution artifacts
+build/
+dist/
+*.egg
+*.egg-info/
+MANIFEST
+.coverage
+htmlcov/
+.coverage.*
+.nyc_output
+istanbul*
+.mypy_cache/
+.pytest_cache/
+.tox/
+.hypothesis/
+
+# Editors and IDEs
 .vscode/
 .idea/
 
-# Build and distribution
-build/
-dist/
-target/
-.gradle/
-.mypy_cache/
-.pytest_cache/
-coverage/
-htmlcov/
-.coverage
-
-# System files
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Archives
-*.zip
-*.gz
-*.tar
-*.tgz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.cab
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
+# Coverage reports
+coverage/
+coverage.xml
+*.gcov
+*.lcov
+*.profraw
+*.profdata
+
+# Dependency directories
+node_modules/
+target/
+.gradle/
