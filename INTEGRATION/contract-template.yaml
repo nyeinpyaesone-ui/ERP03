@@ -1,0 +1,49 @@
+contract:
+  name: erp-ai
+  version: v1
+  status: draft
+
+transport:
+  protocol: https
+  authentication: service-jwt
+  correlation_header: X-Correlation-ID
+  idempotency_header: Idempotency-Key
+
+command:
+  required:
+    - command_id
+    - actor
+    - correlation_id
+  mutation_rules:
+    idempotent: true
+    duplicate_behavior: return-original-result
+
+error_contract:
+  fields:
+    - code
+    - message
+    - correlation_id
+  mappings:
+    unauthorized: 401
+    forbidden: 403
+    validation_error: 422
+    conflict: 409
+    not_found: 404
+    business_rule_violation: 400
+    unavailable: 503
+
+events:
+  envelope:
+    required:
+      - event_id
+      - event_type
+      - event_version
+      - occurred_at
+      - correlation_id
+      - producer
+      - payload
+
+compatibility:
+  additive_minor_changes_allowed: true
+  breaking_changes_require_major_version: true
+  unknown_fields_must_be_ignored_by_consumers: true

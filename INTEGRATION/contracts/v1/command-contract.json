@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://erp03.local/contracts/integration/v1/command-contract.json",
+  "title": "ERP03 Integration Command v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["command_id", "command_type", "requested_by", "payload"],
+  "properties": {
+    "command_id": {"type": "string", "format": "uuid"},
+    "command_type": {
+      "type": "string",
+      "enum": ["purchase_order_approve", "purchase_order_reject"]
+    },
+    "requested_by": {"type": "string", "minLength": 1, "maxLength": 128},
+    "payload": {"type": "object", "additionalProperties": true}
+  }
+}
