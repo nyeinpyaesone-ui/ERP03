@@ -58,32 +58,68 @@ class SearchService:
             self.db.commit()
         except IntegrityError:
             self.db.rollback()
-            # Fallback to query-and-update approach
-            existing = self.db.query(SearchIndex).filter(
-                SearchIndex.entity_type == entity_type,
-                SearchIndex.entity_id == entity_id
-            ).first()
+            raise
 
-            if existing:
-                existing.title = title
-                existing.content = content
-                existing.searchable_text = searchable
-                existing.meta_data = metadata or {}
-                existing.tags = tags or []
-                existing.updated_at = datetime.utcnow()
-            else:
-                index = SearchIndex(
-                    entity_type=entity_type,
-                    entity_id=entity_id,
-                    title=title,
-                    content=content,
-                    searchable_text=searchable,
-                    meta_data=metadata or {},
-                    tags=tags or []
-                )
-                self.db.add(index)
-
+    def _bulk_index(self, batch_data: List[Dict[str, Any]]):
+        """Bulk insert/update multiple entities efficiently using batch operations.
+        
+        Args:
+            batch_data: List of dictionaries containing entity data to index.
+                       Each dict should have: entity_type, entity_id, title, content,
+                       meta_data, tags, searchable_text
+        """
+        from sqlalchemy.exc import IntegrityError
+        
+        if not batch_data:
+            return
+        
+        # Prepare bulk upsert using PostgreSQL's execute_values for efficiency
+        try:
+            values_list = []
+            for item in batch_data:
+                values_list.append({
+                    "entity_type": item["entity_type"],
+                    "entity_id": item["entity_id"],
+                    "title": item["title"],
+                    "content": item["content"],
+                    "searchable_text": item.get("searchable_text", f"{item['title']} {item['content']}"),
+                    "meta_data": item.get("meta_data", {}),
+                    "tags": item.get("tags", []),
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow()
+                })
+            
+            # Use bulk insert with upsert on conflict
+            stmt = postgresql_insert(SearchIndex).values(values_list).on_conflict_do_update(
+                index_elements=['entity_type', 'entity_id'],
+                set_={
+                    'title': stmt.excluded.title,
+                    'content': stmt.excluded.content,
+                    'searchable_text': stmt.excluded.searchable_text,
+                    'meta_data': stmt.excluded.meta_data,
+                    'tags': stmt.excluded.tags,
+                    'updated_at': datetime.utcnow()
+                }
+            )
+            self.db.execute(stmt)
             self.db.commit()
+        except IntegrityError as e:
+            self.db.rollback()
+            # Fallback to individual indexing for problematic records
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Bulk indexing failed, falling back to individual: {e}")
+            for item in batch_data:
+                try:
+                    self.index_entity(
+                        item["entity_type"],
+                        item["entity_id"],
+                        item["title"],
+                        item["content"],
+                        item.get("meta_data"),
+                        item.get("tags")
+                    )
+                except Exception as inner_e:
+                    logger.error(f"Failed to index entity {item['entity_type']}:{item['entity_id']}: {inner_e}")
 
     def remove_from_index(self, entity_type: str, entity_id: int):
         """Remove an entity from the search index."""
@@ -93,96 +129,146 @@ class SearchService:
         ).delete()
         self.db.commit()
 
-    def index_all_contacts(self):
-        """Index all contacts."""
-        contacts = self.db.query(Contact).all()
-        for c in contacts:
-            self.index_entity(
-                "contact",
-                c.id,
-                f"{c.first_name} {c.last_name}",
-                f"{c.email or ''} {c.phone or ''} {c.title or ''} {c.notes or ''}",
-                metadata={
-                    "email": c.email,
-                    "phone": c.phone,
-                    "status": c.status,
-                    "company_id": c.company_id,
-                    "assigned_to": c.assigned_to
-                },
-                tags=[c.status, "contact"]
-            )
+    def index_all_contacts(self, batch_size: int = 500):
+        """Index all contacts using batch processing to reduce memory footprint."""
+        offset = 0
+        while True:
+            contacts = self.db.query(Contact).limit(batch_size).offset(offset).all()
+            if not contacts:
+                break
+            
+            batch_data = []
+            for c in contacts:
+                batch_data.append({
+                    "entity_type": "contact",
+                    "entity_id": c.id,
+                    "title": f"{c.first_name} {c.last_name}",
+                    "content": f"{c.email or ''} {c.phone or ''} {c.title or ''} {c.notes or ''}",
+                    "meta_data": {
+                        "email": c.email,
+                        "phone": c.phone,
+                        "status": c.status,
+                        "company_id": c.company_id,
+                        "assigned_to": c.assigned_to
+                    },
+                    "tags": [c.status, "contact"],
+                    "searchable_text": f"{c.first_name} {c.last_name} {c.email or ''} {c.phone or ''} {c.title or ''} {c.notes or ''}"
+                })
+            
+            self._bulk_index(batch_data)
+            offset += batch_size
 
-    def index_all_companies(self):
-        """Index all companies."""
-        companies = self.db.query(Company).all()
-        for c in companies:
-            self.index_entity(
-                "company",
-                c.id,
-                c.name,
-                f"{c.industry or ''} {c.website or ''} {c.address or ''} {c.phone or ''}",
-                metadata={
-                    "industry": c.industry,
-                    "size": c.size,
-                    "website": c.website
-                },
-                tags=[c.industry, "company"] if c.industry else ["company"]
-            )
+    def index_all_companies(self, batch_size: int = 500):
+        """Index all companies using batch processing."""
+        offset = 0
+        while True:
+            companies = self.db.query(Company).limit(batch_size).offset(offset).all()
+            if not companies:
+                break
+            
+            batch_data = []
+            for c in companies:
+                batch_data.append({
+                    "entity_type": "company",
+                    "entity_id": c.id,
+                    "title": c.name,
+                    "content": f"{c.industry or ''} {c.website or ''} {c.address or ''} {c.phone or ''}",
+                    "meta_data": {
+                        "industry": c.industry,
+                        "size": c.size,
+                        "website": c.website
+                    },
+                    "tags": [c.industry, "company"] if c.industry else ["company"],
+                    "searchable_text": f"{c.name} {c.industry or ''} {c.website or ''} {c.address or ''} {c.phone or ''}"
+                })
+            
+            self._bulk_index(batch_data)
+            offset += batch_size
 
-    def index_all_products(self):
-        """Index all products."""
-        products = self.db.query(Product).all()
-        for p in products:
-            self.index_entity(
-                "product",
-                p.id,
-                p.name,
-                f"{p.sku} {p.description or ''} {p.category or ''} {p.supplier or ''}",
-                metadata={
-                    "sku": p.sku,
-                    "category": p.category,
-                    "price": float(p.unit_price) if p.unit_price else 0,
-                    "stock": p.quantity_in_stock,
-                    "status": p.status
-                },
-                tags=[p.category, p.status, "product"] if p.category else [p.status, "product"]
-            )
+    def index_all_products(self, batch_size: int = 500):
+        """Index all products using batch processing."""
+        offset = 0
+        while True:
+            products = self.db.query(Product).limit(batch_size).offset(offset).all()
+            if not products:
+                break
+            
+            batch_data = []
+            for p in products:
+                batch_data.append({
+                    "entity_type": "product",
+                    "entity_id": p.id,
+                    "title": p.name,
+                    "content": f"{p.sku} {p.description or ''} {p.category or ''} {p.supplier or ''}",
+                    "meta_data": {
+                        "sku": p.sku,
+                        "category": p.category,
+                        "price": float(p.unit_price) if p.unit_price else 0,
+                        "stock": p.quantity_in_stock,
+                        "status": p.status
+                    },
+                    "tags": [p.category, p.status, "product"] if p.category else [p.status, "product"],
+                    "searchable_text": f"{p.name} {p.sku} {p.description or ''} {p.category or ''} {p.supplier or ''}"
+                })
+            
+            self._bulk_index(batch_data)
+            offset += batch_size
 
-    def index_all_employees(self):
-        """Index all employees."""
-        employees = self.db.query(Employee).all()
-        for e in employees:
-            self.index_entity(
-                "employee",
-                e.id,
-                e.employee_code,
-                f"{e.job_title or ''} {e.address or ''} {e.emergency_contact or ''}",
-                metadata={
-                    "code": e.employee_code,
-                    "department_id": e.department_id,
-                    "status": e.status,
-                    "employment_type": e.employment_type
-                },
-                tags=[e.status, e.employment_type, "employee"]
-            )
+    def index_all_employees(self, batch_size: int = 500):
+        """Index all employees using batch processing."""
+        offset = 0
+        while True:
+            employees = self.db.query(Employee).limit(batch_size).offset(offset).all()
+            if not employees:
+                break
+            
+            batch_data = []
+            for e in employees:
+                batch_data.append({
+                    "entity_type": "employee",
+                    "entity_id": e.id,
+                    "title": e.employee_code,
+                    "content": f"{e.job_title or ''} {e.address or ''} {e.emergency_contact or ''}",
+                    "meta_data": {
+                        "code": e.employee_code,
+                        "department_id": e.department_id,
+                        "status": e.status,
+                        "employment_type": e.employment_type
+                    },
+                    "tags": [e.status, e.employment_type, "employee"],
+                    "searchable_text": f"{e.employee_code} {e.job_title or ''} {e.address or ''} {e.emergency_contact or ''}"
+                })
+            
+            self._bulk_index(batch_data)
+            offset += batch_size
 
-    def index_all_documents(self):
-        """Index all documents."""
-        documents = self.db.query(Document).all()
-        for d in documents:
-            self.index_entity(
-                "document",
-                d.id,
-                d.title,
-                f"{d.filename} {d.extracted_text or ''} {d.mime_type or ''}",
-                metadata={
-                    "filename": d.filename,
-                    "mime_type": d.mime_type,
-                    "entity_type": d.entity_type,
-                    "file_size": d.file_size
-                },
-                tags=[d.mime_type, d.entity_type, "document"] if d.mime_type else ["document"]
-            )
+    def index_all_documents(self, batch_size: int = 500):
+        """Index all documents using batch processing."""
+        offset = 0
+        while True:
+            documents = self.db.query(Document).limit(batch_size).offset(offset).all()
+            if not documents:
+                break
+            
+            batch_data = []
+            for d in documents:
+                batch_data.append({
+                    "entity_type": "document",
+                    "entity_id": d.id,
+                    "title": d.title,
+                    "content": f"{d.filename} {d.extracted_text or ''} {d.mime_type or ''}",
+                    "meta_data": {
+                        "filename": d.filename,
+                        "mime_type": d.mime_type,
+                        "entity_type": d.entity_type,
+                        "file_size": d.file_size
+                    },
+                    "tags": [d.mime_type, d.entity_type, "document"] if d.mime_type else ["document"],
+                    "searchable_text": f"{d.title} {d.filename} {d.extracted_text or ''} {d.mime_type or ''}"
+                })
+            
+            self._bulk_index(batch_data)
+            offset += batch_size
 
     def reindex_all(self):
         """Reindex all entities."""
