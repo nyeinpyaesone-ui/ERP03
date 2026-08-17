@@ -6,13 +6,17 @@ on:
     paths:
       - 'ERP-BACKEND/**'
       - 'ERP-BACKEND/frontend-react/**'
-      - 'AI-BACKEND/**'   # optional; remove if not needed
+      - 'AI-BACKEND/**'
+      - 'INTEGRATION/**'
+      - '.github/workflows/ci.yml'
   push:
     branches: [main]
     paths:
       - 'ERP-BACKEND/**'
       - 'ERP-BACKEND/frontend-react/**'
       - 'AI-BACKEND/**'
+      - 'INTEGRATION/**'
+      - '.github/workflows/ci.yml'
 
 permissions:
   contents: read
@@ -41,6 +45,17 @@ jobs:
         working-directory: ERP-BACKEND
         run: |
           if [ -d tests ]; then pytest -q; else echo "No tests found"; fi
+
+  integration-contract-test:
+    name: Integration Contract Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38
+        with:
+          python-version: "3.12"
+      - name: Run M2 contract tests
+        run: python -m pytest -q INTEGRATION/contracts/v1/test_contract.py
 
   frontend-build:
     name: Frontend Build
