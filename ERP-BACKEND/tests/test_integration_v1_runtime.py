@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.database import get_db
 from app.main import app
 from app.models import User
@@ -32,8 +33,14 @@ def integration_client(db_session):
         app.dependency_overrides.pop(get_db, None)
 
 
-def _service_token(actor_id=10):
-    return {"Authorization": "Bearer integration-test-token", "Idempotency-Key": str(uuid.uuid4()) + "-key"}
+def _claims(actor_id=10, subject="ai-service", service=True, valid_issuer=True, valid_audience=True):
+    return {
+        "sub": subject,
+        "service": service,
+        "actor_id": actor_id,
+        "iss": settings.INTEGRATION_SERVICE_ISSUER if valid_issuer else "invalid-issuer",
+        "aud": settings.INTEGRATION_SERVICE_AUDIENCE if valid_audience else "invalid-audience",
+    }
 
 
 def test_missing_service_authentication_is_401(integration_client):
@@ -44,14 +51,21 @@ def test_missing_service_authentication_is_401(integration_client):
 
 def test_non_service_principal_is_403(integration_client):
     client, _ = integration_client
-    with patch("app.routers.integration_v1.decode_token", return_value={"sub": "user", "service": False, "actor_id": 10}):
+    with patch("app.routers.integration_v1.decode_token", return_value=_claims(service=False)):
         response = client.get("/integration/v1/erp/purchase-orders/100", headers={"Authorization": "Bearer token"})
     assert response.status_code == 403
 
 
+def test_invalid_service_issuer_is_401(integration_client):
+    client, _ = integration_client
+    with patch("app.routers.integration_v1.decode_token", return_value=_claims(valid_issuer=False)):
+        response = client.get("/integration/v1/erp/purchase-orders/100", headers={"Authorization": "Bearer token"})
+    assert response.status_code == 401
+
+
 def test_purchase_order_read_and_not_found(integration_client):
     client, _ = integration_client
-    with patch("app.routers.integration_v1.decode_token", return_value={"sub": "ai-service", "service": True, "actor_id": 10}):
+    with patch("app.routers.integration_v1.decode_token", return_value=_claims()):
         ok = client.get("/integration/v1/erp/purchase-orders/100", headers={"Authorization": "Bearer token"})
         missing = client.get("/integration/v1/erp/purchase-orders/999", headers={"Authorization": "Bearer token"})
     assert ok.status_code == 200
@@ -68,7 +82,7 @@ def test_first_level_approval_requires_second_level_for_high_value_po(integratio
         "requested_by": "ai-service",
         "payload": {"po_id": 100, "comment": "Approved at level one"},
     }
-    with patch("app.routers.integration_v1.decode_token", return_value={"sub": "ai-service", "service": True, "actor_id": 10}):
+    with patch("app.routers.integration_v1.decode_token", return_value=_claims(actor_id=10)):
         response = client.post("/integration/v1/erp/commands", json=body, headers={"Authorization": "Bearer token", "Idempotency-Key": key})
     assert response.status_code == 202
     assert response.json()["result"]["status"] == "PENDING_SECOND_APPROVAL"
@@ -85,7 +99,7 @@ def test_idempotency_returns_same_result_and_rejects_payload_reuse(integration_c
         "payload": {"po_id": 100},
     }
     key = "m2-idempotency-001"
-    with patch("app.routers.integration_v1.decode_token", return_value={"sub": "ai-service", "service": True, "actor_id": 10}):
+    with patch("app.routers.integration_v1.decode_token", return_value=_claims()):
         first = client.post("/integration/v1/erp/commands", json=body, headers={"Authorization": "Bearer token", "Idempotency-Key": key})
         duplicate = client.post("/integration/v1/erp/commands", json=body, headers={"Authorization": "Bearer token", "Idempotency-Key": key})
         changed = {**body, "payload": {"po_id": 100, "comment": "different"}}
@@ -108,7 +122,7 @@ def test_second_level_approval_is_authorized_and_completes(integration_client):
         "requested_by": "ai-service",
         "payload": {"po_id": 100},
     }
-    with patch("app.routers.integration_v1.decode_token", return_value={"sub": "ai-service", "service": True, "actor_id": 11}):
+    with patch("app.routers.integration_v1.decode_token", return_value=_claims(actor_id=11)):
         response = client.post("/integration/v1/erp/commands", json=body, headers={"Authorization": "Bearer token", "Idempotency-Key": "m2-level2-001"})
     assert response.status_code == 202
     assert response.json()["result"]["status"] == "APPROVED"
@@ -122,6 +136,6 @@ def test_wrong_role_is_403(integration_client):
         "requested_by": "ai-service",
         "payload": {"po_id": 100},
     }
-    with patch("app.routers.integration_v1.decode_token", return_value={"sub": "ai-service", "service": True, "actor_id": 12}):
+    with patch("app.routers.integration_v1.decode_token", return_value=_claims(actor_id=12)):
         response = client.post("/integration/v1/erp/commands", json=body, headers={"Authorization": "Bearer token", "Idempotency-Key": "m2-rbac-001"})
     assert response.status_code == 403
