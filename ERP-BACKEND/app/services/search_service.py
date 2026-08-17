@@ -21,7 +21,20 @@ class SearchService:
     # ==================== INDEXING ====================
 
     def index_entity(self, entity_type: str, entity_id: int, title: str, content: str, metadata: Dict[str, Any] = None, tags: List[str] = None):
-        """Index or update an entity in the search index using atomic upsert."""
+        """
+        Add or update an entity's searchable record.
+        
+        Parameters:
+            entity_type (str): Entity classification used to identify the record.
+            entity_id (int): Unique identifier of the entity.
+            title (str): Entity title.
+            content (str): Main searchable content.
+            metadata (Dict[str, Any], optional): Additional scalar values to include in searchable text and stored metadata.
+            tags (List[str], optional): Tags associated with the entity.
+        
+        Raises:
+            IntegrityError: If the index operation violates a database integrity constraint.
+        """
         from sqlalchemy.exc import IntegrityError
         
         # Build searchable text
@@ -61,12 +74,14 @@ class SearchService:
             raise
 
     def _bulk_index(self, batch_data: List[Dict[str, Any]]):
-        """Bulk insert/update multiple entities efficiently using batch operations.
+        """
+        Bulk inserts or updates search index records.
         
-        Args:
-            batch_data: List of dictionaries containing entity data to index.
-                       Each dict should have: entity_type, entity_id, title, content,
-                       meta_data, tags, searchable_text
+        Parameters:
+            batch_data (List[Dict[str, Any]]): Records to index, including entity type,
+                entity ID, title, and content. Optional fields include searchable text,
+                metadata, and tags. If the bulk operation fails due to an integrity
+                error, records are indexed individually.
         """
         from sqlalchemy.exc import IntegrityError
         
@@ -130,7 +145,12 @@ class SearchService:
         self.db.commit()
 
     def index_all_contacts(self, batch_size: int = 500):
-        """Index all contacts using batch processing to reduce memory footprint."""
+        """
+        Index all contacts in batches for full-text search.
+        
+        Parameters:
+        	batch_size (int): The maximum number of contacts processed per batch.
+        """
         offset = 0
         while True:
             contacts = self.db.query(Contact).limit(batch_size).offset(offset).all()
@@ -159,7 +179,12 @@ class SearchService:
             offset += batch_size
 
     def index_all_companies(self, batch_size: int = 500):
-        """Index all companies using batch processing."""
+        """
+        Index all companies in batches.
+        
+        Parameters:
+        	batch_size (int): Maximum number of companies to process per batch.
+        """
         offset = 0
         while True:
             companies = self.db.query(Company).limit(batch_size).offset(offset).all()
@@ -186,7 +211,12 @@ class SearchService:
             offset += batch_size
 
     def index_all_products(self, batch_size: int = 500):
-        """Index all products using batch processing."""
+        """
+        Index all products for search.
+        
+        Parameters:
+        	batch_size (int): Maximum number of products processed per batch.
+        """
         offset = 0
         while True:
             products = self.db.query(Product).limit(batch_size).offset(offset).all()
@@ -215,7 +245,11 @@ class SearchService:
             offset += batch_size
 
     def index_all_employees(self, batch_size: int = 500):
-        """Index all employees using batch processing."""
+        """Index all employees in batches.
+        
+        Parameters:
+        	batch_size (int): Maximum number of employees processed per batch.
+        """
         offset = 0
         while True:
             employees = self.db.query(Employee).limit(batch_size).offset(offset).all()
@@ -243,7 +277,12 @@ class SearchService:
             offset += batch_size
 
     def index_all_documents(self, batch_size: int = 500):
-        """Index all documents using batch processing."""
+        """
+        Index all documents in the search index using batches.
+        
+        Parameters:
+        	batch_size (int): Maximum number of documents to process per batch.
+        """
         offset = 0
         while True:
             documents = self.db.query(Document).limit(batch_size).offset(offset).all()
@@ -271,7 +310,12 @@ class SearchService:
             offset += batch_size
 
     def reindex_all(self):
-        """Reindex all entities."""
+        """
+        Rebuild the search index for all supported entity types.
+        
+        Returns:
+        	dict: The number of indexed contacts, companies, products, employees, and documents.
+        """
         # Clear existing index
         self.db.query(SearchIndex).delete()
         self.db.commit()
