@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import decode_token
+from app.config import settings
 from app.database import get_db
 from app.models import User
 from app.services.activity_log import log_activity
@@ -59,6 +60,12 @@ def require_service(
 
     if payload.get("service") is not True:
         raise HTTPException(status_code=403, detail="Service principal required")
+    if payload.get("iss") != settings.INTEGRATION_SERVICE_ISSUER:
+        raise HTTPException(status_code=401, detail="Invalid service issuer")
+    audience = payload.get("aud")
+    if audience != settings.INTEGRATION_SERVICE_AUDIENCE:
+        raise HTTPException(status_code=401, detail="Invalid service audience")
+
     actor_id = payload.get("actor_id")
     subject = payload.get("sub")
     if not isinstance(actor_id, int) or not subject:
