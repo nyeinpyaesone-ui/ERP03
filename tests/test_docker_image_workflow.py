@@ -299,5 +299,42 @@ class TestBuildPushSteps(unittest.TestCase):
         self.assertIn("./ERP-BACKEND/frontend-react", self.content)
 
 
+class TestWorkflowKnownGapsAndRegressions(unittest.TestCase):
+    """Additional boundary/regression tests documenting a couple of
+    noteworthy properties of this new workflow, to guard against silent
+    behavioral drift in either direction.
+    """
+
+    def setUp(self):
+        self.content = WORKFLOW_PATH.read_text()
+
+    def test_registry_env_var_is_defined_but_unreferenced(self):
+        # `REGISTRY: docker.io` is declared in `env:`, but neither the
+        # `images:` metadata inputs nor the `tags:` outputs reference
+        # `${{ env.REGISTRY }}` anywhere in the file (Docker Hub is used
+        # implicitly as the default registry). This test documents that
+        # fact so that, if `REGISTRY` is later wired into an image
+        # reference, this test is updated deliberately rather than the
+        # dead config going unnoticed indefinitely.
+        self.assertIn("REGISTRY: docker.io", self.content)
+        self.assertNotIn("env.REGISTRY", self.content)
+
+    def test_no_concurrency_control_configured(self):
+        # Unlike the previously-existing `ci.yml`/`release.yml` workflows
+        # (which both defined a `concurrency:` group), this workflow does
+        # not define one. Because it triggers on every push to `main`,
+        # rapid successive pushes could run overlapping build-and-push
+        # jobs concurrently. This test documents the current behavior as a
+        # known gap rather than an assumption.
+        self.assertNotIn("concurrency:", self.content)
+
+    def test_workflow_has_exactly_one_trigger_section(self):
+        # Sanity/boundary check that the `on:` block is only declared
+        # once, guarding against an accidental duplicate top-level key
+        # that YAML would otherwise silently resolve by taking the last
+        # occurrence.
+        self.assertEqual(len(re.findall(r"^on:\s*$", self.content, re.MULTILINE)), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
