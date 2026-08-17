@@ -1,26 +1,67 @@
-# Environment and runtime secrets
+# Environment variables
 .env
-.env.*
+.env.local
+*.env.*
 !.env.example
-secrets/*
-!secrets/README.md
 
 # Python
 __pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-
-# Node
-node_modules/
-dist/
-
-# Runtime data
-uploads/
-static/generated/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.ENV
+.python-version
+.python_history
+*.pot
+*.pot.*
+*.mo
 *.log
+*.tmp
+*.swp
+*.swo
 
-# IDE / OS
+# Build and distribution artifacts
+build/
+dist/
+*.egg
+*.egg-info/
+MANIFEST
+.coverage
+htmlcov/
+.coverage.*
+.nyc_output
+istanbul*
+.mypy_cache/
+.pytest_cache/
+.tox/
+.hypothesis/
+
+# Editors and IDEs
 .vscode/
 .idea/
+
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Coverage reports
+coverage/
+coverage.xml
+*.gcov
+*.lcov
+*.profraw
+*.profdata
+
+# Dependency directories
+node_modules/
+target/
+.gradle/

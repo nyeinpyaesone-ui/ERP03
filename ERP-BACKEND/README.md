@@ -1,5 +1,13 @@
-# ERP Backend — System of Record
+# ERP Backend
 
-Target boundary from the ERP architecture blueprint. ERP owns deterministic business transactions, validation, authorization, persistence, audit, and reporting.
+System-of-record backend for ERP03.
 
-Current legacy implementation remains under `backend/` until migration is completed; do not mix AI orchestration into this boundary.
+## Boundary
+
+- Owns ERP domain, transactions, persistence, authentication, authorization, reporting, and deterministic business workflows.
+- Does not host LLM/agent orchestration or direct model calls.
+- AI capabilities consume ERP data through the `INTEGRATION/` boundary.
+
+## Runtime
+
+The canonical repository-level Compose configuration builds this service from `./ERP-BACKEND`.
