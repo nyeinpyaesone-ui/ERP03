@@ -10,7 +10,7 @@ on:
       - 'INTEGRATION/**'
       - '.github/workflows/ci.yml'
   push:
-    branches: [main]
+    branches: [main, 'feat/m2-runtime-qualification']
     paths:
       - 'ERP-BACKEND/**'
       - 'ERP-BACKEND/frontend-react/**'
