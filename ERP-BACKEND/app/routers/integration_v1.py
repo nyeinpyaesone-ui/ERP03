@@ -8,15 +8,14 @@ import uuid
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+from jose import JWTError
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import decode_token
-from app.config import settings
 from app.database import get_db
 from app.models import User
 from app.services.activity_log import log_activity
@@ -81,11 +80,7 @@ def _get_command_or_none(db: Session, key: str) -> IntegrationCommand | None:
 
 
 @router.get("/erp/purchase-orders/{po_id}")
-def get_purchase_order(
-    po_id: int,
-    ctx: ServiceContext = Depends(require_service),
-    db: Session = Depends(get_db),
-):
+def get_purchase_order(po_id: int, ctx: ServiceContext = Depends(require_service), db: Session = Depends(get_db)):
     po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
     if po is None:
         raise HTTPException(status_code=404, detail="Purchase order not found")
@@ -96,13 +91,7 @@ def get_purchase_order(
     if actor.role not in {"admin", "superadmin", "approver", "second_approver"} and po.requester_id != actor.id:
         raise HTTPException(status_code=403, detail="Not authorized to view purchase order")
 
-    return {
-        "id": po.id,
-        "po_number": po.po_number,
-        "status": po.status,
-        "amount": float(po.amount),
-        "currency_code": po.currency_code,
-    }
+    return {"id": po.id, "po_number": po.po_number, "status": po.status, "amount": float(po.amount), "currency_code": po.currency_code}
 
 
 @router.post("/erp/commands", response_model=CommandAccepted, status_code=202)
@@ -113,6 +102,9 @@ def submit_command(
     ctx: ServiceContext = Depends(require_service),
     db: Session = Depends(get_db),
 ):
+    if command.requested_by != ctx.subject:
+        raise HTTPException(status_code=403, detail="requested_by does not match authenticated service identity")
+
     payload_hash = _payload_hash(command)
     existing = _get_command_or_none(db, idempotency_key)
     if existing:
@@ -155,21 +147,14 @@ def submit_command(
         po.status = "REJECTED"
         next_level = None
 
-    approval = PurchaseOrderApproval(
-        po_id=po.id,
-        approver_id=actor.id,
-        approval_level=level,
-        decision=decision,
-        comment=command.payload.get("comment"),
-    )
-    db.add(approval)
+    db.add(PurchaseOrderApproval(po_id=po.id, approver_id=actor.id, approval_level=level, decision=decision, comment=command.payload.get("comment")))
     response = {
         "command_id": str(command.command_id),
         "status": "accepted",
         "correlation_id": correlation,
         "result": {"po_id": po.id, "status": po.status, "next_approval_level": next_level},
     }
-    record = IntegrationCommand(
+    db.add(IntegrationCommand(
         idempotency_key=idempotency_key,
         command_id=str(command.command_id),
         command_type=command.command_type,
@@ -178,8 +163,7 @@ def submit_command(
         status_code=202,
         response=response,
         correlation_id=correlation,
-    )
-    db.add(record)
+    ))
     try:
         db.flush()
         log_activity(db, user_id=actor.id, action=f"integration_{command.command_type}", entity_type="purchase_order", entity_id=po.id)
@@ -192,5 +176,4 @@ def submit_command(
         if existing.payload_hash != payload_hash:
             raise HTTPException(status_code=409, detail="Idempotency key reused with different payload")
         return existing.response
-
     return response
