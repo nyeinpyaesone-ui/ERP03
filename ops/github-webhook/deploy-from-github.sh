@@ -14,7 +14,7 @@ git fetch --prune origin "$BRANCH"
 git checkout -B "$BRANCH" "origin/$BRANCH"
 git reset --hard "origin/$BRANCH"
 
-docker compose -f "$COMPOSE_FILE" pull erp-backend frontend
+docker compose -f "$COMPOSE_FILE" build --pull erp-backend frontend
 docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
 
 for i in {1..30}; do
