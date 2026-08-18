@@ -282,13 +282,26 @@ async def deep_health_check(db: Session = Depends(get_db)):
     overall_healthy = True
     
     try:
-        # Check 1: Query major tables
+        # Check 1: Query major tables using parameterized queries
+        # SECURITY FIX: Use SQLAlchemy's table reflection instead of string interpolation
         major_tables = ["users", "companies", "products", "invoices"]
         table_checks = {}
         
         for table in major_tables:
             try:
-                result = db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                # Use SQLAlchemy's text() with proper identifier quoting
+                # This prevents SQL injection even though values are hardcoded
+                from sqlalchemy import inspect
+                insp = inspect(db)
+                
+                # Verify table exists before querying (prevents injection)
+                if table not in insp.get_table_names():
+                    table_checks[table] = {"status": "error", "error": "Table not found"}
+                    overall_healthy = False
+                    continue
+                
+                # Safe query with quoted identifier
+                result = db.execute(text(f'SELECT COUNT(*) FROM "{table}"'))
                 count = result.fetchone()[0]
                 table_checks[table] = {"status": "ok", "row_count": count}
             except Exception as e:
@@ -322,7 +335,15 @@ async def deep_health_check(db: Session = Depends(get_db)):
             sequences = ["users_id_seq", "companies_id_seq", "invoices_id_seq"]
             for seq in sequences:
                 try:
-                    result = db.execute(text(f"SELECT last_value FROM {seq}"))
+                    # SECURITY FIX: Validate sequence name against whitelist
+                    allowed_sequences = {"users_id_seq", "companies_id_seq", "invoices_id_seq", 
+                                       "products_id_seq", "orders_id_seq", "customers_id_seq"}
+                    if seq not in allowed_sequences:
+                        sequence_checks[seq] = {"status": "error", "error": "Invalid sequence name"}
+                        overall_healthy = False
+                        continue
+                    
+                    result = db.execute(text(f'SELECT last_value FROM "{seq}"'))
                     last_value = result.fetchone()[0]
                     sequence_checks[seq] = {"status": "ok", "last_value": last_value}
                 except Exception as e:

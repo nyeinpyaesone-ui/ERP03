@@ -17,6 +17,7 @@ from app.routers import (
     integrations, analytics, admin, websocket, health
 )
 from app.config import settings
+from app.middleware.rate_limiter import RateLimiter, AuthRateLimitMiddleware
 
 
 # Check if running in test mode
@@ -89,6 +90,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Initialize rate limiter for API endpoints
+rate_limiter = RateLimiter(default_limit="100/minute")
+app.state.limiter = rate_limiter.limiter
+rate_limiter.setup_exception_handler(app)
+
+# Add auth-specific rate limiting middleware to prevent brute force attacks
+app.add_middleware(AuthRateLimitMiddleware, max_attempts=5, window_seconds=60)
+
 
 @app.middleware("http")
 async def observability_middleware(request, call_next):
@@ -128,12 +137,27 @@ async def observability_middleware(request, call_next):
 
 
 cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
+
+# SECURITY FIX: Restrict CORS methods and headers to only what's necessary
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Only allow necessary HTTP methods instead of wildcard
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    # Only allow necessary headers instead of wildcard
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+        "X-Request-ID"
+    ],
+    # Expose only necessary headers to client
+    expose_headers=["X-Request-ID", "Content-Length"],
+    # Max age for preflight cache
+    max_age=600,
 )
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
