@@ -5,30 +5,36 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
-*.so
-.coverage
-htmlcov/
-.pytest_cache/
-.mypy_cache/
-
-# Dependencies
+env/
 venv/
 .venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+
+# Environment
 .env
 .env.local
-*.env.*
 
-# Logs
+# Compiled and build artifacts
+*.pyc
+__pycache__/
+
+# Dependencies
+ERP-BACKEND/venv/
+ERP-BACKEND/.venv/
+ERP-BACKEND/__pycache__/
+
+# Original rules preserved
 *.log
-
-# Editor/IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
-
-# OS
-.DS_Store
-Thumbs.db
-```.ipynb_checkpoints/
+```
