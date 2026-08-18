@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     INTEGRATION_SERVICE_ISSUER: str = "erp03"
     INTEGRATION_SERVICE_AUDIENCE: str = "erp-ai-integration"
+    GITHUB_WEBHOOK_SECRET: str = ""
 
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
@@ -61,10 +62,13 @@ class Settings(BaseSettings):
 
         database_url = _read_secret("DATABASE_URL")
         secret_key = _read_secret("SECRET_KEY")
+        github_webhook_secret = _read_secret("GITHUB_WEBHOOK_SECRET")
         if database_url:
             self.DATABASE_URL = database_url
         if secret_key:
             self.SECRET_KEY = secret_key
+        if github_webhook_secret:
+            self.GITHUB_WEBHOOK_SECRET = github_webhook_secret
         if not self.DATABASE_URL:
             raise ValueError("DATABASE_URL or DATABASE_URL_FILE is required")
         if len(self.SECRET_KEY) < 32:
