@@ -12,7 +12,7 @@ PORT = int(os.getenv("WEBHOOK_PORT", "9001"))
 SECRET = os.environ["GITHUB_WEBHOOK_SECRET"].encode()
 REPOSITORY = os.getenv("GITHUB_REPOSITORY", "nyeinpyaesone-ui/ERP03")
 BRANCH = os.getenv("GITHUB_BRANCH", "main")
-DEPLOY_SCRIPT = os.getenv("DEPLOY_SCRIPT", "/opt/erp03/deploy-from-github.sh")
+DEPLOY_SCRIPT = os.getenv("DEPLOY_SCRIPT", "/opt/erp03/ops/github-webhook/deploy-from-github.sh")
 
 
 def valid_signature(body: bytes, header: str | None) -> bool:
