@@ -5,30 +5,39 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
-*.so
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
 .coverage
-htmlcov/
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+*.pot
+*.pyc
+*.pyo
+*.pyd
+*.so
+.TemporaryItems
+.deps
 .pytest_cache/
 .mypy_cache/
 
-# Dependencies
-venv/
-.venv/
+# Environment
 .env
 .env.local
-*.env.*
+.env.*
 
 # Logs
 *.log
 
-# Editor/IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+# Temporary files
 *.tmp
-
-# OS
-.DS_Store
-Thumbs.db
-```.ipynb_checkpoints/
+*.swp
+*~
+```

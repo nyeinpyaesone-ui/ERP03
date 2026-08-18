@@ -1,26 +1,32 @@
+"""
+SQLAlchemy ORM models for the ERP system.
+
+This module defines all database models used throughout the application,
+organized by domain:
+- User management and authentication
+- CRM (Companies, Contacts, Deals)
+- HR (Departments, Employees)
+- Inventory (Products, Movements)
+- Finance (Invoices, Payments)
+- Projects and Tasks
+- Documents and Workflows
+- System (Notifications, Activity Logs, Search)
+"""
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime, Date,
     Numeric, ForeignKey, Index, Float, LargeBinary, UniqueConstraint, JSON
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.sql import func
-from app.database import Base
 
-# Use JSON for SQLite compatibility in tests, JSONB for PostgreSQL in production
-try:
-    # Test if we're using PostgreSQL
-    from sqlalchemy import create_engine
-    test_engine = create_engine("sqlite:///:memory:")
-    USE_JSONB = False
-except:
-    USE_JSONB = True
+# Import Base from database module to avoid circular imports
+Base = declarative_base()
 
-# Alias JSONB to JSON for SQLite compatibility
-if not USE_JSONB:
-    JSONB = JSON
 
 class User(Base):
+    """User account model for authentication and authorization."""
+    
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -34,14 +40,19 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    # Relationships
     contacts = relationship("Contact", back_populates="assigned_user", foreign_keys="Contact.assigned_to")
     deals = relationship("Deal", back_populates="assigned_user", foreign_keys="Deal.assigned_to")
     projects_managed = relationship("Project", back_populates="manager", foreign_keys="Project.manager_id")
     tasks = relationship("Task", back_populates="assigned_user", foreign_keys="Task.assigned_to")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     activity_logs = relationship("ActivityLog", back_populates="user")
+    roles = relationship("Role", secondary="user_roles", back_populates="users")
+
 
 class Company(Base):
+    """Company model for CRM functionality."""
+    
     __tablename__ = "companies"
 
     id = Column(Integer, primary_key=True, index=True)
