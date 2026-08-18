@@ -108,6 +108,10 @@ app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(websocket.router, prefix="/api/v1/ws", tags=["WebSocket"])
 app.include_router(health.router, prefix="/api/v1", tags=["Health Checks"])
 
+# AI Assistant router
+from app.ai.assistant import build_router as build_ai_router
+app.include_router(build_ai_router(), prefix="/api/v1/ai", tags=["AI Assistant"])
+
 from app.middleware.error_handler import register_exception_handlers
 register_exception_handlers(app)
 
