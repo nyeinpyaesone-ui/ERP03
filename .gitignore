@@ -4,31 +4,21 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-*.so
-.coverage
-htmlcov/
-.pytest_cache/
-.mypy_cache/
 
-# Dependencies
+# Build and distribution artifacts
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
 venv/
 .venv/
-.env
-.env.local
-*.env.*
+env/
 
 # Logs
 *.log
 
-# Editor/IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
-
-# OS
+# OS generated files
 .DS_Store
 Thumbs.db
 ```.ipynb_checkpoints/
