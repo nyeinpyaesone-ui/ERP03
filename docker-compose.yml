@@ -1,71 +1,74 @@
+# Base docker-compose configuration (shared settings)
 services:
   postgres:
-    image: postgres:15.18-alpine3.24
-    container_name: erp_solution-postgres
+    image: postgres:15-alpine
+    container_name: erp-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-erp}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
-      POSTGRES_DB: ${POSTGRES_DB:-erp_solution}
+      POSTGRES_USER: ${DB_USER:-erp}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+      POSTGRES_DB: ${DB_NAME:-erp_solution}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U $${DB_USER:-erp} -d $${DB_NAME:-erp_solution}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks: [erp-network]
 
   redis:
-    image: redis:7.4.9-alpine3.21
-    container_name: erp_solution-redis
-    ports:
-      - "6379:6379"
+    image: redis:7-alpine
+    container_name: erp-redis
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "$${REDIS_PASSWORD}"]
     volumes:
       - redis_data:/data
-    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [erp-network]
 
   erp-backend:
     build:
       context: ./ERP-BACKEND
       dockerfile: Dockerfile
-    container_name: erp_solution-backend
+    container_name: erp-backend
     environment:
-      DATABASE_URL: ${DATABASE_URL:-}
-      REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY:-}
-      ENVIRONMENT: development
-      DEBUG: "true"
-    ports:
-      - "8000:8000"
+      DATABASE_URL: postgresql://${DB_USER:-erp}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-erp_solution}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
-    volumes:
-      - ./ERP-BACKEND:/app
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+        condition: service_healthy
+    networks: [erp-network]
 
   frontend:
     build:
       context: ./ERP-BACKEND/frontend-react
       dockerfile: Dockerfile
     container_name: erp-frontend
-    ports:
-      - "3000:80"
     depends_on:
       - erp-backend
+    networks: [erp-network]
 
   ollama:
-    image: ollama/ollama:0.32.5
-    container_name: erp_solution-ollama
-    ports:
-      - "11434:11434"
+    image: ollama/ollama:latest
+    container_name: erp-ollama
     volumes:
       - ollama_data:/root/.ollama
+    networks: [erp-network]
 
 volumes:
   postgres_data:
   redis_data:
   ollama_data:
+
+networks:
+  erp-network:
+    driver: bridge
