@@ -49,7 +49,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   publish-main:
-    name: Publish immutable main images
+    name: Publish ERP03 images to GHCR
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate-and-build
     runs-on: ubuntu-latest
@@ -71,6 +71,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Publish ERP backend image
+        id: backend
         uses: docker/build-push-action@v6
         with:
           context: ./ERP-BACKEND
@@ -85,6 +86,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Publish ERP frontend image
+        id: frontend
         uses: docker/build-push-action@v6
         with:
           context: ./ERP-BACKEND/frontend-react
@@ -97,3 +99,46 @@ jobs:
           sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Write release manifest
+        run: |
+          mkdir -p release-manifest
+          cat > release-manifest/erp03-release.txt <<EOF
+          ERP03 release
+          commit=${GITHUB_SHA}
+          backend=ghcr.io/${GITHUB_REPOSITORY_OWNER}/erp03-backend:${GITHUB_SHA}
+          backend_digest=${{ steps.backend.outputs.digest }}
+          frontend=ghcr.io/${GITHUB_REPOSITORY_OWNER}/erp03-frontend:${GITHUB_SHA}
+          frontend_digest=${{ steps.frontend.outputs.digest }}
+          EOF
+
+      - name: Upload release manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: erp03-release-${{ github.sha }}
+          path: release-manifest/erp03-release.txt
+          if-no-files-found: error
+
+  verify-published:
+    name: Verify GHCR release artifacts
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: publish-main
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Verify backend artifact
+        run: docker buildx imagetools inspect ghcr.io/${{ github.repository_owner }}/erp03-backend:${{ github.sha }}
+
+      - name: Verify frontend artifact
+        run: docker buildx imagetools inspect ghcr.io/${{ github.repository_owner }}/erp03-frontend:${{ github.sha }}
