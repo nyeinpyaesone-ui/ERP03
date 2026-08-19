@@ -38,7 +38,7 @@ def create_invoice(db, *, invoice_number: str, contact_id, company_id, issue_dat
             description=i["description"],
             quantity=i["quantity"],
             unit_price=i["unit_price"],
-            line_total=i["quantity"] * i["unit_price"],
+            total=i["quantity"] * i["unit_price"],
         )
         for i in items
     ]
@@ -61,8 +61,8 @@ def record_payment(db, *, invoice_id: int, amount: float, payment_method: str, p
     )
     saved = repo.save_payment(payment)
 
-    invoice.amount_paid += amount
-    invoice.status = "paid" if invoice.amount_paid >= invoice.total else "partial"
+    invoice.amount_paid = float(invoice.amount_paid) + float(amount)
+    invoice.status = "paid" if invoice.amount_paid >= float(invoice.total) else "partial"
     db.commit()
 
     return saved
