@@ -1,113 +1,89 @@
 #!/usr/bin/env bash
 ###############################################################################
-# ERP SOLUTION — Environment Setup
-# Run this after cloning the repository
+# ERP03 — Development Environment Setup
+# Host/devcontainer bootstrap for the active ERP03 architecture.
 ###############################################################################
+set -Eeuo pipefail
 
-set -e
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
 
-C='[0;36m'; G='[0;32m'; Y='[1;33m'; NC='[0m'
+info() { printf '[i] %s\n' "$1"; }
+ok()   { printf '[✓] %s\n' "$1"; }
+fail() { printf '[✗] %s\n' "$1" >&2; exit 1; }
 
-info()  { echo -e "${C}[i]${NC} $1"; }
-ok()    { echo -e "${G}[✓]${NC} $1"; }
-warn()  { echo -e "${Y}[!]${NC} $1"; }
+command -v git >/dev/null || fail "git is required"
+command -v python3 >/dev/null || fail "python3 is required"
+command -v pip3 >/dev/null || fail "pip3 is required"
+command -v node >/dev/null || fail "Node.js is required"
+command -v npm >/dev/null || fail "npm is required"
+command -v docker >/dev/null || fail "Docker is required"
 
-echo "=========================================="
-echo "  ERP SOLUTION Environment Setup"
-echo "=========================================="
-echo ""
+docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin is required"
 
-# Check prerequisites
-info "Checking prerequisites..."
+docker info >/dev/null 2>&1 || fail "Docker daemon is not available"
 
-for cmd in docker docker-compose git node npm python3 pip3; do
-    if command -v "$cmd" &>/dev/null; then
-        ok "$cmd found"
-    else
-        warn "$cmd not found (may be optional)"
-    fi
-done
+PYTHON_MAJOR_MINOR="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+[ "$PYTHON_MAJOR_MINOR" = "3.11" ] || fail "ERP03 backend targets Python 3.11; found $PYTHON_MAJOR_MINOR"
 
-echo ""
+NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
+[ "$NODE_MAJOR" -ge 20 ] || fail "ERP03 frontend requires Node.js 20+; found $NODE_MAJOR"
 
-# Setup backend
-if [ -d "backend" ]; then
-    info "Setting up backend..."
-    cd backend
+ok "Host/runtime prerequisites validated"
 
-    if [ ! -d "venv" ]; then
-        python3 -m venv venv
-        ok "Virtual environment created"
-    fi
-
-    source venv/bin/activate
-
-    if [ -f "requirements.txt" ]; then
-        pip install -r requirements.txt
-        ok "Python dependencies installed"
-    fi
-
-    cd ..
+# Root development configuration is the authoritative Compose configuration.
+if [ ! -f .env ]; then
+  [ -f .env.example ] || fail "Missing .env.example"
+  cp .env.example .env
+  ok "Created root .env from .env.example"
 fi
 
-# Setup frontend
-if [ -d "frontend" ]; then
-    info "Setting up frontend..."
-    cd frontend
+# Replace development placeholders only; never overwrite an existing real value.
+python3 - <<'PY'
+from pathlib import Path
+import secrets
 
-    if [ -f "package.json" ]; then
-        npm install
-        ok "Node dependencies installed"
-    fi
+p = Path('.env')
+s = p.read_text()
+password = secrets.token_urlsafe(24)
+secret = secrets.token_urlsafe(48)
+s = s.replace('replace-with-random-development-secret', password)
+s = s.replace('replace-with-at-least-32-random-characters', secret)
+p.write_text(s)
+PY
 
-    cd ..
+# ERP-BACKEND supports direct local Python development in addition to Compose.
+if [ -f ERP-BACKEND/requirements.txt ]; then
+  if [ ! -d ERP-BACKEND/.venv ]; then
+    python3 -m venv ERP-BACKEND/.venv
+    ok "Created ERP-BACKEND/.venv"
+  fi
+  ERP-BACKEND/.venv/bin/python -m pip install --upgrade pip
+  ERP-BACKEND/.venv/bin/pip install -r ERP-BACKEND/requirements.txt
+  ok "ERP-BACKEND Python dependencies installed"
 fi
 
-# Setup mobile
-if [ -d "mobile" ]; then
-    info "Setting up mobile app..."
-    cd mobile
-
-    if [ -f "package.json" ]; then
-        npm install
-        ok "Mobile dependencies installed"
-    fi
-
-    cd ..
+# The maintained web client is ERP-BACKEND/frontend-react, not the legacy frontend/ path.
+if [ -f ERP-BACKEND/frontend-react/package.json ]; then
+  cd ERP-BACKEND/frontend-react
+  npm install
+  cd "$ROOT_DIR"
+  ok "ERP frontend dependencies installed"
 fi
 
-# Create environment files
-info "Creating environment files..."
+# Validate the repository's real development runtime definition without starting it.
+docker compose config >/dev/null
+ok "docker-compose.yml validated"
 
-if [ ! -f "backend/.env" ]; then
-    cat > backend/.env << EOF
-DATABASE_URL=postgresql://erp:erp_secret@localhost:5432/erp_solution
-REDIS_URL=redis://localhost:6379/0
-SECRET_KEY=change-this-in-production-$(openssl rand -hex 16)
-ENVIRONMENT=development
-OLLAMA_URL=http://localhost:11434
-EOF
-    ok "backend/.env created"
+if [ "${START_SERVICES:-0}" = "1" ]; then
+  docker compose up -d
+  ok "ERP03 development services started"
+else
+  info "Services not started. Run: START_SERVICES=1 ./scripts/setup.sh"
 fi
 
-if [ ! -f "frontend/.env" ]; then
-    cat > frontend/.env << EOF
-REACT_APP_API_URL=http://localhost:8000
-REACT_APP_WS_URL=ws://localhost:8000
-EOF
-    ok "frontend/.env created"
-fi
-
-echo ""
-echo "=========================================="
-echo "  ✅ Setup Complete!"
-echo "=========================================="
-echo ""
-echo "Next steps:"
-echo "  1. Start services:  docker-compose up -d"
-echo "  2. Run backend:     cd backend && source venv/bin/activate && uvicorn app.main:app --reload"
-echo "  3. Run frontend:    cd frontend && npm run dev"
-echo "  4. Run mobile:      cd mobile && npx expo start"
-echo ""
-echo "API docs: http://localhost:8000/docs"
-echo ""
+echo
+echo "ERP03 development environment is ready."
+echo "  API:      http://localhost:8000"
+echo "  Frontend: http://localhost:3000"
+echo "  Ollama:   http://localhost:11434"
