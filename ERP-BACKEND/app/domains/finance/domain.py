@@ -37,5 +37,8 @@ def is_overdue(due_date: date, status: str, *, today: date) -> bool:
 def validate_payment(amount: float, invoice_total: float, amount_already_paid: float) -> None:
     if amount <= 0:
         raise ValueError("Payment amount must be positive")
-    if amount_already_paid + amount > invoice_total + 1e-6:
+    # Convert to float for comparison (handle Decimal types from DB)
+    total_float = float(invoice_total) if hasattr(invoice_total, '__float__') else invoice_total
+    paid_float = float(amount_already_paid) if hasattr(amount_already_paid, '__float__') else amount_already_paid
+    if paid_float + amount > total_float + 1e-6:
         raise ValueError("Payment would exceed invoice total")
