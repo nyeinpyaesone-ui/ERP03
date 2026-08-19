@@ -10,7 +10,7 @@ import hashlib
 import secrets
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 from dataclasses import dataclass
 from enum import Enum
 
@@ -261,8 +261,15 @@ class APIKeyManager:
         # Generate random key
         raw_key = secrets.token_urlsafe(32)
         
-        # Hash the key for storage
-        key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        # Derive a computationally expensive hash for storage
+        salt = secrets.token_bytes(16)
+        iterations = 210000
+        key_hash = hashlib.pbkdf2_hmac(
+            "sha256",
+            raw_key.encode(),
+            salt,
+            iterations
+        ).hex()
         
         # Store key metadata
         self._keys[key_hash] = {
@@ -273,7 +280,9 @@ class APIKeyManager:
             "metadata": metadata or {},
             "created_at": datetime.utcnow(),
             "last_used_at": None,
-            "is_active": True
+            "is_active": True,
+            "salt": salt,
+            "iterations": iterations
         }
         
         logger.info(f"Generated API key '{name}' for service {service_id}")
@@ -289,9 +298,7 @@ class APIKeyManager:
         Returns:
             Key metadata if valid, None otherwise
         """
-        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
-        
-        key_data = self._keys.get(key_hash)
+        key_hash, key_data = self._find_key_record(api_key)
         if not key_data:
             logger.warning("API key not found")
             return None
@@ -323,9 +330,8 @@ class APIKeyManager:
         Returns:
             True if key was revoked, False if not found
         """
-        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
-        
-        if key_hash in self._keys:
+        key_hash, key_data = self._find_key_record(api_key)
+        if key_hash and key_data:
             self._keys[key_hash]["is_active"] = False
             logger.info(f"Revoked API key '{self._keys[key_hash]['name']}'")
             return True
@@ -352,8 +358,9 @@ class APIKeyManager:
         if not key_data:
             return None
         
-        key_hash = hashlib.sha256(old_api_key.encode()).hexdigest()
-        old_key_data = self._keys[key_hash]
+        key_hash, old_key_data = self._find_key_record(old_api_key)
+        if not key_hash or not old_key_data:
+            return None
         
         # Revoke old key
         self.revoke_key(old_api_key)
@@ -367,6 +374,22 @@ class APIKeyManager:
             metadata=old_key_data["metadata"]
         )
     
+    def _find_key_record(self, api_key: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        for stored_hash, key_data in self._keys.items():
+            salt = key_data.get("salt")
+            iterations = key_data.get("iterations", 210000)
+            if not salt:
+                continue
+            candidate_hash = hashlib.pbkdf2_hmac(
+                "sha256",
+                api_key.encode(),
+                salt,
+                iterations
+            ).hex()
+            if secrets.compare_digest(candidate_hash, stored_hash):
+                return stored_hash, key_data
+        return None, None
+
     def list_keys(self, service_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         List all API keys, optionally filtered by service.
