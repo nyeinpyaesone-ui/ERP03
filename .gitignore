@@ -5,30 +5,76 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
-*.so
-.coverage
-htmlcov/
-.pytest_cache/
-.mypy_cache/
-
-# Dependencies
+env/
 venv/
 .venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+*.pot
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.egg-info/
+.eggs/
+.eggs/
+dist/
+build/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg
+.venv.bak/
+.venv/
+venv.bak/
+venv/
+
+# Environment
 .env
 .env.local
-*.env.*
+.env.*
 
-# Logs
-*.log
+# Terraform
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+*.tfvars
 
-# Editor/IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
+# Compressed files
+*.tar.gz
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
 
-# OS
-.DS_Store
-Thumbs.db
-```.ipynb_checkpoints/
+# Docker
+.dockerenv
+```
