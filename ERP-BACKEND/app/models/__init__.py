@@ -27,6 +27,7 @@ from app.models.workflow import (
     WebhookDelivery,
     Integration,
 )
+from app.models.permissions import Role, Permission, RolePermission, UserRole, FieldPermission, DataPolicy
 from app.models.system import ActivityLog, Notification, Report, Forecast, Setting
 from app.models.search import SearchIndex, SearchQuery, SearchSuggestion
 
@@ -59,6 +60,13 @@ __all__ = [
     "Webhook",
     "WebhookDelivery",
     "Integration",
+    # Permissions & RBAC
+    "Role",
+    "Permission",
+    "RolePermission",
+    "UserRole",
+    "FieldPermission",
+    "DataPolicy",
     # System
     "ActivityLog",
     "Notification",
