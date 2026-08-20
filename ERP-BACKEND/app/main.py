@@ -14,7 +14,7 @@ from app.database import engine, Base
 from app.routers import (
     auth, crm, hr, inventory, finance, projects,
     documents, reports, workflows, payments,
-    integrations, analytics, admin, websocket, health
+    integrations, analytics, admin, websocket, health, integration_v1
 )
 from app.config import settings
 from app.middleware.rate_limiter import RateLimiter, AuthRateLimitMiddleware
@@ -171,6 +171,7 @@ app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
 app.include_router(workflows.router, prefix="/api/v1/workflows", tags=["Workflows"])
 app.include_router(payments.router, prefix="/api/v1/payments", tags=["Payments"])
 app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["Integrations"])
+app.include_router(integration_v1.router, prefix="/integration/v1", tags=["Integration v1"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(websocket.router, prefix="/api/v1/ws", tags=["WebSocket"])

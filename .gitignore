@@ -1,4 +1,4 @@
-```gitignore
+```
 # Python
 __pycache__/
 *.py[cod]
@@ -21,12 +21,6 @@ wheels/
 .installed.cfg
 *.egg
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.coverage.*
-
 # Environment
 .env
 .env.local
@@ -35,9 +29,6 @@ htmlcov/
 venv/
 ENV/
 
-# Logs
-*.log
-
 # IDE
 .vscode/
 .idea/
@@ -45,7 +36,11 @@ ENV/
 *.swo
 *.tmp
 
-# OS
-.DS_Store
-Thumbs.db
+# Logs
+*.log
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
 ```
