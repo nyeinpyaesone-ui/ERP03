@@ -31,9 +31,7 @@ class AnalyticsQueryService:
         invoice_metrics = (
             self.db.query(
                 func.coalesce(
-                    func.sum(
-                        case((Invoice.status == "paid", Invoice.total), else_=0)
-                    ),
+                    func.sum(case((Invoice.status == "paid", Invoice.total), else_=0)),
                     0,
                 ).label("total_revenue"),
                 func.coalesce(
@@ -52,20 +50,6 @@ class AnalyticsQueryService:
             .one()
         )
 
-        crm_metrics = (
-            self.db.query(
-                func.count(Contact.id).label("total_contacts"),
-                func.coalesce(func.sum(Deal.value), 0).label("pipeline_value"),
-                func.count(Deal.id).label("total_deals"),
-            )
-            .select_from(Contact)
-            .outerjoin(Deal, Deal.contact_id == Contact.id)
-            .one()
-        )
-
-        # Deal count/pipeline is intentionally calculated separately below when
-        # the contact/deal join would multiply rows. Keep the query deterministic
-        # by using scalar subqueries for the deal metrics.
         total_contacts = self.db.query(func.count(Contact.id)).scalar() or 0
         deal_metrics = (
             self.db.query(
@@ -156,7 +140,7 @@ class AnalyticsQueryService:
                 ),
             },
             "crm": {
-                "contacts": total_contacts,
+                "contacts": int(total_contacts),
                 "deals": int(deal_metrics.total_deals or 0),
                 "pipeline_value": float(deal_metrics.pipeline_value or 0),
             },
