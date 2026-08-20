@@ -16,7 +16,7 @@ from sqlalchemy import (
     ForeignKey, UniqueConstraint, Index, Text
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from app.database.session import Base
+from app.database import Base
 
 
 class ERPItemMaster(Base):
