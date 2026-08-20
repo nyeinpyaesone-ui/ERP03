@@ -1,22 +1,12 @@
 """Base model class and common utilities."""
-from sqlalchemy import Column, Integer, DateTime, JSON
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Column, Integer, Boolean, DateTime, JSON
 from sqlalchemy.sql import func
 from app.database import Base
 
 
-# Use JSON for SQLite compatibility in tests, JSONB for PostgreSQL in production
-try:
-    # Test if we're using PostgreSQL
-    from sqlalchemy import create_engine
-    test_engine = create_engine("sqlite:///:memory:")
-    USE_JSONB = False
-except:
-    USE_JSONB = True
-
-# Alias JSONB to JSON for SQLite compatibility
-if not USE_JSONB:
-    JSONB = JSON
+# Use JSON universally for compatibility across SQLite (tests) and PostgreSQL (production)
+# SQLAlchemy handles JSON type appropriately for each database dialect
+JSONB = JSON
 
 
 class TimestampMixin:

@@ -16,54 +16,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  dependency-review:
-    name: Dependency review
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Dependency Review
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
-
-  codeql:
-    name: CodeQL
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [python, javascript-typescript]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
-        with:
-          languages: ${{ matrix.language }}
-
-      - name: Analyze
-        uses: github/codeql-action/analyze@v4
-        with:
-          category: /language:${{ matrix.language }}
-
-  secrets:
-    name: Secret scan
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  security-scan:
+    name: Security Scanning
+    uses: ./.github/workflows/reusable/security-scan.yml
+    with:
+      fail-on-severity: high
+      languages: '["python", "javascript-typescript"]'
+      scan-dependencies: ${{ github.event_name == 'pull_request' }}
+      scan-codeql: true
+      scan-secrets: true
