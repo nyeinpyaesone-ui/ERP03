@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15  # Reduced from 24 hours to 15 minutes for security
 
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
@@ -46,6 +46,13 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE: int = 50 * 1024 * 1024
     WS_HEARTBEAT_INTERVAL: int = 30
 
+    # Test mode flag (set by conftest.py during testing)
+    TEST_MODE: bool = False
+    
+    # Integration service settings (with test defaults)
+    INTEGRATION_SERVICE_ISSUER: str = "test-issuer"
+    INTEGRATION_SERVICE_AUDIENCE: str = "test-audience"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,
@@ -53,6 +60,21 @@ class Settings(BaseSettings):
     )
 
     def model_post_init(self, __context):
+        # Skip validation in test mode
+        """
+        Initialize settings, applying test-mode defaults or validating production configuration.
+        
+        Raises:
+            ValueError: If production mode lacks a database URL or the secret key is shorter than 32 characters.
+        """
+        if self.TEST_MODE:
+            if not self.DATABASE_URL:
+                self.DATABASE_URL = "sqlite:///:memory:"
+            # SECURITY FIX: Require valid SECRET_KEY even in test mode
+            if not self.SECRET_KEY or len(self.SECRET_KEY) < 32:
+                raise ValueError("SECRET_KEY must contain at least 32 characters even in test mode")
+            return
+        
         database_url = _read_secret("DATABASE_URL")
         secret_key = _read_secret("SECRET_KEY")
         if database_url:

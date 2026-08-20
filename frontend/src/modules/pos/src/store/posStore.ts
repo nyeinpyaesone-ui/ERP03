@@ -77,131 +77,129 @@ const initialCart: Cart = {
   appliedDiscounts: [],
 };
 
-// Extracted cart reducer functions for better testability and reusability
-const cartReducers = {
-  addToCart: (state: POSState, product: POSProduct, quantity: number, variantId?: string) => {
-    const existingItem = state.cart.items.find(
-      (item) => item.productId === product.id && item.variantId === variantId
-    );
-
-    if (existingItem) {
-      return { cart: { ...state.cart } }; // Will be handled by updateCartItemQuantity
-    }
-
-    const variant = variantId ? product.variants?.find((v) => v.id === variantId) : undefined;
-    const unitPrice = variant?.price ?? product.price;
-    const taxAmount = product.taxInclusive ? 0 : unitPrice * quantity * (product.taxRate / 100);
-    const subtotal = unitPrice * quantity;
-    const total = product.taxInclusive ? subtotal : subtotal + taxAmount;
-
-    const newItem: CartItem = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      productId: product.id,
-      productName: product.name,
-      sku: variant?.sku ?? product.sku,
-      barcode: variant?.barcode ?? product.barcode,
-      variantId: variant?.id,
-      variantName: variant?.name,
-      quantity,
-      unitPrice,
-      originalPrice: unitPrice,
-      discountAmount: 0,
-      discountPercentage: 0,
-      taxAmount,
-      taxRate: product.taxRate,
-      subtotal,
-      total,
-      imageUrl: product.imageUrl,
-    };
-
-    return { cart: { ...state.cart, items: [...state.cart.items, newItem] } };
-  },
-
-  updateCartItemQuantity: (state: POSState, itemId: string, quantity: number) => {
-    if (quantity <= 0) {
-      return { cart: { ...state.cart, items: state.cart.items.filter((item) => item.id !== itemId) } };
-    }
-    
-    const newItems = state.cart.items.map((item) => {
-      if (item.id !== itemId) return item;
-      const subtotal = item.unitPrice * quantity;
-      const taxAmount = item.taxRate > 0 && !item.taxAmount
-        ? subtotal * (item.taxRate / 100)
-        : item.taxAmount * (quantity / item.quantity);
-      return {
-        ...item,
-        quantity,
-        subtotal,
-        taxAmount,
-        total: subtotal + taxAmount - item.discountAmount,
-      };
-    });
-
-    return { cart: { ...state.cart, items: newItems } };
-  },
-
-  removeFromCart: (state: POSState, itemId: string) => ({
-    cart: { ...state.cart, items: state.cart.items.filter((item) => item.id !== itemId) },
-  }),
-
-  clearCart: () => ({ cart: initialCart }),
-
-  recalculateCart: (state: POSState) => {
-    const items = state.cart.items;
-    const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
-    const totalTax = items.reduce((sum, item) => sum + item.taxAmount, 0);
-    const itemDiscounts = items.reduce((sum, item) => sum + item.discountAmount, 0);
-    const cartDiscounts = state.cart.appliedDiscounts.reduce((sum, d) => sum + d.amount, 0);
-    const totalDiscount = itemDiscounts + cartDiscounts;
-    const total = subtotal + totalTax - totalDiscount;
-    const itemCount = items.length;
-    const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
-
-    return {
-      cart: {
-        ...state.cart,
-        items,
-        subtotal,
-        totalTax,
-        totalDiscount,
-        total: Math.max(0, total),
-        itemCount,
-        totalQuantity,
-      },
-    };
-  },
-};
-
 export const usePOSStore = create<POSState>()(
   persist(
     (set, get) => ({
       // Cart
       cart: initialCart,
       addToCart: (product, quantity = 1, variantId) => {
-        set((state) => cartReducers.addToCart(state, product, quantity, variantId));
+        const state = get();
+        const existingItem = state.cart.items.find(
+          (item) =>
+            item.productId === product.id &&
+            item.variantId === variantId
+        );
+
+        if (existingItem) {
+          state.updateCartItemQuantity(existingItem.id, existingItem.quantity + quantity);
+          return;
+        }
+
+        const variant = variantId
+          ? product.variants?.find((v) => v.id === variantId)
+          : undefined;
+
+        const unitPrice = variant?.price ?? product.price;
+        const taxAmount = product.taxInclusive
+          ? 0
+          : unitPrice * quantity * (product.taxRate / 100);
+        const subtotal = unitPrice * quantity;
+        const total = product.taxInclusive ? subtotal : subtotal + taxAmount;
+
+        const newItem: CartItem = {
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          productId: product.id,
+          productName: product.name,
+          sku: variant?.sku ?? product.sku,
+          barcode: variant?.barcode ?? product.barcode,
+          variantId: variant?.id,
+          variantName: variant?.name,
+          quantity,
+          unitPrice,
+          originalPrice: unitPrice,
+          discountAmount: 0,
+          discountPercentage: 0,
+          taxAmount,
+          taxRate: product.taxRate,
+          subtotal,
+          total,
+          imageUrl: product.imageUrl,
+        };
+
+        const newItems = [...state.cart.items, newItem];
+        state.recalculateCartWithItems(newItems);
       },
       updateCartItemQuantity: (itemId, quantity) => {
-        set((state) => cartReducers.updateCartItemQuantity(state, itemId, quantity));
+        const state = get();
+        if (quantity <= 0) {
+          state.removeFromCart(itemId);
+          return;
+        }
+        const newItems = state.cart.items.map((item) => {
+          if (item.id !== itemId) return item;
+          const subtotal = item.unitPrice * quantity;
+          const taxAmount = item.taxRate > 0 && !item.taxAmount
+            ? subtotal * (item.taxRate / 100)
+            : item.taxAmount * (quantity / item.quantity);
+          return {
+            ...item,
+            quantity,
+            subtotal,
+            taxAmount,
+            total: subtotal + taxAmount - item.discountAmount,
+          };
+        });
+        state.recalculateCartWithItems(newItems);
       },
       removeFromCart: (itemId) => {
-        set((state) => cartReducers.removeFromCart(state, itemId));
+        const state = get();
+        const newItems = state.cart.items.filter((item) => item.id !== itemId);
+        state.recalculateCartWithItems(newItems);
       },
-      clearCart: () => set(cartReducers.clearCart()),
-      recalculateCart: () => {
-        set((state) => cartReducers.recalculateCart(state));
-      },
+      clearCart: () => set({ cart: initialCart }),
       applyDiscount: (discount) => {
-        set((state) => ({ cart: { ...state.cart, appliedDiscounts: [...state.cart.appliedDiscounts, discount] } }));
-        set((state) => cartReducers.recalculateCart(state));
+        const state = get();
+        const newDiscounts = [...state.cart.appliedDiscounts, discount];
+        set({ cart: { ...state.cart, appliedDiscounts: newDiscounts } });
+        state.recalculateCart();
       },
       removeDiscount: (discountId) => {
-        set((state) => ({ cart: { ...state.cart, appliedDiscounts: state.cart.appliedDiscounts.filter((d) => d.id !== discountId) } }));
-        set((state) => cartReducers.recalculateCart(state));
+        const state = get();
+        const newDiscounts = state.cart.appliedDiscounts.filter((d) => d.id !== discountId);
+        set({ cart: { ...state.cart, appliedDiscounts: newDiscounts } });
+        state.recalculateCart();
       },
       setCustomer: (customerId, customerName) =>
         set((state) => ({ cart: { ...state.cart, customerId, customerName } })),
       setCartNotes: (notes) =>
         set((state) => ({ cart: { ...state.cart, notes } })),
+      recalculateCart: () => {
+        const state = get();
+        state.recalculateCartWithItems(state.cart.items);
+      },
+      recalculateCartWithItems: (items) => {
+        const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
+        const totalTax = items.reduce((sum, item) => sum + item.taxAmount, 0);
+        const itemDiscounts = items.reduce((sum, item) => sum + item.discountAmount, 0);
+        const cartDiscounts = get().cart.appliedDiscounts.reduce((sum, d) => sum + d.amount, 0);
+        const totalDiscount = itemDiscounts + cartDiscounts;
+        const total = subtotal + totalTax - totalDiscount;
+        const itemCount = items.length;
+        const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+
+        set({
+          cart: {
+            ...get().cart,
+            items,
+            subtotal,
+            totalTax,
+            totalDiscount,
+            total: Math.max(0, total),
+            itemCount,
+            totalQuantity,
+          },
+        });
+      },
 
       // Current Sale
       currentSale: null,

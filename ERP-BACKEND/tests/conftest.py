@@ -10,36 +10,37 @@ from datetime import datetime, timedelta
 # Add app to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+# Set test mode environment variable BEFORE importing app modules
+os.environ['TEST_MODE'] = 'True'
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+
+
+@pytest.fixture(scope="session", autouse=True)
+def set_test_mode():
+    """
+    Enable test mode for the test session and remove its environment variable during cleanup.
+    """
+    os.environ['TEST_MODE'] = 'True'
+    # Force reload of settings if already loaded
+    from app.config import settings
+    settings.TEST_MODE = True
+    yield
+    os.environ.pop('TEST_MODE', None)
 
 
 @pytest.fixture
 def test_settings():
     """Create test settings with mocked values."""
     settings = MagicMock()
-    settings.SECRET_KEY = "test_secret_key_for_testing_purposes_only_123456"
+    settings.SECRET_KEY = "test_secret_key_for_testing_purposes_only_1234567890"
     settings.ALGORITHM = "HS256"
     settings.ACCESS_TOKEN_EXPIRE_MINUTES = 60
     settings.DATABASE_URL = "sqlite:///:memory:"
+    settings.TEST_MODE = True
     return settings
-
-
-@pytest.fixture(scope="session", autouse=True)
-def setup_jsonb_mock():
-    """Setup JSONB mock for SQLite compatibility at session start."""
-    import sqlalchemy.types as types
-    from unittest.mock import patch
-    
-    class MockJSONB(types.TypeDecorator):
-        impl = types.JSON
-        cache_ok = True
-    
-    # Patch JSONB in the models module
-    import app.models
-    with patch.object(app.models, 'JSONB', MockJSONB):
-        yield
 
 
 @pytest.fixture
@@ -48,8 +49,7 @@ def engine():
     return create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-        echo=False
+        poolclass=StaticPool
     )
 
 

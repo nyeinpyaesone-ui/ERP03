@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -13,14 +14,27 @@ from app.database import engine, Base
 from app.routers import (
     auth, crm, hr, inventory, finance, projects,
     documents, reports, workflows, payments,
-    integrations, analytics, admin, websocket,
-    bulk_import_export, migrations
+    integrations, analytics, admin, websocket, health, integration_v1
 )
 from app.config import settings
+from app.middleware.rate_limiter import RateLimiter, AuthRateLimitMiddleware
+
+
+# Check if running in test mode
+IS_TEST_MODE = os.getenv("TESTING", "false").lower() == "true" or os.getenv("TEST_MODE", "false").lower() == "true"
 
 
 class JsonFormatter(logging.Formatter):
     def format(self, record):
+        """
+        Serialize a log record as a JSON string with standard fields and optional request metadata.
+        
+        Parameters:
+        	record (logging.LogRecord): The log record to serialize.
+        
+        Returns:
+        	str: A JSON representation of the log record.
+        """
         payload = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created)),
             "level": record.levelname,
@@ -58,7 +72,22 @@ HTTP_REQUEST_DURATION = Histogram(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    # Only create tables if not in test mode (tests handle their own DB setup)
+    """
+    Manage application startup and shutdown lifecycle events.
+    
+    Creates database tables during startup when the application is not running in test mode.
+    """
+    if not IS_TEST_MODE:
+        # Use async table creation for async engines, sync for sync engines
+        from app.database import is_async, engine, Base
+        if is_async:
+            # For async engines, properly await the async connection
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        else:
+            # For sync engines, use synchronous execution
+            Base.metadata.create_all(bind=engine)
     yield
 
 
@@ -68,6 +97,14 @@ app = FastAPI(
     version=settings.APP_VERSION,
     lifespan=lifespan,
 )
+
+# Initialize rate limiter for API endpoints
+rate_limiter = RateLimiter(default_limit="100/minute")
+app.state.limiter = rate_limiter.limiter
+rate_limiter.setup_exception_handler(app)
+
+# Add auth-specific rate limiting middleware to prevent brute force attacks
+app.add_middleware(AuthRateLimitMiddleware, max_attempts=5, window_seconds=60)
 
 
 @app.middleware("http")
@@ -108,12 +145,27 @@ async def observability_middleware(request, call_next):
 
 
 cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
+
+# SECURITY FIX: Restrict CORS methods and headers to only what's necessary
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Only allow necessary HTTP methods instead of wildcard
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    # Only allow necessary headers instead of wildcard
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+        "X-Request-ID"
+    ],
+    # Expose only necessary headers to client
+    expose_headers=["X-Request-ID", "Content-Length"],
+    # Max age for preflight cache
+    max_age=600,
 )
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
@@ -127,11 +179,16 @@ app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
 app.include_router(workflows.router, prefix="/api/v1/workflows", tags=["Workflows"])
 app.include_router(payments.router, prefix="/api/v1/payments", tags=["Payments"])
 app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["Integrations"])
+# Integration v1 router - DO NOT add extra prefix as it has its own prefix defined
+app.include_router(integration_v1.router, tags=["Integration v1"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(websocket.router, prefix="/api/v1/ws", tags=["WebSocket"])
-app.include_router(bulk_import_export.router, prefix="/api/v1/bulk", tags=["Bulk Import/Export"])
-app.include_router(migrations.router, prefix="/api/v1/migrations", tags=["Migrations"])
+app.include_router(health.router, prefix="/api/v1", tags=["Health Checks"])
+
+# Register exception handlers for standardized error responses
+from app.middleware.error_handler import register_exception_handlers
+register_exception_handlers(app)
 
 
 @app.get("/")

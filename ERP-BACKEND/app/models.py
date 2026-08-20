@@ -1,11 +1,14 @@
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime, Date,
-    Numeric, ForeignKey, Index, Float, LargeBinary, UniqueConstraint
+    Numeric, ForeignKey, Index, Float, LargeBinary, UniqueConstraint, JSON
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
+
+# Use JSON universally for compatibility across SQLite (tests) and PostgreSQL (production)
+# SQLAlchemy handles JSON type appropriately for each database dialect
+JSONB = JSON
 
 class User(Base):
     __tablename__ = "users"
@@ -166,125 +169,6 @@ class InventoryMovement(Base):
 
     product = relationship("Product", back_populates="movements")
     creator = relationship("User", foreign_keys=[created_by])
-
-# ============================================================================
-# REGULATED MANUFACTURING INVENTORY MODELS
-# Batch/Lot Traceability, FEFO, Quality Status, Multi-Location
-# ============================================================================
-
-class QualityStatus(str, enum.Enum):
-    """Quality states for GMP/ISO compliance"""
-    PENDING = "pending"       # Awaiting QC check
-    RELEASED = "released"     # Approved for use
-    QUARANTINE = "quarantine" # Held for inspection
-    REJECTED = "rejected"     # Failed QC, do not use
-
-class Location(Base):
-    """Warehouse locations with type classification"""
-    __tablename__ = "locations"
-
-    id = Column(Integer, primary_key=True, index=True)
-    code = Column(String(50), unique=True, nullable=False)  # e.g., "WH-A-01"
-    name = Column(String(200), nullable=False)
-    type = Column(String(50), default="STORAGE")  # RAW_MATERIAL, WIP, FINISHED_GOODS, QUARANTINE
-    is_active = Column(Boolean, nullable=False, server_default="true")
-    capacity = Column(Integer, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    stock_levels = relationship("StockLevel", back_populates="location")
-    movements = relationship("StockMovement", back_populates="location")
-
-class Batch(Base):
-    """
-    Batch/Lot tracking for full traceability.
-    Required for regulated manufacturing (GMP, ISO 9001, FDA 21 CFR Part 11).
-    """
-    __tablename__ = "batches"
-
-    id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
-    
-    # Identification
-    batch_number = Column(String(100), unique=True, nullable=False, index=True)  # Internal Lot ID
-    supplier_batch_id = Column(String(100), nullable=True)  # Vendor's Lot ID
-    
-    # Dates for shelf-life management
-    manufacturing_date = Column(Date, nullable=True)
-    expiry_date = Column(Date, nullable=True, index=True)  # Critical for FEFO
-    received_date = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Compliance & Quality
-    quality_status = Column(String(50), nullable=False, server_default="pending")  # Uses QualityStatus values
-    certificate_of_analysis_url = Column(String(500), nullable=True)
-    qc_notes = Column(Text, nullable=True)
-    qc_inspector_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-    product = relationship("Product", back_populates="batches")
-    stock_levels = relationship("StockLevel", back_populates="batch", cascade="all, delete-orphan")
-    movements = relationship("StockMovement", back_populates="batch")
-    qc_inspector = relationship("User", foreign_keys=[qc_inspector_id])
-
-class StockLevel(Base):
-    """
-    Current stock levels per product/batch/location combination.
-    Enforces batch-level tracking for traceability.
-    """
-    __tablename__ = "stock_levels"
-
-    id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
-    batch_id = Column(Integer, ForeignKey("batches.id", ondelete="CASCADE"), nullable=False)
-    location_id = Column(Integer, ForeignKey("locations.id", ondelete="RESTRICT"), nullable=False)
-    
-    quantity = Column(Numeric(15, 2), nullable=False, server_default="0")
-    reserved_quantity = Column(Numeric(15, 2), nullable=False, server_default="0")  # For production orders
-    
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-    product = relationship("Product")
-    batch = relationship("Batch", back_populates="stock_levels")
-    location = relationship("Location", back_populates="stock_levels")
-
-    __table_args__ = (
-        UniqueConstraint('product_id', 'batch_id', 'location_id', name='uq_product_batch_location'),
-        CheckConstraint('quantity >= 0', name='check_stock_non_negative'),
-        CheckConstraint('reserved_quantity <= quantity', name='check_reservation_limit'),
-    )
-
-class StockMovement(Base):
-    """
-    Immutable ledger of all stock movements.
-    Links to batch for full traceability from receipt to consumption.
-    """
-    __tablename__ = "stock_movements"
-
-    id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
-    batch_id = Column(Integer, ForeignKey("batches.id", ondelete="CASCADE"), nullable=False)
-    location_id = Column(Integer, ForeignKey("locations.id", ondelete="RESTRICT"), nullable=False)
-    
-    movement_type = Column(String(50), nullable=False)  # RECEIPT, ISSUE, ADJUSTMENT, TRANSFER, SCRAP
-    quantity = Column(Numeric(15, 2), nullable=False)  # Positive for IN, Negative for OUT
-    reference_number = Column(String(100), nullable=True, index=True)  # PO#, SO#, Transfer ID
-    reason_code = Column(String(50), nullable=True)
-    notes = Column(Text, nullable=True)
-    
-    performed_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
-    performed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    product = relationship("Product", back_populates="stock_movements")
-    batch = relationship("Batch", back_populates="movements")
-    location = relationship("Location", back_populates="movements")
-    user = relationship("User")
-
-# Add relationships to existing Product model
-Product.batches = relationship("Batch", back_populates="product", cascade="all, delete-orphan")
-Product.stock_movements = relationship("StockMovement", back_populates="product")
 
 class Invoice(Base):
     __tablename__ = "invoices"
@@ -506,9 +390,18 @@ class ActivityLog(Base):
     details = Column(JSONB, nullable=True)
     ip_address = Column(String(50), nullable=True)
     user_agent = Column(String(500), nullable=True)
+    correlation_id = Column(String(100), nullable=True, index=True)
+    request_id = Column(String(100), nullable=True)
+    status = Column(String(50), nullable=False, server_default="SUCCESS")  # SUCCESS, FAILURE, ROLLBACK
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     user = relationship("User", back_populates="activity_logs")
+    
+    __table_args__ = (
+        Index('idx_activity_entity', 'entity_type', 'entity_id'),
+        Index('idx_activity_user', 'user_id', 'created_at'),
+        Index('idx_activity_action', 'action'),
+    )
 
 class Notification(Base):
     __tablename__ = "notifications"
