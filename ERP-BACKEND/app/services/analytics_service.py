@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from sqlalchemy import extract, func, case
+from sqlalchemy import extract, func, case, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -24,9 +24,9 @@ class AnalyticsQueryService:
     def get_dashboard(self) -> dict:
         """Build the dashboard with bounded, read-only aggregate query paths.
 
-        Each domain keeps one aggregate query where practical. This avoids the
-        previous pattern of issuing separate count queries for every metric,
-        while keeping the SQL straightforward and domain-local.
+        Each domain keeps one aggregate query where practical. CRM contact
+        count is folded into the deal aggregate as a scalar subquery so the
+        dashboard does not issue a separate contacts round trip.
         """
         invoice_metrics = (
             self.db.query(
@@ -50,9 +50,10 @@ class AnalyticsQueryService:
             .one()
         )
 
-        total_contacts = self.db.query(func.count(Contact.id)).scalar() or 0
+        contact_count = select(func.count(Contact.id)).scalar_subquery()
         deal_metrics = (
             self.db.query(
+                contact_count.label("total_contacts"),
                 func.count(Deal.id).label("total_deals"),
                 func.coalesce(
                     func.sum(
@@ -140,7 +141,7 @@ class AnalyticsQueryService:
                 ),
             },
             "crm": {
-                "contacts": int(total_contacts),
+                "contacts": int(deal_metrics.total_contacts or 0),
                 "deals": int(deal_metrics.total_deals or 0),
                 "pipeline_value": float(deal_metrics.pipeline_value or 0),
             },
