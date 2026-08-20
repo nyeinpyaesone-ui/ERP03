@@ -6,9 +6,9 @@ import hashlib
 import json
 import uuid
 from decimal import Decimal
-from typing import Any
+from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from pydantic import BaseModel, Field
@@ -18,12 +18,91 @@ from sqlalchemy.orm import Session
 from app.auth import decode_token
 from app.config import settings
 from app.database import get_db
-from app.models import User
+from app.models import User, Company, Contact, Deal, Product
 from app.services.activity_log import log_activity
 from app.integration_runtime.models import IntegrationCommand, PurchaseOrder, PurchaseOrderApproval
+from app.adapters.integration import CRMAdapter, InventoryAdapter
 
 router = APIRouter(prefix="/integration/v1", tags=["ERP-AI Integration v1"])
 bearer = HTTPBearer(auto_error=False)
+
+
+# ============================================================================
+# Integration Contract Schemas (mirroring INTEGRATION/contracts)
+# ============================================================================
+
+class CustomerResponse(BaseModel):
+    """Customer response matching integration contract."""
+    id: int
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    company: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    postal_code: Optional[str] = None
+    status: str = "active"
+    notes: Optional[str] = None
+    created_at: Any
+    updated_at: Optional[Any] = None
+    created_by: Optional[int] = None
+    tags: List[str] = []
+
+
+class ContactResponse(BaseModel):
+    """Contact response matching integration contract."""
+    id: int
+    customer_id: int
+    first_name: str
+    last_name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    position: Optional[str] = None
+    is_primary: bool = False
+    notes: Optional[str] = None
+    created_at: Any
+    updated_at: Optional[Any] = None
+
+
+class OpportunityResponse(BaseModel):
+    """Opportunity response matching integration contract."""
+    id: int
+    customer_id: int
+    title: str
+    description: Optional[str] = None
+    stage: str
+    value: float
+    currency: str = "USD"
+    probability: int = 0
+    expected_close_date: Optional[Any] = None
+    actual_close_date: Optional[Any] = None
+    owner_id: Optional[int] = None
+    created_at: Any
+    updated_at: Optional[Any] = None
+    tags: List[str] = []
+
+
+class ProductResponse(BaseModel):
+    """Product response matching integration contract."""
+    id: int
+    sku: str
+    name: str
+    description: Optional[str] = None
+    category_id: Optional[int] = None
+    unit_price: float = 0.0
+    cost_price: Optional[float] = None
+    quantity_on_hand: int = 0
+    quantity_reserved: int = 0
+    quantity_available: int = 0
+    reorder_point: Optional[int] = None
+    reorder_quantity: Optional[int] = None
+    unit_of_measure: str = "unit"
+    is_active: bool = True
+    created_at: Any
+    updated_at: Optional[Any] = None
+    tags: List[str] = []
 
 
 class CommandRequest(BaseModel):
@@ -99,6 +178,123 @@ def get_purchase_order(po_id: int, ctx: ServiceContext = Depends(require_service
         raise HTTPException(status_code=403, detail="Not authorized to view purchase order")
 
     return {"id": po.id, "po_number": po.po_number, "status": po.status, "amount": float(po.amount), "currency_code": po.currency_code}
+
+
+# ============================================================================
+# CRM Integration Endpoints (using contract-compatible schemas)
+# ============================================================================
+
+@router.get("/crm/customers", response_model=List[CustomerResponse])
+def list_customers(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    ctx: ServiceContext = Depends(require_service),
+):
+    """List customers in integration contract format."""
+    query = db.query(Company)
+    if search:
+        query = query.filter(Company.name.ilike(f"%{search}%"))
+    companies = query.offset(skip).limit(limit).all()
+    return [CRMAdapter.company_to_customer(c) for c in companies]
+
+
+@router.get("/crm/customers/{customer_id}", response_model=CustomerResponse)
+def get_customer(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    ctx: ServiceContext = Depends(require_service),
+):
+    """Get a specific customer in integration contract format."""
+    company = db.query(Company).filter(Company.id == customer_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return CRMAdapter.company_to_customer(company)
+
+
+@router.get("/crm/contacts", response_model=List[ContactResponse])
+def list_contacts(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    customer_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    ctx: ServiceContext = Depends(require_service),
+):
+    """List contacts in integration contract format."""
+    query = db.query(Contact)
+    if customer_id:
+        query = query.filter(Contact.company_id == customer_id)
+    contacts = query.offset(skip).limit(limit).all()
+    return [CRMAdapter.contact_to_contract(c) for c in contacts]
+
+
+@router.get("/crm/opportunities", response_model=List[OpportunityResponse])
+def list_opportunities(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    customer_id: Optional[int] = None,
+    stage: Optional[str] = None,
+    db: Session = Depends(get_db),
+    ctx: ServiceContext = Depends(require_service),
+):
+    """List opportunities in integration contract format."""
+    query = db.query(Deal)
+    if customer_id:
+        query = query.filter(Deal.company_id == customer_id)
+    if stage:
+        query = query.filter(Deal.stage == stage)
+    deals = query.offset(skip).limit(limit).all()
+    return [CRMAdapter.deal_to_opportunity(d) for d in deals]
+
+
+# ============================================================================
+# Inventory Integration Endpoints (using contract-compatible schemas)
+# ============================================================================
+
+@router.get("/inventory/products", response_model=List[ProductResponse])
+def list_products(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    category_id: Optional[int] = None,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    ctx: ServiceContext = Depends(require_service),
+):
+    """List products in integration contract format."""
+    query = db.query(Product)
+    if category_id:
+        query = query.filter(Product.category_id == category_id)
+    if search:
+        query = query.filter(Product.name.ilike(f"%{search}%"))
+    products = query.offset(skip).limit(limit).all()
+    return [InventoryAdapter.product_to_contract(p) for p in products]
+
+
+@router.get("/inventory/products/{product_id}", response_model=ProductResponse)
+def get_product(
+    product_id: int,
+    db: Session = Depends(get_db),
+    ctx: ServiceContext = Depends(require_service),
+):
+    """Get a specific product in integration contract format."""
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return InventoryAdapter.product_to_contract(product)
+
+
+@router.get("/inventory/products/sku/{sku}", response_model=ProductResponse)
+def get_product_by_sku(
+    sku: str,
+    db: Session = Depends(get_db),
+    ctx: ServiceContext = Depends(require_service),
+):
+    """Get a product by SKU in integration contract format."""
+    product = db.query(Product).filter(Product.sku == sku).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return InventoryAdapter.product_to_contract(product)
 
 
 @router.post("/erp/commands", response_model=CommandAccepted, status_code=202)
