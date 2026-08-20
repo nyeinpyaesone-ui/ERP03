@@ -30,8 +30,13 @@ def test_dashboard_uses_bounded_aggregate_query_paths():
     db = MagicMock()
     db.query.side_effect = [
         QueryStub(one_result=SimpleNamespace(total_revenue=1000, outstanding=250)),
-        QueryStub(scalar_result=12),
-        QueryStub(one_result=SimpleNamespace(total_deals=7, pipeline_value=5000)),
+        QueryStub(
+            one_result=SimpleNamespace(
+                total_contacts=12,
+                total_deals=7,
+                pipeline_value=5000,
+            )
+        ),
         QueryStub(one_result=SimpleNamespace(total_employees=20, active_employees=18)),
         QueryStub(one_result=SimpleNamespace(total_products=100, low_stock=8)),
         QueryStub(one_result=SimpleNamespace(total_projects=9, active_projects=4)),
@@ -64,6 +69,6 @@ def test_dashboard_uses_bounded_aggregate_query_paths():
         {"action": "invoice.created", "entity_type": "invoice", "created_at": None}
     ]
 
-    # Dashboard execution is intentionally bounded to one aggregate/read path
-    # per domain plus the recent-activity query.
-    assert db.query.call_count == 8
+    # Dashboard execution is bounded to one query per aggregate/read path.
+    # CRM contacts are included through a scalar subquery in the CRM aggregate.
+    assert db.query.call_count == 7
