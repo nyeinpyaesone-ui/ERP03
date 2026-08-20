@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 from decimal import Decimal
+from datetime import datetime
 
 from app.database import get_db
 from app.models import Product, InventoryMovement
@@ -113,8 +114,8 @@ class ProductResponse(BaseModel):
     barcode: Optional[str]
     weight: Optional[float]
     dimensions: Optional[str]
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
