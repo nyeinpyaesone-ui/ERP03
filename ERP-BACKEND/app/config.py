@@ -48,6 +48,10 @@ class Settings(BaseSettings):
 
     # Test mode flag (set by conftest.py during testing)
     TEST_MODE: bool = False
+    
+    # Integration service settings (with test defaults)
+    INTEGRATION_SERVICE_ISSUER: str = "test-issuer"
+    INTEGRATION_SERVICE_AUDIENCE: str = "test-audience"
 
     model_config = SettingsConfigDict(
         env_file=".env",

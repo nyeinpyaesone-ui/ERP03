@@ -17,15 +17,15 @@ router = APIRouter()
 
 # Companies
 @router.post("/companies", response_model=CompanyResponse)
-def create_company(data: CompanyUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def create_company(data: CompanyCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Create a company and record its creation activity.
     
     Parameters:
-    	data (CompanyCreate): Company details used to create the record.
+        data (CompanyCreate): Company details used to create the record.
     
     Returns:
-    	Company: The newly created company.
+        Company: The newly created company.
     """
     company = Company(**data.model_dump())
     db.add(company)
@@ -342,7 +342,7 @@ def update_deal(deal_id: int, data: DealUpdate, db: Session = Depends(get_db), c
     if deal.stage == "closed_won" and not deal.actual_close_date:
         deal.actual_close_date = date.today()
 
-    from datetime import timezone
+    from datetime import datetime, timezone
     deal.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(deal)
