@@ -78,7 +78,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     
     # Use constant-time comparison to prevent timing attacks
     # Always perform password check even if user doesn't exist
-    dummy_hash = "$2b$12$KIXxKqXJzQ5Z9Z5Z9Z5Z9u"  # Dummy hash for timing
+    dummy_hash = get_password_hash("dummy_password_for_timing")
     password_valid = False
     
     if user:

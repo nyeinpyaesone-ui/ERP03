@@ -123,7 +123,7 @@ def test_second_level_approval_is_authorized_and_completes(integration_client):
         "payload": {"po_id": 100},
     }
     with patch("app.routers.integration_v1.decode_token", return_value=_claims(actor_id=11)):
-        response = client.post("/integration/v1/erp/commands", json=body, headers={"Authorization": "Bearer token", "Idempotency-Key": "m2-level2-001"})
+        response = client.post("/integration/v1/erp/commands", json=body, headers={"Authorization": "Bearer token", "Idempotency-Key": "m2-level2-001-test"})
     assert response.status_code == 202
     assert response.json()["result"]["status"] == "APPROVED"
 
@@ -137,5 +137,5 @@ def test_wrong_role_is_403(integration_client):
         "payload": {"po_id": 100},
     }
     with patch("app.routers.integration_v1.decode_token", return_value=_claims(actor_id=12)):
-        response = client.post("/integration/v1/erp/commands", json=body, headers={"Authorization": "Bearer token", "Idempotency-Key": "m2-rbac-001"})
+        response = client.post("/integration/v1/erp/commands", json=body, headers={"Authorization": "Bearer token", "Idempotency-Key": "m2-rbac-001-test-key"})
     assert response.status_code == 403
