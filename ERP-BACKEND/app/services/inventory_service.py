@@ -8,7 +8,7 @@ from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, case
 
 from app.models import Product, InventoryMovement, User
 
@@ -38,9 +38,7 @@ class InventoryService:
         dimensions: Optional[str] = None,
         created_by: Optional[int] = None
     ) -> Product:
-        """
-        Create a new product with validation.
-        """
+        """Create a new product with validation."""
         existing = self.db.query(Product).filter(Product.sku == sku).first()
         if existing:
             raise ValueError(f"Product with SKU '{sku}' already exists")
@@ -96,9 +94,7 @@ class InventoryService:
         skip: int = 0,
         limit: int = 100
     ) -> List[Product]:
-        """
-        List products with optional filters.
-        """
+        """List products with optional filters."""
         query = self.db.query(Product)
         
         if category:
@@ -118,9 +114,7 @@ class InventoryService:
         updates: dict,
         updated_by: Optional[int] = None
     ) -> Optional[Product]:
-        """
-        Update a product with validation.
-        """
+        """Update a product with validation."""
         product = self.get_product(product_id)
         if not product:
             return None
@@ -172,12 +166,7 @@ class InventoryService:
         notes: Optional[str] = None,
         created_by: Optional[int] = None
     ) -> InventoryMovement:
-        """
-        Create a stock movement with transaction safety.
-        
-        This method ensures atomic updates to both the movement record
-        and the product stock level.
-        """
+        """Create a stock movement with transaction safety."""
         valid_types = ["in", "out", "adjustment", "transfer"]
         if movement_type not in valid_types:
             raise ValueError(f"Invalid movement type. Must be one of: {valid_types}")
@@ -242,9 +231,7 @@ class InventoryService:
         skip: int = 0,
         limit: int = 100
     ) -> List[InventoryMovement]:
-        """
-        Get inventory movements with optional filters.
-        """
+        """Get inventory movements with optional filters."""
         query = self.db.query(InventoryMovement)
         
         if product_id:
@@ -255,22 +242,29 @@ class InventoryService:
         return query.order_by(InventoryMovement.created_at.desc()).offset(skip).limit(limit).all()
     
     def get_dashboard_stats(self) -> dict:
-        """
-        Get inventory dashboard statistics.
-        """
-        total_products = self.db.query(Product).count()
-        
-        total_stock_value = self.db.query(
-            func.sum(Product.quantity_in_stock * Product.unit_price)
-        ).scalar() or Decimal("0")
-        
-        low_stock_count = self.db.query(Product).filter(
-            Product.quantity_in_stock <= Product.reorder_level
-        ).count()
-        
-        out_of_stock = self.db.query(Product).filter(
-            Product.quantity_in_stock == 0
-        ).count()
+        """Get inventory dashboard statistics using bounded aggregate queries."""
+        metrics = self.db.query(
+            func.count(Product.id).label("total_products"),
+            func.coalesce(
+                func.sum(Product.quantity_in_stock * Product.unit_price),
+                0,
+            ).label("total_stock_value"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (Product.quantity_in_stock <= Product.reorder_level, 1),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("low_stock_count"),
+            func.coalesce(
+                func.sum(
+                    case((Product.quantity_in_stock == 0, 1), else_=0)
+                ),
+                0,
+            ).label("out_of_stock"),
+        ).one()
         
         categories = self.db.query(
             Product.category,
@@ -288,17 +282,15 @@ class InventoryService:
         ]
         
         return {
-            "total_products": total_products,
-            "total_stock_value": float(total_stock_value),
-            "low_stock_count": low_stock_count,
-            "out_of_stock": out_of_stock,
+            "total_products": int(metrics.total_products or 0),
+            "total_stock_value": float(metrics.total_stock_value or 0),
+            "low_stock_count": int(metrics.low_stock_count or 0),
+            "out_of_stock": int(metrics.out_of_stock or 0),
             "categories": category_breakdown
         }
     
     def get_low_stock_products(self, limit: int = 50) -> List[Product]:
-        """
-        Get products below reorder level.
-        """
+        """Get products below reorder level."""
         return self.db.query(Product).filter(
             Product.quantity_in_stock <= Product.reorder_level
         ).order_by(
