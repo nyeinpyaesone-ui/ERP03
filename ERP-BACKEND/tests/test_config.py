@@ -12,15 +12,16 @@ class TestSettings:
 
     def test_settings_default_values(self):
         """Test settings with default values."""
-        with patch('app.config._read_secret', return_value=None):
-            with patch.dict(os.environ, {
-                'DATABASE_URL': 'postgresql://test:test@localhost/test',
-                'SECRET_KEY': 'test_secret_key_for_testing_purposes_only_123456'
-            }, clear=False):
+        # Clear environment to ensure we test defaults, not .env file values
+        with patch.dict(os.environ, {
+            'DATABASE_URL': 'postgresql://test:test@localhost/test',
+            'SECRET_KEY': 'test_secret_key_for_testing_purposes_only_123456'
+        }, clear=True):
+            with patch('app.config._read_secret', return_value=None):
                 from app.config import Settings
                 
-                # Create a new settings instance to apply environment values and validation
-                settings = Settings()
+                # Create a new settings instance with no env file loading
+                settings = Settings(_env_file=None)
                 
                 assert settings.APP_NAME == "ERP SOLUTION System"
                 assert settings.ALGORITHM == "HS256"

@@ -1,9 +1,42 @@
-```gitignore
+```
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+
+# Database
+*.db
+*.db-journal
+
+# Environment variables
+.env
+.env.local
+*.env.*
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
+
+# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -20,29 +53,5 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-coverage/
-
-# Environment
-.env
-.env.local
-.env.*
-.venv/
-venv/
-ENV/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
-
-# OS
-.DS_Store
-Thumbs.db
+MANIFEST
 ```
