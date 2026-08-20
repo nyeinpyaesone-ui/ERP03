@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from sqlalchemy import extract, func
+from sqlalchemy import extract, func, case
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -22,58 +22,114 @@ class AnalyticsQueryService:
         self.db = db
 
     def get_dashboard(self) -> dict:
-        """Build the dashboard response from optimized, read-only aggregate queries."""
-        total_revenue = (
-            self.db.query(func.sum(Invoice.total))
-            .filter(Invoice.status == "paid")
-            .scalar()
-            or 0
-        )
-        outstanding = (
-            self.db.query(func.sum(Invoice.total - Invoice.amount_paid))
-            .filter(Invoice.status != "paid")
-            .scalar()
-            or 0
+        """Build the dashboard with bounded, read-only aggregate query paths.
+
+        Each domain keeps one aggregate query where practical. This avoids the
+        previous pattern of issuing separate count queries for every metric,
+        while keeping the SQL straightforward and domain-local.
+        """
+        invoice_metrics = (
+            self.db.query(
+                func.coalesce(
+                    func.sum(
+                        case((Invoice.status == "paid", Invoice.total), else_=0)
+                    ),
+                    0,
+                ).label("total_revenue"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                Invoice.status != "paid",
+                                Invoice.total - Invoice.amount_paid,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("outstanding"),
+            )
+            .one()
         )
 
+        crm_metrics = (
+            self.db.query(
+                func.count(Contact.id).label("total_contacts"),
+                func.coalesce(func.sum(Deal.value), 0).label("pipeline_value"),
+                func.count(Deal.id).label("total_deals"),
+            )
+            .select_from(Contact)
+            .outerjoin(Deal, Deal.contact_id == Contact.id)
+            .one()
+        )
+
+        # Deal count/pipeline is intentionally calculated separately below when
+        # the contact/deal join would multiply rows. Keep the query deterministic
+        # by using scalar subqueries for the deal metrics.
         total_contacts = self.db.query(func.count(Contact.id)).scalar() or 0
-        total_deals = self.db.query(func.count(Deal.id)).scalar() or 0
-        pipeline_value = (
-            self.db.query(func.sum(Deal.value))
-            .filter(Deal.stage != "closed_lost")
-            .scalar()
-            or 0
+        deal_metrics = (
+            self.db.query(
+                func.count(Deal.id).label("total_deals"),
+                func.coalesce(
+                    func.sum(
+                        case((Deal.stage != "closed_lost", Deal.value), else_=0)
+                    ),
+                    0,
+                ).label("pipeline_value"),
+            )
+            .one()
         )
 
-        total_employees = self.db.query(func.count(Employee.id)).scalar() or 0
-        active_employees = (
-            self.db.query(func.count(Employee.id))
-            .filter(Employee.status == "active")
-            .scalar()
-            or 0
+        employee_metrics = (
+            self.db.query(
+                func.count(Employee.id).label("total_employees"),
+                func.coalesce(
+                    func.sum(case((Employee.status == "active", 1), else_=0)),
+                    0,
+                ).label("active_employees"),
+            )
+            .one()
         )
 
-        total_products = self.db.query(func.count(Product.id)).scalar() or 0
-        low_stock = (
-            self.db.query(func.count(Product.id))
-            .filter(Product.quantity_in_stock <= Product.reorder_level)
-            .scalar()
-            or 0
+        product_metrics = (
+            self.db.query(
+                func.count(Product.id).label("total_products"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                Product.quantity_in_stock <= Product.reorder_level,
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("low_stock"),
+            )
+            .one()
         )
 
-        total_projects = self.db.query(func.count(Project.id)).scalar() or 0
-        active_projects = (
-            self.db.query(func.count(Project.id))
-            .filter(Project.status == "active")
-            .scalar()
-            or 0
+        project_metrics = (
+            self.db.query(
+                func.count(Project.id).label("total_projects"),
+                func.coalesce(
+                    func.sum(case((Project.status == "active", 1), else_=0)),
+                    0,
+                ).label("active_projects"),
+            )
+            .one()
         )
-        total_tasks = self.db.query(func.count(Task.id)).scalar() or 0
-        completed_tasks = (
-            self.db.query(func.count(Task.id))
-            .filter(Task.status == "done")
-            .scalar()
-            or 0
+
+        task_metrics = (
+            self.db.query(
+                func.count(Task.id).label("total_tasks"),
+                func.coalesce(
+                    func.sum(case((Task.status == "done", 1), else_=0)),
+                    0,
+                ).label("completed_tasks"),
+            )
+            .one()
         )
 
         recent_activity = (
@@ -87,8 +143,8 @@ class AnalyticsQueryService:
             .all()
         )
 
-        total_revenue_float = float(total_revenue)
-        outstanding_float = float(outstanding)
+        total_revenue_float = float(invoice_metrics.total_revenue or 0)
+        outstanding_float = float(invoice_metrics.outstanding or 0)
         denominator = total_revenue_float + outstanding_float
 
         return {
@@ -101,21 +157,24 @@ class AnalyticsQueryService:
             },
             "crm": {
                 "contacts": total_contacts,
-                "deals": total_deals,
-                "pipeline_value": float(pipeline_value),
+                "deals": int(deal_metrics.total_deals or 0),
+                "pipeline_value": float(deal_metrics.pipeline_value or 0),
             },
             "hr": {
-                "total_employees": total_employees,
-                "active_employees": active_employees,
+                "total_employees": int(employee_metrics.total_employees or 0),
+                "active_employees": int(employee_metrics.active_employees or 0),
             },
             "inventory": {
-                "total_products": total_products,
-                "low_stock": low_stock,
+                "total_products": int(product_metrics.total_products or 0),
+                "low_stock": int(product_metrics.low_stock or 0),
             },
             "projects": {
-                "total_projects": total_projects,
-                "active_projects": active_projects,
-                "tasks": {"total": total_tasks, "completed": completed_tasks},
+                "total_projects": int(project_metrics.total_projects or 0),
+                "active_projects": int(project_metrics.active_projects or 0),
+                "tasks": {
+                    "total": int(task_metrics.total_tasks or 0),
+                    "completed": int(task_metrics.completed_tasks or 0),
+                },
             },
             "recent_activity": [
                 {
