@@ -260,7 +260,7 @@ class InventoryService:
 
         category_breakdown = [
             {
-                "category": cat.category or "Uncategorized",
+                "category": cat or "Uncategorized",
                 "product_count": count,
                 "total_value": float(value) if value else 0,
             }

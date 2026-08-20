@@ -24,7 +24,8 @@ class TestSettings:
                 
                 assert settings.APP_NAME == "ERP SOLUTION System"
                 assert settings.ALGORITHM == "HS256"
-                assert settings.ACCESS_TOKEN_EXPIRE_MINUTES == 60 * 24
+                # Note: ACCESS_TOKEN_EXPIRE_MINUTES is now 15 minutes for security (changed from 24 hours)
+                assert settings.ACCESS_TOKEN_EXPIRE_MINUTES == 15
 
     def test_settings_database_url_required(self):
         """Test that DATABASE_URL is required."""
