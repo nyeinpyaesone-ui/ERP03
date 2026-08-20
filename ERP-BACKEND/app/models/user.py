@@ -20,6 +20,7 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
+    roles = relationship("Role", secondary="user_roles", back_populates="users")
     contacts = relationship("Contact", back_populates="assigned_user", foreign_keys="Contact.assigned_to")
     deals = relationship("Deal", back_populates="assigned_user", foreign_keys="Deal.assigned_to")
     projects_managed = relationship("Project", back_populates="manager", foreign_keys="Project.manager_id")

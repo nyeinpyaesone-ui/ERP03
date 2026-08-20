@@ -58,9 +58,9 @@ def get_field_permissions(user: User, resource: str, db: Session) -> Dict[str, s
         for fp in role.field_permissions:
             if fp.resource == resource:
                 # Higher access wins: write > read > hidden
-                existing = field_map.get(fp.field_name, "hidden")
+                existing = field_map.get(fp.field_name, None)
                 levels = {"hidden": 0, "read": 1, "write": 2}
-                if levels.get(fp.access_level, 0) > levels.get(existing, 0):
+                if existing is None or levels.get(fp.access_level, 0) > levels.get(existing, 0):
                     field_map[fp.field_name] = fp.access_level
     return field_map
 
