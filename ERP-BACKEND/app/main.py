@@ -79,7 +79,15 @@ async def lifespan(app: FastAPI):
     Creates database tables during startup when the application is not running in test mode.
     """
     if not IS_TEST_MODE:
-        Base.metadata.create_all(bind=engine)
+        # Use async table creation for async engines, sync for sync engines
+        from app.database import is_async, engine, Base
+        if is_async:
+            # For async engines, properly await the async connection
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        else:
+            # For sync engines, use synchronous execution
+            Base.metadata.create_all(bind=engine)
     yield
 
 

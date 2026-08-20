@@ -225,13 +225,18 @@ def finance_dashboard(db: Session = Depends(get_db), current_user = Depends(get_
     outstanding = db.query(func.sum(Invoice.total - Invoice.amount_paid)).filter(Invoice.status != "paid").scalar() or 0
     overdue = db.query(Invoice).filter(Invoice.due_date < date.today(), Invoice.status != "paid").count()
 
+    monthly_data = db.query(
+        func.extract('month', Invoice.issue_date),
+        func.sum(Invoice.total)
+    ).group_by(func.extract('month', Invoice.issue_date)).all()
+    
+    # Convert to list of dicts for JSON serialization
+    monthly_revenue = [{"month": int(row[0]), "revenue": float(row[1])} for row in monthly_data]
+
     return {
         "total_invoices": total_invoices,
         "total_revenue": float(total_revenue),
         "outstanding": float(outstanding),
         "overdue_count": overdue,
-        "monthly_revenue": db.query(
-            func.extract('month', Invoice.issue_date),
-            func.sum(Invoice.total)
-        ).group_by(func.extract('month', Invoice.issue_date)).all()
+        "monthly_revenue": monthly_revenue
     }
