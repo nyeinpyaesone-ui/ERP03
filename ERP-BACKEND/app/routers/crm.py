@@ -1,108 +1,23 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional, List
-from datetime import datetime, date
-from decimal import Decimal
 
 from app.database import get_db
 from app.models import Contact, Company, Deal
 from app.auth import get_current_user, require_admin
 from app.services.activity_log import log_activity
+from app.schemas.crm import (
+    CompanyCreate, CompanyUpdate, CompanyResponse,
+    ContactCreate, ContactUpdate, ContactResponse,
+    DealCreate, DealUpdate, DealResponse
+)
 
 router = APIRouter()
 
-# Schemas
-class CompanyCreate(BaseModel):
-    name: str
-    industry: Optional[str] = None
-    size: Optional[str] = None
-    website: Optional[str] = None
-    address: Optional[str] = None
-    phone: Optional[str] = None
-
-class CompanyResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
-    name: str
-    industry: Optional[str] = None
-    size: Optional[str] = None
-    website: Optional[str] = None
-    address: Optional[str] = None
-    phone: Optional[str] = None
-    logo_url: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-
-class ContactCreate(BaseModel):
-    first_name: str
-    last_name: str
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = None
-    title: Optional[str] = None
-    company_id: Optional[int] = None
-    status: str = "lead"
-    source: Optional[str] = None
-    notes: Optional[str] = None
-
-class ContactResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
-    first_name: str
-    last_name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    title: Optional[str] = None
-    company_id: Optional[int] = None
-    status: str
-    source: Optional[str] = None
-    notes: Optional[str] = None
-    assigned_to: Optional[int] = None
-    lifetime_value: float = 0.0
-    created_at: datetime
-    updated_at: datetime
-
-class DealCreate(BaseModel):
-    title: str
-    contact_id: Optional[int] = None
-    company_id: Optional[int] = None
-    value: float = 0
-    stage: str = "prospect"
-    probability: int = 0
-    expected_close_date: Optional[date] = None
-    description: Optional[str] = None
-
-class DealUpdate(BaseModel):
-    title: Optional[str] = None
-    value: Optional[float] = None
-    stage: Optional[str] = None
-    probability: Optional[int] = None
-    expected_close_date: Optional[date] = None
-    actual_close_date: Optional[date] = None
-
-class DealResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
-    title: str
-    contact_id: Optional[int] = None
-    company_id: Optional[int] = None
-    value: float
-    stage: str
-    probability: int
-    expected_close_date: Optional[date] = None
-    actual_close_date: Optional[date] = None
-    assigned_to: Optional[int] = None
-    description: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-
 # Companies
 @router.post("/companies", response_model=CompanyResponse)
-def create_company(data: CompanyCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def create_company(data: CompanyUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Create a company and record its creation activity.
     
@@ -163,7 +78,7 @@ def get_company(company_id: int, db: Session = Depends(get_db), current_user = D
     return company
 
 @router.put("/companies/{company_id}", response_model=CompanyResponse)
-def update_company(company_id: int, data: CompanyCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def update_company(company_id: int, data: CompanyUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Update a company's stored details.
     
@@ -203,7 +118,7 @@ def delete_company(company_id: int, db: Session = Depends(get_db), current_user 
 
 # Contacts
 @router.post("/contacts", response_model=ContactResponse)
-def create_contact(data: ContactCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def create_contact(data: ContactUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Create a contact assigned to the authenticated user.
     
@@ -268,7 +183,7 @@ def get_contact(contact_id: int, db: Session = Depends(get_db), current_user = D
     return contact
 
 @router.put("/contacts/{contact_id}", response_model=ContactResponse)
-def update_contact(contact_id: int, data: ContactCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def update_contact(contact_id: int, data: ContactUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Update a contact with the supplied details.
     
