@@ -3,7 +3,8 @@ import re
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_, and_, text
+from sqlalchemy import func, or_, and_, text, cast
+from sqlalchemy.types import String
 from sqlalchemy.dialects.postgresql import array, insert as postgresql_insert
 import httpx
 
@@ -251,9 +252,18 @@ class SearchService:
                             SearchIndex.meta_data[meta_key].as_boolean() == value
                         )
                     else:
-                        base_query = base_query.filter(
-                            SearchIndex.meta_data[meta_key].astext == str(value)
-                        )
+                        # For JSON column, use json_each or direct comparison depending on DB
+                        # Using PostgreSQL JSONB syntax with ->> operator via astext
+                        try:
+                            base_query = base_query.filter(
+                                SearchIndex.meta_data[meta_key].astext.cast(String) == str(value)
+                            )
+                        except AttributeError:
+                            # Fallback for databases that don't support astext (e.g., SQLite in tests)
+                            # Use a workaround by casting the whole JSON and comparing
+                            base_query = base_query.filter(
+                                cast(SearchIndex.meta_data[meta_key], String) == f'"{str(value)}"'
+                            )
 
         # Get total count
         total = base_query.count()

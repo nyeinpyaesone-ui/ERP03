@@ -229,15 +229,15 @@ class TestFailureInjection:
         product_data = {
             "name": "Unique Product",
             "sku": "UNIQUE-SKU-001",
-            "price": 99.99,
-            "stock": 100
+            "unit_price": 99.99,
+            "quantity_in_stock": 100
         }
         response = client.post(
             "/api/v1/inventory/products",
             json=product_data,
             headers=authenticated_headers
         )
-        assert response.status_code == 200
+        assert response.status_code == 201
         
         # Attempt duplicate SKU (should fail and rollback any partial changes)
         duplicate_product = {
