@@ -12,6 +12,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 # Set test mode environment variable BEFORE importing app modules
 os.environ['TEST_MODE'] = 'True'
+# Ensure SECRET_KEY is set for test mode to bypass validation errors
+if not os.getenv("SECRET_KEY"):
+    os.environ["SECRET_KEY"] = "test-secret-key-for-validation-only-12345678901234567890"
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

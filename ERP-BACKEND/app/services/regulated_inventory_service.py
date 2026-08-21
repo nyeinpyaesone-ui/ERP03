@@ -12,7 +12,7 @@ Implements GMP/FDA 21 CFR Part 11 compliant operations:
 import json
 import hashlib
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
