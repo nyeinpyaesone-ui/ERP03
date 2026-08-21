@@ -1,0 +1,84 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: erp_solution-staging
+
+resources:
+  - ../base
+
+namePrefix: staging-
+
+commonLabels:
+  environment: staging
+
+replicas:
+  - name: erp_solution-api
+    count: 2
+  - name: erp_solution-web
+    count: 1
+  - name: erp_solution-worker
+    count: 1
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: erp_solution-config
+    patch: |-
+      - op: replace
+        path: /data/APP_ENV
+        value: staging
+      - op: replace
+        path: /data/DB_NAME
+        value: erp_solution_staging
+      - op: replace
+        path: /data/API_BASE_URL
+        value: https://staging-api.erp-domain.com
+      - op: replace
+        path: /data/ENABLE_PUSH_NOTIFICATIONS
+        value: "false"
+
+  - target:
+      kind: Ingress
+      name: erp_solution-ingress
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: staging-api.erp-domain.com
+      - op: replace
+        path: /spec/rules/1/host
+        value: staging-admin.erp-domain.com
+      - op: replace
+        path: /spec/rules/2/host
+        value: staging-store.erp-domain.com
+      - op: replace
+        path: /spec/tls/0/hosts
+        value:
+          - staging-api.erp-domain.com
+          - staging-admin.erp-domain.com
+          - staging-store.erp-domain.com
+      - op: replace
+        path: /spec/tls/0/secretName
+        value: staging-erp_solution-tls
+      - op: add
+        path: /metadata/annotations/nginx.ingress.kubernetes.io~1whitelist-source-range
+        value: "0.0.0.0/0"
+
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: erp_solution-api-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 5
+
+images:
+  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-api
+    newTag: staging
+  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-web
+    newTag: staging
+  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-worker
+    newTag: staging
+

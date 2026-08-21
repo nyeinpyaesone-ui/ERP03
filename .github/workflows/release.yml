@@ -1,0 +1,28 @@
+name: Release Images
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-release:
+    name: Build and publish immutable release images
+    uses: ./.github/workflows/reusable/docker-publish.yml
+    with:
+      registry: ghcr.io
+      repository-owner: ${{ github.repository_owner }}
+      image-tag: ${{ github.ref_name }}
+      push: true
+      create-provenance: true
+      create-sbom: true
+    secrets: inherit

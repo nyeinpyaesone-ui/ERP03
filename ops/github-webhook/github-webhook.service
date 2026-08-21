@@ -1,0 +1,24 @@
+[Unit]
+Description=ERP03 GitHub Webhook Deployment Receiver
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=erpdeploy
+Group=erpdeploy
+WorkingDirectory=/opt/erp03
+EnvironmentFile=/etc/erp03/github-webhook.env
+# Nginx reaches the host receiver through Docker's host-gateway address.
+Environment=WEBHOOK_HOST=0.0.0.0
+ExecStart=/usr/bin/python3 /opt/erp03/ops/github-webhook/deploy_receiver.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/erp03
+
+[Install]
+WantedBy=multi-user.target
