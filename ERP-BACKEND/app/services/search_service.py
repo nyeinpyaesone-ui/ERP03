@@ -22,7 +22,17 @@ class SearchService:
     # ==================== INDEXING ====================
 
     def index_entity(self, entity_type: str, entity_id: int, title: str, content: str, metadata: Dict[str, Any] = None, tags: List[str] = None):
-        """Index or update an entity in the search index using atomic upsert."""
+        """
+        Index or update an entity in the search index.
+        
+        Parameters:
+            entity_type (str): Type of the indexed entity.
+            entity_id (int): Identifier of the indexed entity.
+            title (str): Search result title.
+            content (str): Searchable entity content.
+            metadata (Dict[str, Any], optional): Additional searchable and stored metadata.
+            tags (List[str], optional): Tags associated with the entity.
+        """
         from sqlalchemy.exc import IntegrityError
         
         # Build searchable text
@@ -380,7 +390,13 @@ class SearchService:
         return result[:limit]
 
     def record_suggestion(self, query: str, entity_type: str = None, entity_id: int = None):
-        """Record a search query for suggestion building."""
+        """Record a normalized search query for future suggestions.
+        
+        Parameters:
+        	query (str): The search query to record.
+        	entity_type (str, optional): The type of entity associated with the query.
+        	entity_id (int, optional): The identifier of the associated entity.
+        """
         existing = self.db.query(SearchSuggestion).filter(
             SearchSuggestion.query_text == query.lower().strip(),
             SearchSuggestion.entity_type == entity_type

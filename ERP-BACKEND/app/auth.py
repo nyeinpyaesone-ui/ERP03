@@ -19,6 +19,16 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    """
+    Create a signed access token containing the supplied claims and an expiration time.
+    
+    Parameters:
+        data (dict): Claims to include in the token.
+        expires_delta (Optional[timedelta]): Duration until expiration. Uses the configured default when omitted.
+    
+    Returns:
+        str: The encoded access token.
+    """
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})

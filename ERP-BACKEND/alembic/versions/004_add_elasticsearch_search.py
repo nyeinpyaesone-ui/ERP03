@@ -19,6 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Search indexes table
+    """Create tables and indexes for search indexes, query analytics, and suggestions."""
     op.create_table(
         'search_indexes',
         sa.Column('id', sa.Integer(), nullable=False),
