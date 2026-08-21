@@ -120,7 +120,20 @@ class InventoryService:
         updated_by: Optional[int] = None,
         commit: bool = True,
     ) -> Optional[Product]:
-        """Update a product with validation."""
+        """Update an existing product and return the refreshed product.
+        
+        Parameters:
+            product_id (int): Identifier of the product to update.
+            updates (dict): Product fields and replacement values.
+            updated_by (Optional[int]): Identifier of the user making the update.
+            commit (bool): Whether to commit the transaction instead of flushing it.
+        
+        Returns:
+            Optional[Product]: The updated product, or None if no product matches the identifier.
+        
+        Raises:
+            ValueError: If the replacement SKU already exists or a price or stock quantity is negative.
+        """
         product = self.get_product(product_id)
         if not product:
             return None
@@ -142,7 +155,7 @@ class InventoryService:
 
         for key, value in updates.items():
             setattr(product, key, value)
-        product.updated_at = datetime.utcnow()
+        product.updated_at = datetime.now(timezone.utc)
 
         if commit:
             self.db.commit()
@@ -174,7 +187,25 @@ class InventoryService:
         created_by: Optional[int] = None,
         commit: bool = True,
     ) -> InventoryMovement:
-        """Create a stock movement with transaction safety."""
+        """
+        Create an inventory movement and update the associated product stock.
+        
+        Parameters:
+            product_id (int): ID of the product affected by the movement.
+            movement_type (str): Movement type: ``"in"``, ``"out"``, ``"adjustment"``, or ``"transfer"``.
+            quantity (int): Movement quantity, which must be greater than or equal to zero.
+            unit_cost (Optional[Decimal]): Cost per unit for the movement.
+            reference (Optional[str]): External reference for the movement.
+            notes (Optional[str]): Additional movement notes.
+            created_by (Optional[int]): ID of the user who created the movement.
+            commit (bool): Whether to commit the transaction; otherwise, flushes the changes.
+        
+        Returns:
+            InventoryMovement: The created inventory movement.
+        
+        Raises:
+            ValueError: If the movement type or quantity is invalid, the product does not exist, or an outbound movement exceeds available stock.
+        """
         valid_types = ["in", "out", "adjustment", "transfer"]
         if movement_type not in valid_types:
             raise ValueError(f"Invalid movement type. Must be one of: {valid_types}")
@@ -214,7 +245,7 @@ class InventoryService:
             elif movement_type == "transfer":
                 pass
 
-            product.updated_at = datetime.utcnow()
+            product.updated_at = datetime.now(timezone.utc)
             self.db.add(movement)
             if commit:
                 self.db.commit()

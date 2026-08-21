@@ -1,11 +1,11 @@
 services:
   postgres:
     image: postgres:15.18-alpine3.24
-    container_name: erp_solution-postgres
+    container_name: erp03-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-erp}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
-      POSTGRES_DB: ${POSTGRES_DB:-erp_solution}
+      POSTGRES_USER: ${POSTGRES_USER:-erp_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-erp_password}
+      POSTGRES_DB: ${POSTGRES_DB:-erp_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -15,27 +15,33 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - erp_network
 
   redis:
     image: redis:7.4.9-alpine3.21
-    container_name: erp_solution-redis
+    container_name: erp03-redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     command: ["redis-server", "--appendonly", "yes"]
+    networks:
+      - erp_network
 
   erp-backend:
     build:
       context: ./ERP-BACKEND
       dockerfile: Dockerfile
-    container_name: erp_solution-backend
+    container_name: erp03-backend
     environment:
-      DATABASE_URL: ${DATABASE_URL:-}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-erp_user}:${POSTGRES_PASSWORD:-erp_password}@postgres:5432/${POSTGRES_DB:-erp_db}
       REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY:-}
-      ENVIRONMENT: development
-      DEBUG: "true"
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      ENVIRONMENT: ${APP_ENV:-production}
+      DEBUG: ${DEBUG:-false}
+      DOCKERHUB_USERNAME: ${DOCKERHUB_USERNAME}
+      DOCKERHUB_PASSWORD: ${DOCKERHUB_PASSWORD}
     ports:
       - "8000:8000"
     depends_on:
@@ -45,25 +51,52 @@ services:
         condition: service_started
     volumes:
       - ./ERP-BACKEND:/app
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    networks:
+      - erp_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   frontend:
     build:
-      context: ./ERP-BACKEND/frontend-react
+      context: ./frontend
       dockerfile: Dockerfile
-    container_name: erp-frontend
+      args:
+        - REACT_APP_API_URL=http://localhost:8000
+    container_name: erp03-frontend
     ports:
       - "3000:80"
     depends_on:
       - erp-backend
+    networks:
+      - erp_network
+    restart: unless-stopped
 
   ollama:
     image: ollama/ollama:0.32.5
-    container_name: erp_solution-ollama
+    container_name: erp03-ollama
     ports:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    networks:
+      - erp_network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # Only enable GPU if available, otherwise comment out deploy section
+
+networks:
+  erp_network:
+    driver: bridge
 
 volumes:
   postgres_data:

@@ -8,7 +8,7 @@ Implements:
 - EBMR_BatchRecord: Electronic Batch Manufacturing Record for traceability
 """
 
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 from typing import Optional, List
 from sqlalchemy import (
@@ -33,7 +33,7 @@ class ERPItemMaster(Base):
     ValuationMethod: Mapped[str] = mapped_column(String(20), nullable=False)  # StandardCost, FIFO, WeightedAvg
     IsBatchTracked: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     IsSerialized: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    CreatedDateTime: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    CreatedDateTime: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     
     # Relationships
     transactions: Mapped[List["ERPInventoryTransaction"]] = relationship(back_populates="ItemMaster")
@@ -123,8 +123,8 @@ class EBMRBatchRecord(Base):
     sourcingAndProcurement: Mapped[dict] = mapped_column(type_=Text)  # Stored as JSON string
     productionExecutionLog: Mapped[dict] = mapped_column(type_=Text)  # Stored as JSON string
     
-    CreatedDateTime: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    LastModifiedDateTime: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    CreatedDateTime: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    LastModifiedDateTime: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
     
     # Relationships
     ProductMaster: Mapped["ERPItemMaster"] = relationship(back_populates="batch_records")
