@@ -216,7 +216,19 @@ class SearchService:
         limit: int = 20,
         offset: int = 0
     ) -> Tuple[List[Dict[str, Any]], int]:
-        """Full-text search with PostgreSQL."""
+        """
+        Search indexed entities using PostgreSQL full-text search and optional filters.
+        
+        Parameters:
+            query (str): Text to search for.
+            entity_types (List[str], optional): Entity types to include.
+            filters (Dict[str, Any], optional): Tag or metadata filters to apply.
+            limit (int): Maximum number of results to return.
+            offset (int): Number of matching results to skip.
+        
+        Returns:
+            Tuple[List[Dict[str, Any]], int, int]: Formatted search results, total matching result count, and execution time in milliseconds.
+        """
         start_time = datetime.now(timezone.utc)
 
         # Build base query
@@ -416,7 +428,15 @@ class SearchService:
         self.db.commit()
 
     def get_search_analytics(self, days: int = 30) -> Dict[str, Any]:
-        """Get search analytics."""
+        """
+        Summarize search activity and usage patterns for a recent period.
+        
+        Parameters:
+        	days (int): Number of preceding days to include in the analytics.
+        
+        Returns:
+        	Dict[str, Any]: Analytics containing query totals, zero-result statistics, average execution time, top queries, daily volume, and popular filters.
+        """
         from datetime import datetime, timedelta
 
         start_date = datetime.now(timezone.utc) - timedelta(days=days)
