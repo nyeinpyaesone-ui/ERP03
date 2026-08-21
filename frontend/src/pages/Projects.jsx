@@ -3,6 +3,13 @@ import { FolderKanban, CheckCircle, Clock, AlertCircle, Plus, Calendar, BarChart
 import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+/**
+ * Displays projects with their status, details, budget, and completion progress.
+ *
+ * Fetches project data from the projects API using the stored bearer token.
+ *
+ * @returns {JSX.Element} The rendered projects page.
+ */
 export default function Projects() {
   const [projects, setProjects] = useState([]);
   const token = localStorage.getItem('token');

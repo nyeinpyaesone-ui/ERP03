@@ -3,6 +3,10 @@ import { Workflow, Plus, ToggleLeft, ToggleRight, Trash2, Play, GitBranch, Setti
 import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+/**
+ * Displays workflow automation controls, workflow details, and execution history.
+ * @returns {JSX.Element} The workflow automation page.
+ */
 export default function Workflows() {
   const [workflows, setWorkflows] = useState([]);
   const [executions, setExecutions] = useState([]);

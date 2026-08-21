@@ -3,6 +3,10 @@ import { BarChart3, TrendingUp, Users, Package, DollarSign, Activity, Calendar, 
 import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+/**
+ * Display dashboard metrics, revenue trends, forecasts, and recent activity.
+ * @returns {JSX.Element} The analytics page or a loading indicator.
+ */
 export default function Analytics() {
   const [data, setData] = useState(null);
   const [trends, setTrends] = useState(null);

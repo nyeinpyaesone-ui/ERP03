@@ -3,6 +3,10 @@ import { Package, AlertTriangle, Plus, ArrowDown, ArrowUp } from 'lucide-react';
 import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+/**
+ * Displays inventory products with stock levels, pricing, status, and low-stock alerts.
+ * @returns {JSX.Element} The inventory page.
+ */
 export default function Inventory() {
   const [products, setProducts] = useState([]);
   const [lowStock, setLowStock] = useState([]);

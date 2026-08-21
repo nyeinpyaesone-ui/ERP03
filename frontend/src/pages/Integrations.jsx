@@ -3,6 +3,9 @@ import { Plug, Webhook, Plus, Trash2, Send, CheckCircle, Slack, MessageCircle, Z
 import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+/**
+ * Displays configured integrations and webhooks with provider status and webhook testing controls.
+ */
 export default function Integrations() {
   const [integrations, setIntegrations] = useState([]);
   const [webhooks, setWebhooks] = useState([]);

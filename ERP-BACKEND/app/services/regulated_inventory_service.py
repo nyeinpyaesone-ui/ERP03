@@ -191,8 +191,15 @@ class RegulatedInventoryService:
         quality_notes: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Transition batch from Quarantine to Released status.
-        Requires authorized quality personnel sign-off.
+        Record the release of a batch from quality hold.
+        
+        Parameters:
+        	batch_id (str): Identifier of the batch being released.
+        	released_by_user_id (str): Identifier of the user recording the release.
+        	quality_notes (Optional[str]): Notes associated with the release.
+        
+        Returns:
+        	Dict[str, Any]: Release details including the batch, releasing user, UTC timestamp, notes, and `RELEASED` status.
         """
         # In production, this would update a QualityStatus table
         # For now, we log the release action

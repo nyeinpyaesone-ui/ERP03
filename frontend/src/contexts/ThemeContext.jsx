@@ -2,6 +2,10 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const ThemeContext = createContext(null);
 
+/**
+ * Provides theme state and controls to descendant components.
+ * @returns {JSX.Element} The theme context provider containing the child components.
+ */
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('theme');
@@ -25,6 +29,11 @@ export function ThemeProvider({ children }) {
   );
 }
 
+/**
+ * Access the current theme state and controls.
+ * @returns {{ theme: string, toggleTheme: Function, isDark: boolean }} The theme context value.
+ * @throws {Error} If called outside a `ThemeProvider`.
+ */
 export function useTheme() {
   const context = useContext(ThemeContext);
   if (!context) throw new Error('useTheme must be used within ThemeProvider');

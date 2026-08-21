@@ -19,6 +19,9 @@ const statCards = [
   { label: 'Revenue', icon: DollarSign, color: 'bg-amber-500', path: '/finance', key: 'total_revenue', format: 'currency', trend: 'revenue_trend' },
 ];
 
+/**
+ * Display aggregated business metrics, trends, alerts, and recent activity.
+ */
 export default function Dashboard() {
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);

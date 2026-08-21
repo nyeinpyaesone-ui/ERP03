@@ -22,7 +22,17 @@ class SearchService:
     # ==================== INDEXING ====================
 
     def index_entity(self, entity_type: str, entity_id: int, title: str, content: str, metadata: Dict[str, Any] = None, tags: List[str] = None):
-        """Index or update an entity in the search index using atomic upsert."""
+        """
+        Index or update an entity in the search index.
+        
+        Parameters:
+            entity_type (str): Type of the indexed entity.
+            entity_id (int): Identifier of the indexed entity.
+            title (str): Search result title.
+            content (str): Searchable entity content.
+            metadata (Dict[str, Any], optional): Additional searchable and stored metadata.
+            tags (List[str], optional): Tags associated with the entity.
+        """
         from sqlalchemy.exc import IntegrityError
         
         # Build searchable text
@@ -216,7 +226,19 @@ class SearchService:
         limit: int = 20,
         offset: int = 0
     ) -> Tuple[List[Dict[str, Any]], int]:
-        """Full-text search with PostgreSQL."""
+        """
+        Search indexed entities using full-text matching and optional filters.
+        
+        Parameters:
+        	query (str): Search text matched against indexed content.
+        	entity_types (List[str]): Entity types to include.
+        	filters (Dict[str, Any]): Metadata or tag filters to apply.
+        	limit (int): Maximum number of results to return.
+        	offset (int): Number of matching results to skip.
+        
+        Returns:
+        	Tuple[List[Dict[str, Any]], int, int]: Formatted search results, total matching count, and execution time in milliseconds.
+        """
         start_time = datetime.now(timezone.utc)
 
         # Build base query
@@ -379,7 +401,13 @@ class SearchService:
         return result[:limit]
 
     def record_suggestion(self, query: str, entity_type: str = None, entity_id: int = None):
-        """Record a search query for suggestion building."""
+        """Record a normalized search query for future suggestions.
+        
+        Parameters:
+        	query (str): The search query to record.
+        	entity_type (str, optional): The type of entity associated with the query.
+        	entity_id (int, optional): The identifier of the associated entity.
+        """
         existing = self.db.query(SearchSuggestion).filter(
             SearchSuggestion.query_text == query.lower().strip(),
             SearchSuggestion.entity_type == entity_type
@@ -415,7 +443,15 @@ class SearchService:
         self.db.commit()
 
     def get_search_analytics(self, days: int = 30) -> Dict[str, Any]:
-        """Get search analytics."""
+        """
+        Summarize search activity over a recent period.
+        
+        Parameters:
+        	days (int): Number of recent days to include in the analytics.
+        
+        Returns:
+        	Dict[str, Any]: Analytics including query totals, no-result rates, average execution time, top queries, daily volume, and filter usage.
+        """
         from datetime import timedelta
 
         start_date = datetime.now(timezone.utc) - timedelta(days=days)

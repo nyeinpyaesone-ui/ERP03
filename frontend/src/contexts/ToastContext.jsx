@@ -17,6 +17,11 @@ const styles = {
   info: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200',
 };
 
+/**
+ * Provide toast notification actions and render active notifications for descendant components.
+ * @param {React.ReactNode} children - Components that can access the toast context.
+ * @returns {React.ReactElement} The context provider and its rendered children.
+ */
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
 
@@ -56,6 +61,11 @@ export function ToastProvider({ children }) {
   );
 }
 
+/**
+ * Access the toast notification context.
+ * @returns {{ addToast: Function, removeToast: Function }} The toast context operations.
+ * @throws {Error} If called outside a `ToastProvider`.
+ */
 export function useToast() {
   const context = useContext(ToastContext);
   if (!context) throw new Error('useToast must be used within ToastProvider');

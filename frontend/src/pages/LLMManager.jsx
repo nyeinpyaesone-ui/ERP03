@@ -8,6 +8,9 @@ import {
 import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+/**
+ * Manages LLM models, prompt templates, usage analytics, and conversation statistics.
+ */
 export default function LLMManager() {
   const [activeTab, setActiveTab] = useState('models');
   const [models, setModels] = useState([]);

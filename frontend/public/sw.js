@@ -63,6 +63,9 @@ self.addEventListener('sync', (event) => {
   }
 });
 
+/**
+ * Submits queued requests and removes items that are successfully processed.
+ */
 async function syncData() {
   const queue = await getSyncQueue();
   for (const item of queue) {
@@ -79,6 +82,10 @@ async function syncData() {
   }
 }
 
+/**
+ * Retrieves queued synchronization items.
+ * @return {Array} An empty queue.
+ */
 async function getSyncQueue() {
   return [];
 }

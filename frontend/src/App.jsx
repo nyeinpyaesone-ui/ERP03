@@ -21,6 +21,10 @@ import Permissions from './pages/Permissions';
 import LLMManager from './pages/LLMManager';
 import Search from './pages/Search';
 
+/**
+ * Render the authenticated application or login screen.
+ * @returns {JSX.Element} The login screen when unauthenticated, or the routed application layout when authenticated.
+ */
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
 

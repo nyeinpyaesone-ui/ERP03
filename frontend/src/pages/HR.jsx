@@ -3,6 +3,9 @@ import { Users, Building, Briefcase, DollarSign, Plus } from 'lucide-react';
 import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+/**
+ * Display employee and department information in switchable tabs.
+ */
 export default function HR() {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);

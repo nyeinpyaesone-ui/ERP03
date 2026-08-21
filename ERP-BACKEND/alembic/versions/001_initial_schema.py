@@ -20,6 +20,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Users table
+    """
+    Create the initial database schema for the ERP application.
+    
+    Creates tables for identity, CRM, human resources, products, inventory,
+    billing, project management, workflows, auditing, notifications, reporting,
+    integrations, webhooks, API keys, and bulk data operations.
+    """
     op.create_table(
         'users',
         sa.Column('id', sa.Integer(), nullable=False),
@@ -454,6 +461,11 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drop tables in reverse order (respecting foreign key constraints)
+    """
+    Remove all tables created by this migration.
+    
+    The tables are removed in reverse dependency order so foreign-key constraints remain valid.
+    """
     op.drop_table('bulk_export_jobs')
     op.drop_table('bulk_import_jobs')
     op.drop_table('api_keys')

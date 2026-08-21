@@ -1,5 +1,15 @@
 import React from 'react';
 
+/**
+ * Render one or more animated loading placeholders.
+ * @param {Object} props - Placeholder configuration.
+ * @param {string} [props.className=''] - Additional CSS classes.
+ * @param {number} [props.count=1] - Number of placeholders to render.
+ * @param {string|number} [props.width] - Placeholder width.
+ * @param {string|number} [props.height] - Placeholder height.
+ * @param {boolean} [props.circle=false] - Whether the placeholders are circular.
+ * @returns {JSX.Element} The rendered loading placeholder or placeholder group.
+ */
 export function Skeleton({ className = '', count = 1, width, height, circle = false }) {
   const items = Array.from({ length: count }, (_, i) => (
     <div
@@ -11,6 +21,10 @@ export function Skeleton({ className = '', count = 1, width, height, circle = fa
   return count === 1 ? items[0] : <div className="space-y-2">{items}</div>;
 }
 
+/**
+ * Renders a card-shaped loading placeholder with avatar, text, content, and action blocks.
+ * @param {string} className - Additional CSS classes for the card.
+ */
 export function SkeletonCard({ className = '' }) {
   return (
     <div className={`card p-5 space-y-4 ${className}`}>
@@ -30,6 +44,11 @@ export function SkeletonCard({ className = '' }) {
   );
 }
 
+/**
+ * Render a table-shaped loading placeholder with configurable rows and columns.
+ * @param {number} rows - The number of placeholder rows to display.
+ * @param {number} columns - The number of placeholder columns to display.
+ */
 export function SkeletonTable({ rows = 5, columns = 4 }) {
   return (
     <div className="card overflow-hidden">
@@ -51,6 +70,10 @@ export function SkeletonTable({ rows = 5, columns = 4 }) {
   );
 }
 
+/**
+ * Renders a responsive grid of statistic-card loading placeholders.
+ * @param {number} [count=4] - The number of statistic-card placeholders to render.
+ */
 export function SkeletonStats({ count = 4 }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -67,6 +90,9 @@ export function SkeletonStats({ count = 4 }) {
   );
 }
 
+/**
+ * Renders a chat conversation loading placeholder with alternating message alignment.
+ */
 export function SkeletonChat() {
   return (
     <div className="space-y-4">

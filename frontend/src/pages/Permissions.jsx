@@ -20,6 +20,10 @@ const accessLevels = [
   { value: 'hidden', label: 'Hidden', color: 'text-red-600', bg: 'bg-red-50' },
 ];
 
+/**
+ * Render the administrative permissions and role-based access control interface.
+ * @returns {JSX.Element} The permissions management page or its loading, error, or access-denied state.
+ */
 export default function PermissionsManager() {
   const [activeTab, setActiveTab] = useState('roles');
   const [roles, setRoles] = useState([]);

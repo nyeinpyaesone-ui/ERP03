@@ -4,6 +4,10 @@ import { useDropzone } from 'react-dropzone';
 import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+/**
+ * Render the authenticated document management page.
+ * @return {JSX.Element} The document upload and listing interface.
+ */
 export default function Documents() {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(false);

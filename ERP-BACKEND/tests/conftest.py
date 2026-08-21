@@ -172,7 +172,12 @@ def mock_jwt_encode():
 
 @pytest.fixture
 def mock_jwt_decode():
-    """Mock JWT decode function."""
+    """
+    Provide a mocked JWT decoder with fixed subject and a 60-minute UTC expiration.
+    
+    Returns:
+    	mock (MagicMock): The patched JWT decoder mock.
+    """
     with patch('app.auth.jwt.decode') as mock:
         mock.return_value = {"sub": "1", "exp": datetime.now(timezone.utc) + timedelta(minutes=60)}
         yield mock

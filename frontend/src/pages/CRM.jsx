@@ -4,6 +4,9 @@ import { Users, Building2, DollarSign, Plus, Search, Filter, Phone, Mail } from 
 import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+/**
+ * Render the CRM interface for browsing contacts, companies, deals, and pipeline summaries.
+ */
 export default function CRM() {
   const [activeTab, setActiveTab] = useState('contacts');
   const [contacts, setContacts] = useState([]);

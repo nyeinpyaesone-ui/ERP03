@@ -249,7 +249,16 @@ def get_popular_queries(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
-    """Get most popular search queries. Admin only."""
+    """
+    Retrieve the most frequently searched queries within a specified period.
+    
+    Parameters:
+        limit (int): Maximum number of queries to include.
+        days (int): Number of days to include in the search history.
+    
+    Returns:
+        dict: An object containing query text, search counts, and average result counts.
+    """
     from datetime import datetime, timezone, timedelta
     from sqlalchemy import func
 

@@ -3,6 +3,10 @@ import { Settings, Save, Key, Mail, Database, CreditCard, Shield, Bell, Globe, T
 import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+/**
+ * Render the administrative settings interface for viewing, adding, and deleting application settings.
+ * @returns {JSX.Element} The settings administration page.
+ */
 export default function SettingsPage() {
   const [settings, setSettings] = useState([]);
   const [newKey, setNewKey] = useState('');

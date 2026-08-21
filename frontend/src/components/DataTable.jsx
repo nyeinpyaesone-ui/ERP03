@@ -1,6 +1,17 @@
 import React, { useState, useMemo } from 'react';
 import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Search, SlidersHorizontal, Download } from 'lucide-react';
 
+/**
+ * Renders a configurable data table with search, filtering, sorting, pagination, and optional export controls.
+ * @param {Object} props - Table configuration and data.
+ * @param {Array<Object>} props.data - Rows displayed in the table.
+ * @param {Array<Object>} props.columns - Column definitions, including keys, labels, and optional renderers.
+ * @param {string} props.keyField - Row property used to identify each row.
+ * @param {Function} [props.onRowClick] - Callback invoked with a row when it is selected.
+ * @param {string} props.emptyMessage - Message displayed when no rows match the active filters.
+ * @param {React.ReactNode} [props.actions] - Additional controls rendered in the toolbar.
+ * @returns {JSX.Element} The rendered data table or loading skeleton.
+ */
 export default function DataTable({
   data = [],
   columns = [],
@@ -277,10 +288,21 @@ export default function DataTable({
   );
 }
 
+/**
+ * Resolves a nested property value from an object using a dot-separated path.
+ * @param {Object} obj - The object to read from.
+ * @param {string} path - The dot-separated property path.
+ * @return {*} The resolved value, or `undefined` when a property is unavailable.
+ */
 function getValue(obj, path) {
   return path.split('.').reduce((o, p) => o?.[p], obj);
 }
 
+/**
+ * Formats a cell value for display.
+ * @param {*} val - The value to format.
+ * @return {string} The formatted value, using an em dash for nullish values, `Yes` or `No` for booleans, and a locale-formatted date for dates.
+ */
 function formatValue(val) {
   if (val == null) return '—';
   if (typeof val === 'boolean') return val ? 'Yes' : 'No';

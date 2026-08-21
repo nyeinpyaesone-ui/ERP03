@@ -3,6 +3,10 @@ import { Receipt, DollarSign, Plus, CheckCircle, Clock, AlertCircle } from 'luci
 import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+/**
+ * Displays a finance invoice list with totals, payment amounts, dates, and statuses.
+ * @return {JSX.Element} The rendered finance invoice list.
+ */
 export default function Finance() {
   const [invoices, setInvoices] = useState([]);
   const token = localStorage.getItem('token');

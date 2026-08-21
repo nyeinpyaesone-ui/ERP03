@@ -4,6 +4,11 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+/**
+ * Renders a form for signing in or registering an account.
+ * @param {Function} onLogin - Callback invoked with the access token after authentication.
+ * @returns {JSX.Element} The authentication form.
+ */
 export default function Login({ onLogin }) {
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
