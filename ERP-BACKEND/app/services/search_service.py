@@ -1,7 +1,7 @@
 import os
 import re
 from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, and_, text, cast
 from sqlalchemy.types import String
@@ -22,17 +22,7 @@ class SearchService:
     # ==================== INDEXING ====================
 
     def index_entity(self, entity_type: str, entity_id: int, title: str, content: str, metadata: Dict[str, Any] = None, tags: List[str] = None):
-        """
-        Index or update an entity in the search index.
-        
-        Parameters:
-            entity_type (str): Type of the indexed entity.
-            entity_id (int): Identifier of the indexed entity.
-            title (str): Search result title.
-            content (str): Searchable entity content.
-            metadata (Dict[str, Any], optional): Additional searchable and stored metadata.
-            tags (List[str], optional): Tags associated with the entity.
-        """
+        """Index or update an entity in the search index using atomic upsert."""
         from sqlalchemy.exc import IntegrityError
         
         # Build searchable text
@@ -52,8 +42,8 @@ class SearchService:
                 searchable_text=searchable,
                 meta_data=metadata or {},
                 tags=tags or [],
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
             ).on_conflict_do_update(
                 index_elements=['entity_type', 'entity_id'],
                 set_={
@@ -62,7 +52,7 @@ class SearchService:
                     'searchable_text': searchable,
                     'meta_data': metadata or {},
                     'tags': tags or [],
-                    'updated_at': datetime.utcnow()
+                    'updated_at': datetime.now(timezone.utc)
                 }
             )
             self.db.execute(stmt)
@@ -81,7 +71,7 @@ class SearchService:
                 existing.searchable_text = searchable
                 existing.meta_data = metadata or {}
                 existing.tags = tags or []
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = datetime.now(timezone.utc)
             else:
                 index = SearchIndex(
                     entity_type=entity_type,
@@ -227,7 +217,7 @@ class SearchService:
         offset: int = 0
     ) -> Tuple[List[Dict[str, Any]], int]:
         """Full-text search with PostgreSQL."""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         # Build base query
         base_query = self.db.query(SearchIndex)
@@ -297,7 +287,7 @@ class SearchService:
                 "updated_at": r.updated_at.isoformat() if r.updated_at else None
             })
 
-        execution_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+        execution_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
         return formatted, total, execution_time
 
@@ -390,13 +380,7 @@ class SearchService:
         return result[:limit]
 
     def record_suggestion(self, query: str, entity_type: str = None, entity_id: int = None):
-        """Record a normalized search query for future suggestions.
-        
-        Parameters:
-        	query (str): The search query to record.
-        	entity_type (str, optional): The type of entity associated with the query.
-        	entity_id (int, optional): The identifier of the associated entity.
-        """
+        """Record a search query for suggestion building."""
         existing = self.db.query(SearchSuggestion).filter(
             SearchSuggestion.query_text == query.lower().strip(),
             SearchSuggestion.entity_type == entity_type
@@ -404,7 +388,7 @@ class SearchService:
 
         if existing:
             existing.frequency += 1
-            existing.last_used = datetime.utcnow()
+            existing.last_used = datetime.now(timezone.utc)
         else:
             suggestion = SearchSuggestion(
                 query_text=query.lower().strip(),
@@ -435,7 +419,7 @@ class SearchService:
         """Get search analytics."""
         from datetime import datetime, timedelta
 
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         # Total queries
         total_queries = self.db.query(SearchQuery).filter(

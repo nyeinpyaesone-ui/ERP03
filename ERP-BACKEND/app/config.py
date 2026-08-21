@@ -62,15 +62,10 @@ class Settings(BaseSettings):
     def model_post_init(self, __context):
         # Skip validation in test mode
         """
-        Initialize settings with test-mode defaults or production configuration validation.
-        
-        In production mode, secret files may override the database URL and secret key. Raises
-        ``ValueError`` when production mode has no database URL or the secret key is shorter
-        than 32 characters.
+        Initialize settings, applying test-mode defaults or validating production configuration.
         
         Raises:
-            ValueError: If production configuration is missing a database URL or has an
-                insufficiently long secret key.
+            ValueError: If production mode lacks a database URL or the secret key is shorter than 32 characters.
         """
         if self.TEST_MODE:
             if not self.DATABASE_URL:

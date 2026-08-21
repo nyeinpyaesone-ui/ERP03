@@ -19,9 +19,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # LLM Models table
-    """
-    Creates the LLM integration schema and seeds default models and prompt templates.
-    """
     op.create_table(
         'llm_models',
         sa.Column('id', sa.Integer(), nullable=False),

@@ -191,22 +191,15 @@ class RegulatedInventoryService:
         quality_notes: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Record the release of a batch from quality hold.
-        
-        Parameters:
-        	batch_id (str): Identifier of the batch being released.
-        	released_by_user_id (str): Identifier of the user recording the release.
-        	quality_notes (Optional[str]): Notes associated with the release.
-        
-        Returns:
-        	Dict[str, Any]: Release details including the batch, releasing user, UTC timestamp, notes, and `RELEASED` status.
+        Transition batch from Quarantine to Released status.
+        Requires authorized quality personnel sign-off.
         """
         # In production, this would update a QualityStatus table
         # For now, we log the release action
         release_record = {
             "batchId": batch_id,
             "releasedBy": released_by_user_id,
-            "releasedAt": datetime.utcnow().isoformat(),
+            "releasedAt": datetime.now(timezone.utc).isoformat(),
             "qualityNotes": quality_notes,
             "status": "RELEASED"
         }

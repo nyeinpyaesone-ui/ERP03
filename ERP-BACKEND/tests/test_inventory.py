@@ -14,12 +14,7 @@ from sqlalchemy.pool import StaticPool
 
 @pytest.fixture
 def test_db_session():
-    """
-    Provide an isolated in-memory SQLite session and simplified inventory models for tests.
-    
-    Yields:
-        tuple: The database session, product model, and inventory movement model.
-    """
+    """Create a test database session with simplified inventory models."""
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -47,8 +42,8 @@ def test_db_session():
         barcode = Column(String(100))
         weight = Column(Numeric(10, 2))
         dimensions = Column(String(100))
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
         
         movements = relationship("TestInventoryMovement", back_populates="product", cascade="all, delete-orphan")
     
@@ -63,7 +58,7 @@ def test_db_session():
         reference = Column(String(255))
         notes = Column(Text)
         created_by = Column(Integer)
-        created_at = Column(DateTime, default=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
         
         product = relationship("TestProduct", back_populates="movements")
     

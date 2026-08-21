@@ -74,18 +74,6 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    """
-    Authenticate a user and create a bearer access token.
-    
-    Parameters:
-        form_data (OAuth2PasswordRequestForm): Submitted username and password credentials.
-    
-    Returns:
-        dict: A bearer token, token type, and authenticated user information.
-    
-    Raises:
-        HTTPException: If the credentials are invalid.
-    """
     user = db.query(User).filter(User.email == form_data.username).first()
     
     # Use constant-time comparison to prevent timing attacks
@@ -103,7 +91,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         # Generic error message to prevent user enumeration
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    user.last_login = datetime.utcnow()
+    user.last_login = datetime.now(timezone.utc)
     db.commit()
 
     token = create_access_token({"sub": str(user.id), "role": user.role})

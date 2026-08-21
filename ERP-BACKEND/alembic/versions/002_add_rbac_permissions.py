@@ -19,9 +19,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Roles table
-    """
-    Create the RBAC schema and seed system roles, permissions, role assignments, and field-level restrictions.
-    """
     op.create_table(
         'roles',
         sa.Column('id', sa.Integer(), nullable=False),
