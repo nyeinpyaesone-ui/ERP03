@@ -25,8 +25,8 @@ def upgrade() -> None:
         sa.Column('name', sa.String(length=100), nullable=False),
         sa.Column('display_name', sa.String(length=255), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('is_system', sa.Boolean(), nullable=False, server_default='0'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column('is_system', sa.Boolean(), nullable=False, server_default='false'),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('name')
     )
@@ -39,7 +39,7 @@ def upgrade() -> None:
         sa.Column('resource', sa.String(length=100), nullable=False),
         sa.Column('action', sa.String(length=50), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('name')
     )
@@ -72,7 +72,7 @@ def upgrade() -> None:
         sa.Column('resource', sa.String(length=100), nullable=False),
         sa.Column('field_name', sa.String(length=100), nullable=False),
         sa.Column('access_level', sa.String(length=20), nullable=False, server_default='read'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
         sa.ForeignKeyConstraint(['role_id'], ['roles.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('role_id', 'resource', 'field_name', name='uq_field_permission')
@@ -88,8 +88,8 @@ def upgrade() -> None:
         sa.Column('condition', postgresql.JSONB(), nullable=True),
         sa.Column('effect', sa.String(length=20), nullable=False, server_default='allow'),
         sa.Column('priority', sa.Integer(), nullable=False, server_default='100'),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='1'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
         sa.ForeignKeyConstraint(['role_id'], ['roles.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id')
     )

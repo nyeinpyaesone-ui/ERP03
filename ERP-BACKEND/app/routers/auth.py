@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, field_validator
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 from app.database import get_db
@@ -91,7 +91,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         # Generic error message to prevent user enumeration
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    user.last_login = datetime.now(timezone.utc)
+    user.last_login = datetime.utcnow()
     db.commit()
 
     token = create_access_token({"sub": str(user.id), "role": user.role})

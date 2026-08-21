@@ -29,8 +29,8 @@ def upgrade() -> None:
         sa.Column('searchable_text', sa.Text(), nullable=False),
         sa.Column('metadata', postgresql.JSONB(), nullable=True),
         sa.Column('tags', postgresql.JSONB(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('entity_type', 'entity_id', name='uq_search_index_entity')
     )
@@ -47,7 +47,7 @@ def upgrade() -> None:
         sa.Column('results_count', sa.Integer(), nullable=False, server_default='0'),
         sa.Column('execution_time_ms', sa.Integer(), nullable=True),
         sa.Column('clicked_results', postgresql.JSONB(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index('ix_search_queries_created_at', 'search_queries', ['created_at'], unique=False)
@@ -62,7 +62,7 @@ def upgrade() -> None:
         sa.Column('entity_type', sa.String(length=100), nullable=True),
         sa.Column('entity_id', sa.Integer(), nullable=True),
         sa.Column('frequency', sa.Integer(), nullable=False, server_default='1'),
-        sa.Column('last_used', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column('last_used', sa.DateTime(timezone=True), server_default=sa.text('now()')),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('query_text', 'suggestion_type', 'entity_type', name='uq_search_suggestion')
     )

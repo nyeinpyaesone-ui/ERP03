@@ -4,7 +4,7 @@ Tests product CRUD, stock movements, and business rules.
 Uses SQLite with simplified models to avoid PostgreSQL-specific JSONB issues.
 """
 import pytest
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, Column, Integer, String, Text, Numeric, ForeignKey, DateTime
@@ -42,8 +42,8 @@ def test_db_session():
         barcode = Column(String(100))
         weight = Column(Numeric(10, 2))
         dimensions = Column(String(100))
-        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+        created_at = Column(DateTime, default=datetime.utcnow)
+        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
         
         movements = relationship("TestInventoryMovement", back_populates="product", cascade="all, delete-orphan")
     
@@ -58,7 +58,7 @@ def test_db_session():
         reference = Column(String(255))
         notes = Column(Text)
         created_by = Column(Integer)
-        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        created_at = Column(DateTime, default=datetime.utcnow)
         
         product = relationship("TestProduct", back_populates="movements")
     

@@ -72,8 +72,7 @@ class Settings(BaseSettings):
                 self.DATABASE_URL = "sqlite:///:memory:"
             # SECURITY FIX: Require valid SECRET_KEY even in test mode
             if not self.SECRET_KEY or len(self.SECRET_KEY) < 32:
-                # Provide a default test secret key if none provided
-                self.SECRET_KEY = "test_secret_key_for_testing_purposes_only_1234567890abcdef"
+                raise ValueError("SECRET_KEY must contain at least 32 characters even in test mode")
             return
         
         database_url = _read_secret("DATABASE_URL")

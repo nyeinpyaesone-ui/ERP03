@@ -45,7 +45,7 @@ def test_openapi_contract_requires_idempotency_key_for_commands() -> None:
 
 def test_boundary_policy_forbids_internal_erp_coupling() -> None:
     policy = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "ORM entities are prohibited" in policy
+    assert "No ORM" in policy
     assert "No direct database" not in policy  # DB prohibition is stated in erp-client policy.
 
     client_policy = (
@@ -59,8 +59,8 @@ def test_authentication_policy_keeps_authn_and_authorization_separate() -> None:
     policy = (ROOT.parent.parent / "authentication" / "README.md").read_text(
         encoding="utf-8"
     )
-    assert "issuer, audience, signature, expiry" in policy.lower()
-    assert "Authorization is performed again by ERP" in policy
+    assert "issuer, audience, signature, expiry" in policy
+    assert "authorization is performed again by ERP" in policy.lower()
     assert "401" in policy
     assert "403" in policy
     assert "Tokens must not be logged" in policy

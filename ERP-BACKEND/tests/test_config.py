@@ -47,20 +47,16 @@ class TestSettings:
                 assert "DATABASE_URL" in str(exc_info.value)
 
     def test_settings_secret_key_minimum_length(self):
-        """Test that SECRET_KEY must be at least 32 characters in production mode."""
+        """Test that SECRET_KEY must be at least 32 characters."""
         from app.config import Settings
-        
-        # Clear cache to ensure fresh settings instance
-        from app.config import get_settings
-        get_settings.cache_clear()
         
         with patch.dict(os.environ, {
             'DATABASE_URL': 'postgresql://test:test@localhost/test',
             'SECRET_KEY': 'short'  # Too short
-        }, clear=True):
+        }, clear=False):
             with patch('app.config._read_secret', return_value=None):
                 with pytest.raises(ValueError) as exc_info:
-                    Settings(_env_file=None)
+                    Settings()
                 
                 assert "SECRET_KEY" in str(exc_info.value) or "32" in str(exc_info.value)
 

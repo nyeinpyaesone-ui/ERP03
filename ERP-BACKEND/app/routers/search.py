@@ -250,10 +250,10 @@ def get_popular_queries(
     current_user: User = Depends(require_admin)
 ):
     """Get most popular search queries. Admin only."""
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta
     from sqlalchemy import func
 
-    start_date = datetime.now(timezone.utc) - timedelta(days=days)
+    start_date = datetime.utcnow() - timedelta(days=days)
 
     queries = db.query(
         SearchQuery.query,

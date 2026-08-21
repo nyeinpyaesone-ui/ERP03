@@ -5,7 +5,7 @@ This module contains the core business logic for inventory operations,
 separated from the API layer for better testability and maintainability.
 """
 from typing import Optional, List
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
@@ -142,7 +142,7 @@ class InventoryService:
 
         for key, value in updates.items():
             setattr(product, key, value)
-        product.updated_at = datetime.now(timezone.utc)
+        product.updated_at = datetime.utcnow()
 
         if commit:
             self.db.commit()
@@ -214,7 +214,7 @@ class InventoryService:
             elif movement_type == "transfer":
                 pass
 
-            product.updated_at = datetime.now(timezone.utc)
+            product.updated_at = datetime.utcnow()
             self.db.add(movement)
             if commit:
                 self.db.commit()

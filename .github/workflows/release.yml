@@ -26,3 +26,26 @@ jobs:
       create-provenance: true
       create-sbom: true
     secrets: inherit
+
+  staging-gate:
+    name: Staging approval gate
+    needs: publish-release
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Record release digests
+        run: |
+          echo "Frontend digest: ${{ needs.publish-release.outputs.frontend-digest }}"
+          echo "ERP backend digest: ${{ needs.publish-release.outputs.backend-digest }}"
+          echo "Staging must consume the exact published release images."
+
+  production-gate:
+    name: Production approval gate
+    needs: staging-gate
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Confirm production promotion boundary
+        run: |
+          echo "Production environment approval passed."
+          echo "Deployment must consume the exact approved release image digests."

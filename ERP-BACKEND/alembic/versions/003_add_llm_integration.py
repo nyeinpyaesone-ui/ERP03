@@ -28,12 +28,12 @@ def upgrade() -> None:
         sa.Column('display_name', sa.String(length=255), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('parameters', postgresql.JSONB(), nullable=True),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='1'),
-        sa.Column('is_default', sa.Boolean(), nullable=False, server_default='0'),
-        sa.Column('supports_streaming', sa.Boolean(), nullable=False, server_default='1'),
-        sa.Column('supports_tools', sa.Boolean(), nullable=False, server_default='0'),
+        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
+        sa.Column('is_default', sa.Boolean(), nullable=False, server_default='false'),
+        sa.Column('supports_streaming', sa.Boolean(), nullable=False, server_default='true'),
+        sa.Column('supports_tools', sa.Boolean(), nullable=False, server_default='false'),
         sa.Column('context_window', sa.Integer(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('model_id')
     )
@@ -47,9 +47,9 @@ def upgrade() -> None:
         sa.Column('model_id', sa.String(length=100), nullable=False),
         sa.Column('system_prompt', sa.Text(), nullable=True),
         sa.Column('context', postgresql.JSONB(), nullable=True),
-        sa.Column('is_archived', sa.Boolean(), nullable=False, server_default='0'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column('is_archived', sa.Boolean(), nullable=False, server_default='false'),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id')
     )
@@ -66,7 +66,7 @@ def upgrade() -> None:
         sa.Column('tokens_used', sa.Integer(), nullable=True),
         sa.Column('latency_ms', sa.Integer(), nullable=True),
         sa.Column('tool_calls', postgresql.JSONB(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
         sa.ForeignKeyConstraint(['conversation_id'], ['ai_conversations.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id')
     )
@@ -84,9 +84,9 @@ def upgrade() -> None:
         sa.Column('total_tokens', sa.Integer(), nullable=False, server_default='0'),
         sa.Column('latency_ms', sa.Integer(), nullable=True),
         sa.Column('endpoint', sa.String(length=100), nullable=True),
-        sa.Column('success', sa.Boolean(), nullable=False, server_default='1'),
+        sa.Column('success', sa.Boolean(), nullable=False, server_default='true'),
         sa.Column('error_message', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index('ix_llm_usage_created_at', 'llm_usage', ['created_at'], unique=False)
@@ -103,9 +103,9 @@ def upgrade() -> None:
         sa.Column('variables', postgresql.JSONB(), nullable=True),
         sa.Column('model_id', sa.String(length=100), nullable=True),
         sa.Column('category', sa.String(length=50), nullable=False, server_default='general'),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='1'),
+        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
         sa.Column('created_by', sa.Integer(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
         sa.ForeignKeyConstraint(['created_by'], ['users.id'], ondelete='SET NULL'),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('name')

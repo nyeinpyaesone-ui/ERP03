@@ -12,7 +12,7 @@ Implements GMP/FDA 21 CFR Part 11 compliant operations:
 import json
 import hashlib
 import uuid
-from datetime import datetime, date, timezone
+from datetime import datetime, date
 from decimal import Decimal
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
@@ -199,7 +199,7 @@ class RegulatedInventoryService:
         release_record = {
             "batchId": batch_id,
             "releasedBy": released_by_user_id,
-            "releasedAt": datetime.now(timezone.utc).isoformat(),
+            "releasedAt": datetime.utcnow().isoformat(),
             "qualityNotes": quality_notes,
             "status": "RELEASED"
         }

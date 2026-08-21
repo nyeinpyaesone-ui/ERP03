@@ -1,7 +1,7 @@
 import os
 import re
 from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime, timezone
+from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, and_, text, cast
 from sqlalchemy.types import String
@@ -42,8 +42,8 @@ class SearchService:
                 searchable_text=searchable,
                 meta_data=metadata or {},
                 tags=tags or [],
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc)
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
             ).on_conflict_do_update(
                 index_elements=['entity_type', 'entity_id'],
                 set_={
@@ -52,7 +52,7 @@ class SearchService:
                     'searchable_text': searchable,
                     'meta_data': metadata or {},
                     'tags': tags or [],
-                    'updated_at': datetime.now(timezone.utc)
+                    'updated_at': datetime.utcnow()
                 }
             )
             self.db.execute(stmt)
@@ -71,7 +71,7 @@ class SearchService:
                 existing.searchable_text = searchable
                 existing.meta_data = metadata or {}
                 existing.tags = tags or []
-                existing.updated_at = datetime.now(timezone.utc)
+                existing.updated_at = datetime.utcnow()
             else:
                 index = SearchIndex(
                     entity_type=entity_type,
@@ -217,7 +217,7 @@ class SearchService:
         offset: int = 0
     ) -> Tuple[List[Dict[str, Any]], int]:
         """Full-text search with PostgreSQL."""
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.utcnow()
 
         # Build base query
         base_query = self.db.query(SearchIndex)
@@ -252,7 +252,8 @@ class SearchService:
                             SearchIndex.meta_data[meta_key].as_boolean() == value
                         )
                     else:
-                        # Use PostgreSQL JSONB syntax with ->> operator via astext
+                        # For JSON column, use json_each or direct comparison depending on DB
+                        # Using PostgreSQL JSONB syntax with ->> operator via astext
                         try:
                             base_query = base_query.filter(
                                 SearchIndex.meta_data[meta_key].astext.cast(String) == str(value)
@@ -286,7 +287,7 @@ class SearchService:
                 "updated_at": r.updated_at.isoformat() if r.updated_at else None
             })
 
-        execution_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+        execution_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
 
         return formatted, total, execution_time
 
@@ -387,7 +388,7 @@ class SearchService:
 
         if existing:
             existing.frequency += 1
-            existing.last_used = datetime.now(timezone.utc)
+            existing.last_used = datetime.utcnow()
         else:
             suggestion = SearchSuggestion(
                 query_text=query.lower().strip(),
@@ -416,9 +417,9 @@ class SearchService:
 
     def get_search_analytics(self, days: int = 30) -> Dict[str, Any]:
         """Get search analytics."""
-        from datetime import timedelta
+        from datetime import datetime, timedelta
 
-        start_date = datetime.now(timezone.utc) - timedelta(days=days)
+        start_date = datetime.utcnow() - timedelta(days=days)
 
         # Total queries
         total_queries = self.db.query(SearchQuery).filter(
