@@ -183,7 +183,7 @@ class EventBus:
         logger.info("EventBus disconnected from Redis")
     
     def _get_channel_name(self, event_type: str) -> str:
-        """Build the Redis channel name for an event type.
+        """Build the Redis channel name from an event type's first two segments.
         
         Parameters:
         	event_type (str): Dot-separated event type used to derive the channel topic.
@@ -222,11 +222,11 @@ class EventBus:
         handler: Callable[[Event], Awaitable[None]]
     ):
         """
-        Register an asynchronous handler for events matching the specified type.
+        Register an asynchronous handler for events matching an event type pattern.
         
         Parameters:
-            event_type (str): Event type pattern to subscribe to, including supported wildcards.
-            handler (Callable[[Event], Awaitable[None]]): Callback invoked for matching events.
+        	event_type (str): Event type or trailing-prefix wildcard pattern to match.
+        	handler (Callable[[Event], Awaitable[None]]): Asynchronous callback invoked with each matching event.
         """
         if event_type not in self._subscribers:
             self._subscribers[event_type] = []
@@ -336,16 +336,16 @@ class EventBus:
         limit: int = 100
     ) -> List[Event]:
         """
-        Get event history when persistence support is available.
+        Provide event history for an optional event type.
         
-        Currently returns an empty list because Redis Streams history is not implemented.
+        Event history is currently unavailable.
         
-        Args:
-            event_type: Optional event type filter.
-            limit: Maximum number of events to retrieve.
+        Parameters:
+            event_type (Optional[str]): Event type used to filter the history.
+            limit (int): Maximum number of events to retrieve.
         
         Returns:
-            An empty list.
+            List[Event]: An empty list.
         """
         # This would require Redis Streams implementation
         # For now, return empty list
@@ -392,7 +392,13 @@ class EventBusSync:
         logger.info("EventBusSync disconnected from Redis")
     
     def _get_channel_name(self, event_type: str) -> str:
-        """Get full channel name for an event type."""
+        """Build the Redis channel name for an event type.
+        
+        Parameters:
+        	event_type (str): The dot-separated event type.
+        
+        Returns:
+        	str: The channel name derived from the event type."""
         parts = event_type.split('.')
         if len(parts) >= 2:
             topic = f"{parts[0]}.{parts[1]}"

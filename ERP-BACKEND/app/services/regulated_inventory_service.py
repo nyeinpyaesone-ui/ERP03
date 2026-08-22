@@ -60,11 +60,14 @@ class RegulatedInventoryService:
         is_serialized: bool = False
     ) -> ERPItemMaster:
         """
-        Register an item in the item master and persist its tracking and valuation settings.
+        Register an item in the item master with its valuation and tracking settings.
         
         Parameters:
             item_id (str): Unique identifier for the item.
-            valuation_method (str): Inventory valuation method, defaulting to ``"FIFO"``.
+            item_name (str): Display name of the item.
+            item_type (str): Classification of the item.
+            base_uom (str): Base unit of measure.
+            valuation_method (str): Inventory valuation method.
             is_batch_tracked (bool): Whether inventory is tracked by batch.
             is_serialized (bool): Whether inventory is tracked by serial number.
         
@@ -170,17 +173,18 @@ class RegulatedInventoryService:
         data_area_id: str = "USMF"
     ) -> ERPInventoryTransaction:
         """
-        Record an inbound inventory receipt for an existing item.
+        Record a received inventory transaction for an existing item.
         
         Parameters:
-            supplier_id (Optional[str]): Supplier identifier used to classify the receipt reference.
-            supplier_lot_number (Optional[str]): Supplier-provided lot number.
-            certificate_of_analysis_id (Optional[str]): Certificate of analysis identifier.
+            supplier_id (Optional[str]): Determines whether the receipt is classified as a purchase order.
             cost_amount (Decimal): Physical cost recorded for the receipt.
-            data_area_id (str): Legal entity or data area associated with the transaction.
+            data_area_id (str): Legal entity associated with the transaction.
         
         Returns:
             ERPInventoryTransaction: The persisted inventory receipt transaction.
+        
+        Raises:
+            ValueError: If the item does not exist.
         """
         # Validate item exists
         item = self.db.get(ERPItemMaster, item_id)
@@ -259,20 +263,20 @@ class RegulatedInventoryService:
         exclude_batch_ids: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
-        Select inventory batches in expiry order until the requested quantity is fulfilled.
+        Allocate available inventory by batch identifier until the requested quantity is fulfilled.
         
         Parameters:
-            item_id (str): Identifier of the item to allocate.
-            quantity_required (Decimal): Quantity to allocate.
-            site_id (str): Site containing the inventory.
-            warehouse_id (str): Warehouse containing the inventory.
-            exclude_batch_ids (Optional[List[str]]): Batch identifiers to exclude.
+        	item_id (str): Identifier of the item to allocate.
+        	quantity_required (Decimal): Quantity to allocate.
+        	site_id (str): Site containing the inventory.
+        	warehouse_id (str): Warehouse containing the inventory.
+        	exclude_batch_ids (Optional[List[str]]): Batch identifiers to exclude from allocation.
         
         Returns:
-            List[Dict[str, Any]]: Allocated batches with their identifiers, allocated quantities, and available quantities.
+        	List[Dict[str, Any]]: Allocations containing each batch identifier, allocated quantity, and available quantity.
         
         Raises:
-            StockShortageException: If the available stock cannot fulfill the requested quantity.
+        	StockShortageException: If the available stock cannot fulfill the requested quantity.
         """
         exclude_batch_ids = exclude_batch_ids or []
         
@@ -463,7 +467,7 @@ class RegulatedInventoryService:
         	batch_id (str): Identifier of the batch to report.
         
         Returns:
-        	Dict[str, Any]: Traceability report containing batch metadata, source materials, suppliers, production steps, operators, and compliance indicators.
+        	Dict[str, Any]: Report containing batch metadata, source materials, suppliers, production steps, operators, and regulatory compliance indicators.
         
         Raises:
         	ValueError: If no electronic batch manufacturing record exists for the batch.
@@ -515,11 +519,11 @@ class RegulatedInventoryService:
         site_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Identify inventory batches approaching their expiry date.
+        Provide near-expiry inventory batches for an optional site.
         
         Parameters:
-        	days_threshold (int): Number of days within which a batch is considered near expiry.
-        	site_id (Optional[str]): Site to limit the query to.
+        	days_threshold (int): Number of days used as the near-expiry threshold.
+        	site_id (Optional[str]): Site to limit the results to.
         
         Returns:
         	List[Dict[str, Any]]: An empty list.
