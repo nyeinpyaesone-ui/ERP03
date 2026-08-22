@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr, field_validator
-from datetime import datetime
+from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
+from datetime import datetime, timezone
 from typing import Optional
 
 from app.database import get_db
@@ -15,6 +15,10 @@ from app.services.activity_log import log_activity
 from app.services.security_utils import validate_password_strength, constant_time_compare
 
 router = APIRouter()
+
+# Cache dummy password hash at module level to avoid recomputation on every login attempt
+# This prevents unnecessary CPU load during brute force attacks
+_DUMMY_PASSWORD_HASH = get_password_hash("dummy_password_for_timing")
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -50,8 +54,7 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class Token(BaseModel):
     access_token: str
@@ -115,20 +118,19 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     
     # Use constant-time comparison to prevent timing attacks
     # Always perform password check even if user doesn't exist
-    dummy_hash = get_password_hash("dummy_password_for_timing")
     password_valid = False
     
     if user:
         password_valid = verify_password(form_data.password, user.hashed_password)
     else:
         # Perform dummy verification to maintain constant time
-        verify_password(form_data.password, dummy_hash)
+        verify_password(form_data.password, _DUMMY_PASSWORD_HASH)
     
     if not user or not password_valid:
         # Generic error message to prevent user enumeration
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    user.last_login = datetime.utcnow()
+    user.last_login = datetime.now(timezone.utc)
     db.commit()
 
     token = create_access_token({"sub": str(user.id), "role": user.role})

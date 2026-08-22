@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
 from decimal import Decimal
 from datetime import datetime
@@ -31,7 +31,8 @@ class ProductCreate(BaseModel):
     weight: Optional[float] = Field(None, gt=0, description="Product weight")
     dimensions: Optional[str] = Field(None, max_length=100, description="Product dimensions")
 
-    @validator("status")
+    @field_validator("status")
+    @classmethod
     def validate_status(cls, v):
         """
         Validate that a status is one of the supported product states.
@@ -68,7 +69,8 @@ class ProductUpdate(BaseModel):
     weight: Optional[float] = Field(None, gt=0)
     dimensions: Optional[str] = Field(None, max_length=100)
 
-    @validator("status")
+    @field_validator("status")
+    @classmethod
     def validate_status(cls, v):
         """
         Validate that a product status is supported.
@@ -98,7 +100,8 @@ class MovementCreate(BaseModel):
     reference: Optional[str] = Field(None, max_length=255, description="Reference number")
     notes: Optional[str] = Field(None, max_length=1000, description="Notes")
 
-    @validator("movement_type")
+    @field_validator("movement_type")
+    @classmethod
     def validate_movement_type(cls, v):
         """
         Validate a stock movement type.
@@ -129,8 +132,7 @@ class MovementResponse(BaseModel):
     created_by: Optional[int]
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProductResponse(BaseModel):
@@ -153,8 +155,7 @@ class ProductResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DashboardResponse(BaseModel):
