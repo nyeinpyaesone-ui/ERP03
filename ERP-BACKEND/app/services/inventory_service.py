@@ -17,6 +17,7 @@ class InventoryService:
     """Service class for inventory business operations."""
     
     def __init__(self, db: Session):
+        """Initialize the inventory service with a database session."""
         self.db = db
     
     def create_product(
@@ -41,25 +42,16 @@ class InventoryService:
         """
         Create and persist a product after validating its SKU, prices, and stock levels.
         
-        Args:
-            sku: Unique product SKU.
-            name: Product name.
-            unit_price: Selling price.
-            description: Optional product description.
-            category: Optional product category.
-            cost_price: Optional cost price.
-            quantity_in_stock: Initial stock quantity.
-            reorder_level: Stock quantity at which reordering is triggered.
-            reorder_quantity: Quantity to reorder.
-            supplier: Optional supplier name.
-            supplier_contact: Optional supplier contact information.
-            status: Product status.
-            barcode: Optional product barcode.
-            weight: Optional product weight.
-            dimensions: Optional product dimensions.
+        Parameters:
+            sku (str): Unique product SKU.
+            name (str): Product name.
+            unit_price (Decimal): Selling price.
+            reorder_level (int): Stock quantity at which reordering is triggered.
+            reorder_quantity (int): Quantity to reorder.
+            updates (dict): Product attributes to store, when applicable.
         
         Returns:
-            The newly created product.
+            Product: The newly created product.
         
         Raises:
             ValueError: If the SKU already exists or a price or stock value is negative.
@@ -112,7 +104,14 @@ class InventoryService:
         return self.db.query(Product).filter(Product.id == product_id).first()
     
     def get_product_by_sku(self, sku: str) -> Optional[Product]:
-        """Get a product by SKU."""
+        """Retrieve a product by its stock-keeping unit.
+        
+        Parameters:
+        	sku (str): The product's stock-keeping unit.
+        
+        Returns:
+        	Optional[Product]: The matching product, or `None` if no product has the SKU.
+        """
         return self.db.query(Product).filter(Product.sku == sku).first()
     
     def list_products(
@@ -212,7 +211,7 @@ class InventoryService:
             product_id (int): Identifier of the product to delete.
         
         Returns:
-            bool: `true` if the product was deleted, `false` if it was not found.
+            bool: `True` if the product was deleted, `False` if it was not found.
         """
         product = self.get_product(product_id)
         if not product:

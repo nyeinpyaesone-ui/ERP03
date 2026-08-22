@@ -107,7 +107,7 @@ class CircuitBreaker:
         self._half_open_successes = 0
     
     def record_failure(self):
-        """Record a failed request."""
+        """Record a failed request and open the circuit after the failure threshold is reached."""
         self._failures += 1
         self._last_failure_time = __import__('time').time()
         
@@ -177,12 +177,12 @@ class ERPClient:
         Initialize an asynchronous ERP HTTP client.
         
         Parameters:
-            base_url (str): Base URL for ERP-BACKEND requests.
-            api_key (Optional[str]): API key used for authentication, if provided.
-            jwt_token (Optional[str]): JWT token used for authentication, if provided.
+            base_url (str): Base URL for ERP requests.
+            api_key (Optional[str]): API key for authentication.
+            jwt_token (Optional[str]): JWT token for authentication.
             timeout (float): Request timeout in seconds.
-            max_retries (int): Maximum number of retries for retryable request failures.
-            circuit_breaker (Optional[CircuitBreaker]): Circuit breaker controlling request execution.
+            max_retries (int): Maximum number of retries for retryable failures.
+            circuit_breaker (Optional[CircuitBreaker]): Circuit breaker used to control request execution.
         """
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
@@ -235,22 +235,21 @@ class ERPClient:
         **kwargs
     ) -> httpx.Response:
         """
-        Execute an HTTP request to the ERP service and record its outcome with the circuit breaker.
+        Execute an HTTP request to the ERP service with circuit-breaker protection.
         
         Args:
             method (str): HTTP method to use.
-            path (str): API endpoint path.
-            **kwargs: Additional arguments passed to the HTTP client.
+            path (str): ERP API endpoint path.
+            **kwargs: Additional arguments forwarded to the HTTP client.
         
         Returns:
             httpx.Response: The HTTP response.
         
         Raises:
-            CircuitBreakerOpen: If the circuit breaker is open.
+            CircuitBreakerOpen: If requests are currently blocked by the circuit breaker.
             AuthenticationError: If authentication or authorization fails.
             RateLimitError: If the service rate limit is exceeded.
-            ValidationError: If the request is rejected due to invalid data.
-            ERPClientError: If the service returns another error or a connection failure.
+            ERPClientError: If the request fails or the service returns an error.
         """
         if not self.circuit_breaker.can_execute():
             raise CircuitBreakerOpen(
@@ -438,7 +437,15 @@ class ERPClient:
         return [CustomerSchema(**item) for item in data.get('items', [])]
     
     async def get_customer(self, customer_id: int) -> CustomerSchema:
-        """Get a specific customer."""
+        """
+        Retrieve a customer by its identifier.
+        
+        Parameters:
+            customer_id (int): The unique identifier of the customer.
+        
+        Returns:
+            CustomerSchema: The validated customer record.
+        """
         data = await self.get(f"/api/v1/crm/customers/{customer_id}")
         return CustomerSchema(**data)
     
@@ -462,6 +469,7 @@ class ERPClient:
         """Update an existing customer with the provided data.
         
         Parameters:
+            customer_id (int): Identifier of the customer to update.
             customer_data (Dict[str, Any]): Fields and values to update.
         
         Returns:
@@ -525,7 +533,13 @@ class ERPClient:
         return ProductSchema(**data)
     
     async def create_product(self, product_data: Dict[str, Any]) -> ProductSchema:
-        """Create a new product."""
+        """Create a new product in the ERP inventory.
+        
+        Parameters:
+        	product_data (Dict[str, Any]): Product attributes to submit.
+        
+        Returns:
+        	ProductSchema: The created product."""
         data = await self.post("/api/v1/inventory/products", product_data)
         return ProductSchema(**data)
     
@@ -619,7 +633,7 @@ class ERPSyncClient:
         logger.info(f"ERPSyncClient initialized for {self.base_url}")
     
     def _build_headers(self) -> Dict[str, str]:
-        """Build default headers."""
+        """Build default JSON request headers with configured API-key and bearer-token authentication."""
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",

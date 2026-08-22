@@ -111,7 +111,7 @@ class JWTValidator:
     
     def validate_token(self, token: str) -> TokenPayload:
         """
-        Validate the JWT and convert its claims into a token payload.
+        Validate a JWT and convert its claims into a token payload.
         
         Parameters:
             token (str): JWT string to validate.
@@ -171,17 +171,16 @@ class JWTValidator:
     
     def refresh_token(self, refresh_token: str) -> str:
         """
-        Refresh an access token using a refresh token.
+        Creates a new one-hour access token from a valid refresh token.
         
-        Args:
-            refresh_token: Valid refresh token
-            
+        Parameters:
+            refresh_token (str): The refresh token to validate.
+        
         Returns:
-            New access token
-            
+            str: A new access token preserving the subject, scopes, and metadata.
+        
         Raises:
-            jwt.InvalidTokenError: If refresh token is invalid
-            ValueError: If token is not a refresh token
+            ValueError: If the supplied token is not a refresh token.
         """
         payload = self.validate_token(refresh_token)
         
@@ -255,15 +254,17 @@ class APIKeyManager:
         metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """
-        Create an API key for a service with optional permissions, expiration, and metadata.
+        Create an API key associated with a service.
         
         Parameters:
-        	scopes (Optional[List[str]]): Permission scopes granted to the key.
-        	expires_at (Optional[datetime]): Time at which the key expires.
-        	metadata (Optional[Dict[str, Any]]): Additional metadata associated with the key.
+            name (str): Human-readable name for the key.
+            service_id (str): Identifier of the service that owns the key.
+            scopes (Optional[List[str]]): Permission scopes granted to the key.
+            expires_at (Optional[datetime]): Time at which the key expires.
+            metadata (Optional[Dict[str, Any]]): Additional metadata associated with the key.
         
         Returns:
-        	str: The generated API key, which must be stored securely because it cannot be retrieved later.
+            str: The generated API key. Store it securely because it cannot be retrieved later.
         """
         # Generate random key
         raw_key = secrets.token_urlsafe(32)
@@ -295,7 +296,7 @@ class APIKeyManager:
         
         Returns:
             Optional[Dict[str, Any]]: Service ID, scopes, and metadata for a valid active,
-            unexpired key; `None` otherwise.
+                unexpired key; `None` otherwise.
         """
         key_hash = hashlib.sha256(api_key.encode()).hexdigest()
         
@@ -323,13 +324,13 @@ class APIKeyManager:
     
     def revoke_key(self, api_key: str) -> bool:
         """
-        Revoke an API key.
+        Mark a stored API key as inactive.
         
-        Args:
-            api_key: API key to revoke
-            
+        Parameters:
+            api_key (str): The raw API key to revoke.
+        
         Returns:
-            True if key was revoked, False if not found
+            bool: True if the API key exists, otherwise False.
         """
         key_hash = hashlib.sha256(api_key.encode()).hexdigest()
         
@@ -409,10 +410,10 @@ class APIKeyManager:
 
 def extract_token_from_header(headers: Dict[str, str]) -> Optional[str]:
     """
-    Extracts a JWT from a Bearer Authorization header.
+    Extracts a token from a Bearer authorization header.
     
     Returns:
-    	str: The token value, or None if the header is absent or does not use the Bearer scheme.
+    	str: The token value, or None if the header is absent or uses another scheme.
     """
     auth_header = headers.get("Authorization", "")
     

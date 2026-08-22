@@ -194,7 +194,7 @@ def create_product(
     	ProductResponse: The newly created product.
     
     Raises:
-    	HTTPException: With status 400 when product creation fails validation.
+    	HTTPException: With status 400 when the inventory service rejects the product.
     """
     try:
         product = service.create_product(
@@ -243,18 +243,18 @@ def list_products(
     service: InventoryService = Depends(get_inventory_service)
 ):
     """
-    List products with optional filtering and pagination.
+    List products with optional category, status, stock, search, and pagination filters.
     
     Parameters:
-        category (str, optional): Restrict results to a product category.
-        status (str, optional): Restrict results to a product status.
-        low_stock (bool): Restrict results to products below their reorder level.
-        search (str, optional): Filter products by name.
-        skip (int): Number of products to skip.
-        limit (int): Maximum number of products to return.
+    	category (str, optional): Restrict results to a product category.
+    	status (str, optional): Restrict results to a product status.
+    	low_stock (bool): Restrict results to products below their reorder levels.
+    	search (str, optional): Filter results by a search term.
+    	skip (int): Number of matching products to skip.
+    	limit (int): Maximum number of products to return.
     
     Returns:
-        list: Products matching the specified filters.
+    	list: Products matching the specified filters.
     """
     return service.list_products(
         category=category,
@@ -303,13 +303,13 @@ def update_product(
     
     Parameters:
         product_id (int): The identifier of the product to update.
-        data (ProductUpdate): The fields and values to update.
+        data (ProductUpdate): The fields to change; omitted fields remain unchanged.
     
     Returns:
         Product: The updated product.
     
     Raises:
-        HTTPException: If no fields are provided, the product does not exist, or the update is invalid.
+        HTTPException: If no fields are provided, the product is not found, or the update is invalid.
     """
     # Filter out None values
     updates = {k: v for k, v in data.dict().items() if v is not None}
@@ -355,7 +355,10 @@ def delete_product(
         product_id (int): Identifier of the product to delete.
     
     Returns:
-        dict: Confirmation message indicating that the product was deleted.
+        dict: Confirmation message indicating successful deletion.
+    
+    Raises:
+        HTTPException: If the product does not exist.
     """
     success = service.delete_product(product_id)
     if not success:
