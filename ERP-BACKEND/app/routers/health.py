@@ -28,7 +28,12 @@ router = APIRouter(prefix="/health", tags=["Health Checks"])
 
 
 def get_alembic_config() -> Config:
-    """Get Alembic configuration."""
+    """
+    Create the Alembic configuration using the application's database URL.
+    
+    Returns:
+    	Config: An Alembic configuration with the database URL overridden by the application setting.
+    """
     alembic_cfg = Config("alembic.ini")
     alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
     return alembic_cfg
@@ -149,15 +154,13 @@ def check_schema_integrity(db: Session) -> Dict[str, Any]:
 @router.get("/db")
 async def check_database_connectivity(db: Session = Depends(get_db)):
     """
-    Check database connectivity and report connection statistics.
+    Check database connectivity and report query latency and connection statistics.
     
     Returns:
-        dict: Health status, query response time, PostgreSQL connection counts,
-            and the current timestamp.
+        dict: Health status, response time, PostgreSQL connection counts, and UTC timestamp.
     
     Raises:
-        HTTPException: If the connectivity check or connection-statistics query
-            fails.
+        HTTPException: If the connectivity or connection-statistics query fails.
     """
     start_time = datetime.now(timezone.utc)
     
@@ -202,7 +205,7 @@ async def check_migrations(db: Session = Depends(get_db)):
     Report whether database migrations are current.
     
     Returns:
-    	dict: Health status and migration details, including pending migrations when applicable.
+    	dict: A health status with migration details; reports an unhealthy status when migrations are pending.
     
     Raises:
     	HTTPException: If migration status cannot be determined.
@@ -232,13 +235,13 @@ async def check_migrations(db: Session = Depends(get_db)):
 @router.get("/schema")
 async def check_schema_integrity_endpoint(db: Session = Depends(get_db)):
     """
-    Check the database schema integrity.
+    Assess database schema integrity and report the service health status.
     
     Returns:
-    	dict: Schema status with a healthy or unhealthy status and integrity details.
+    	dict: A healthy or unhealthy status with schema integrity details.
     
     Raises:
-    	HTTPException: If the schema check fails.
+    	HTTPException: If the schema check fails, with HTTP status 503.
     """
     try:
         schema_status = check_schema_integrity(db)
@@ -265,18 +268,13 @@ async def check_schema_integrity_endpoint(db: Session = Depends(get_db)):
 @router.get("/db/deep")
 async def deep_health_check(db: Session = Depends(get_db)):
     """
-    Perform comprehensive database health diagnostics.
-    
-    Checks major-table accessibility, database read capability, PostgreSQL recovery state,
-    sequence values, and database size. Individual check failures produce a degraded result
-    when applicable.
+    Run detailed database diagnostics, including table access, read capability, replication state, sequences, and database size.
     
     Returns:
-        Dict[str, Any]: A health payload containing the overall status, diagnostic results,
-        and an UTC timestamp.
+        Dict[str, Any]: A health payload with the overall status, diagnostic results, and UTC timestamp.
     
     Raises:
-        HTTPException: If the overall health-check operation fails.
+        HTTPException: If the health-check operation fails.
     """
     checks: Dict[str, Any] = {}
     overall_healthy = True
@@ -362,10 +360,12 @@ async def deep_health_check(db: Session = Depends(get_db)):
 @router.get("/ready")
 async def readiness_check(db: Session = Depends(get_db)):
     """
-    Check database connectivity and migration status for Kubernetes readiness.
+    Check database connectivity and migration status for service readiness.
     
     Returns:
-    	tuple: A readiness payload and HTTP status code. The status is 200 when the database is reachable and migrations are current, or 503 otherwise.
+        dict or tuple: A ready-status payload when connectivity is available and
+        migrations are current; otherwise, a not-ready payload with HTTP status
+        code 503.
     """
     try:
         # Quick connectivity check

@@ -80,14 +80,17 @@ def get_company(company_id: int, db: Session = Depends(get_db), current_user = D
 @router.put("/companies/{company_id}", response_model=CompanyResponse)
 def update_company(company_id: int, data: CompanyUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
-    Update a company's stored details.
+    Update the stored details for a company.
     
     Parameters:
     	company_id (int): Identifier of the company to update.
-    	data (CompanyCreate): Replacement company details.
+    	data (CompanyUpdate): Fields and values to apply to the company.
     
     Returns:
     	Company: The updated company.
+    
+    Raises:
+    	HTTPException: If the company does not exist.
     """
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
@@ -108,6 +111,9 @@ def delete_company(company_id: int, db: Session = Depends(get_db), current_user 
     
     Returns:
     	dict: Confirmation message indicating that the company was deleted.
+    
+    Raises:
+    	HTTPException: If the company does not exist.
     """
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
@@ -123,7 +129,7 @@ def create_contact(data: ContactUpdate, db: Session = Depends(get_db), current_u
     Create a contact assigned to the authenticated user.
     
     Parameters:
-    	data (ContactCreate): Contact details used to create the record.
+    	data (ContactUpdate): Contact details for the new contact.
     
     Returns:
     	Contact: The newly created contact.
@@ -152,7 +158,7 @@ def list_contacts(
     	search (Optional[str]): Text matched case-insensitively against the contact's full name or email.
     
     Returns:
-    	list[Contact]: Contacts matching the filters and pagination settings.
+    	list[Contact]: Contacts matching the filters and pagination parameters.
     """
     query = db.query(Contact)
     if status:
@@ -189,7 +195,7 @@ def update_contact(contact_id: int, data: ContactUpdate, db: Session = Depends(g
     
     Parameters:
     	contact_id (int): The identifier of the contact to update.
-    	data (ContactCreate): The contact details to apply.
+    	data (ContactUpdate): The fields to apply to the contact.
     
     Returns:
     	Contact: The updated contact.
@@ -232,7 +238,7 @@ def create_deal(data: DealCreate, db: Session = Depends(get_db), current_user = 
     Create a deal assigned to the authenticated user.
     
     Parameters:
-    	data (DealCreate): Deal details used to create the record.
+    	data (DealCreate): Details for the new deal.
     
     Returns:
     	Deal: The newly created deal.
@@ -307,11 +313,11 @@ def get_deal(deal_id: int, db: Session = Depends(get_db), current_user = Depends
 @router.put("/deals/{deal_id}", response_model=DealResponse)
 def update_deal(deal_id: int, data: DealUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
-    Update a deal and apply stage-based closing details.
+    Update a deal and apply stage-dependent probability and closing-date changes.
     
     Parameters:
         deal_id (int): Identifier of the deal to update.
-        data (DealUpdate): Fields to change on the deal.
+        data (DealUpdate): Fields to apply to the deal.
     
     Raises:
         HTTPException: If the deal does not exist.

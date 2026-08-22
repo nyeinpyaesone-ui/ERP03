@@ -26,6 +26,12 @@ class RateLimiter:
     """
     
     def __init__(self, default_limit: str = "100/minute"):
+        """
+        Initialize the rate limiter with a default request limit.
+        
+        Parameters:
+        	default_limit (str): The default rate limit applied to requests.
+        """
         self.limiter = Limiter(
             key_func=get_remote_address,
             default_limits=[default_limit],
@@ -33,7 +39,12 @@ class RateLimiter:
         )
         
     def setup_exception_handler(self, app):
-        """Setup exception handler for rate limit exceeded errors."""
+        """
+        Register the application's handler for rate-limit-exceeded errors.
+        
+        Parameters:
+            app: The application to configure.
+        """
         app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
@@ -44,6 +55,12 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
     """
     
     def __init__(self, app, max_attempts: int = 5, window_seconds: int = 60):
+        """Configure authentication request rate limiting for the middleware.
+        
+        Parameters:
+        	max_attempts (int): Maximum number of authentication attempts allowed within the time window.
+        	window_seconds (int): Duration of the rate-limiting window in seconds.
+        """
         super().__init__(app)
         self.max_attempts = max_attempts
         self.window_seconds = window_seconds
@@ -51,6 +68,16 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
     
     async def dispatch(self, request: Request, call_next):
         # Only apply to auth endpoints
+        """
+        Apply an in-memory request limit to authentication endpoints.
+        
+        Parameters:
+            request (Request): The incoming HTTP request.
+            call_next: The handler that processes requests allowed through the middleware.
+        
+        Returns:
+            The downstream response, or an HTTP 429 response when the client exceeds the configured limit.
+        """
         if not request.url.path.startswith("/api/v1/auth"):
             return await call_next(request)
         

@@ -74,9 +74,7 @@ HTTP_REQUEST_DURATION = Histogram(
 async def lifespan(app: FastAPI):
     # Only create tables if not in test mode (tests handle their own DB setup)
     """
-    Manage application startup and shutdown lifecycle events.
-    
-    Creates database tables during startup when the application is not running in test mode.
+    Initialize the application lifecycle and create database tables outside test mode.
     """
     if not IS_TEST_MODE:
         # Use async table creation for async engines, sync for sync engines
@@ -109,6 +107,11 @@ app.add_middleware(AuthRateLimitMiddleware, max_attempts=5, window_seconds=60)
 
 @app.middleware("http")
 async def observability_middleware(request, call_next):
+    """
+    Record observability data for an HTTP request and attach its request identifier to the response.
+    
+    Exceptions raised while processing the request are logged and re-raised.
+    """
     start = perf_counter()
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     status_code = 500

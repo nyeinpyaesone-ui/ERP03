@@ -62,10 +62,15 @@ class Settings(BaseSettings):
     def model_post_init(self, __context):
         # Skip validation in test mode
         """
-        Initialize settings, applying test-mode defaults or validating production configuration.
+        Initialize settings with test-mode defaults or validated configuration.
+        
+        In test mode, an empty database URL is replaced with an in-memory SQLite
+        URL. Otherwise, database and secret-key values may be loaded from file-based
+        secrets before validation.
         
         Raises:
-            ValueError: If production mode lacks a database URL or the secret key is shorter than 32 characters.
+            ValueError: If the secret key is missing or shorter than 32 characters,
+                or if the database URL is missing outside test mode.
         """
         if self.TEST_MODE:
             if not self.DATABASE_URL:

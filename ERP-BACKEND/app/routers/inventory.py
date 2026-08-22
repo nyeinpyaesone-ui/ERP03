@@ -33,6 +33,18 @@ class ProductCreate(BaseModel):
 
     @validator("status")
     def validate_status(cls, v):
+        """
+        Validate that a status is one of the supported product states.
+        
+        Parameters:
+            v (str): Status value to validate.
+        
+        Returns:
+            str: The validated status value.
+        
+        Raises:
+            ValueError: If the status is not `active`, `discontinued`, or `draft`.
+        """
         allowed = ["active", "discontinued", "draft"]
         if v not in allowed:
             raise ValueError(f"Status must be one of: {allowed}")
@@ -58,6 +70,18 @@ class ProductUpdate(BaseModel):
 
     @validator("status")
     def validate_status(cls, v):
+        """
+        Validate that a product status is supported.
+        
+        Parameters:
+            v: The status value to validate.
+        
+        Returns:
+            The original status value, including None when provided.
+        
+        Raises:
+            ValueError: If the status is not active, discontinued, or draft.
+        """
         if v is None:
             return v
         allowed = ["active", "discontinued", "draft"]
@@ -76,6 +100,18 @@ class MovementCreate(BaseModel):
 
     @validator("movement_type")
     def validate_movement_type(cls, v):
+        """
+        Validate a stock movement type.
+        
+        Parameters:
+            v: The movement type to validate.
+        
+        Returns:
+            The validated movement type.
+        
+        Raises:
+            ValueError: If the movement type is not `in`, `out`, `adjustment`, or `transfer`.
+        """
         allowed = ["in", "out", "adjustment", "transfer"]
         if v not in allowed:
             raise ValueError(f"Movement type must be one of: {allowed}")
@@ -134,6 +170,13 @@ def get_inventory_service(db: Session = Depends(get_db)) -> InventoryService:
 
 
 def _rollback_and_raise(db: Session, exc: Exception):
+    """
+    Roll back the current database transaction and raise an HTTP error for the original exception.
+    
+    Parameters:
+    	db (Session): The database session whose transaction should be rolled back.
+    	exc (Exception): The exception that caused the transaction to fail.
+    """
     db.rollback()
     if isinstance(exc, HTTPException):
         raise exc
@@ -142,6 +185,12 @@ def _rollback_and_raise(db: Session, exc: Exception):
 
 @router.post("/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 def create_product(data: ProductCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user), service: InventoryService = Depends(get_inventory_service)):
+    """
+    Create a product and record the creation activity.
+    
+    Parameters:
+    	data (ProductCreate): Product details and initial inventory values.
+    """
     try:
         product = service.create_product(
             sku=data.sku, name=data.name, unit_price=data.unit_price,
@@ -164,11 +213,35 @@ def create_product(data: ProductCreate, db: Session = Depends(get_db), current_u
 
 @router.get("/products", response_model=List[ProductResponse])
 def list_products(category: Optional[str] = None, status: Optional[str] = None, low_stock: bool = False, search: Optional[str] = None, skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user=Depends(get_current_user), service: InventoryService = Depends(get_inventory_service)):
+    """List products with optional category, status, stock, search, and pagination filters.
+    
+    Parameters:
+    	category (Optional[str]): Category used to filter products.
+    	status (Optional[str]): Status used to filter products.
+    	low_stock (bool): Whether to return only low-stock products.
+    	search (Optional[str]): Search text used to filter products.
+    	skip (int): Number of products to skip.
+    	limit (int): Maximum number of products to return.
+    
+    Returns:
+    	list: Products matching the specified filters.
+    """
     return service.list_products(category=category, status=status, low_stock=low_stock, search=search, skip=skip, limit=limit)
 
 
 @router.get("/products/{product_id}", response_model=ProductResponse)
 def get_product(product_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user), service: InventoryService = Depends(get_inventory_service)):
+    """Retrieve a product by its identifier.
+    
+    Parameters:
+    	product_id (int): The product identifier.
+    
+    Returns:
+    	Product: The matching product.
+    
+    Raises:
+    	HTTPException: If the product does not exist.
+    """
     product = service.get_product(product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -177,6 +250,18 @@ def get_product(product_id: int, db: Session = Depends(get_db), current_user=Dep
 
 @router.put("/products/{product_id}", response_model=ProductResponse)
 def update_product(product_id: int, data: ProductUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user), service: InventoryService = Depends(get_inventory_service)):
+    """Update a product with the provided fields and record the update activity.
+    
+    Parameters:
+    	product_id (int): Identifier of the product to update.
+    	data (ProductUpdate): Fields and values to apply to the product.
+    
+    Returns:
+    	Product: The updated product.
+    
+    Raises:
+    	HTTPException: If no fields are provided, the product is not found, or the update fails.
+    """
     updates = {k: v for k, v in data.dict().items() if v is not None}
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -199,6 +284,18 @@ def update_product(product_id: int, data: ProductUpdate, db: Session = Depends(g
 
 @router.delete("/products/{product_id}", status_code=status.HTTP_200_OK)
 def delete_product(product_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user), service: InventoryService = Depends(get_inventory_service)):
+    """
+    Delete a product and record the deletion activity.
+    
+    Parameters:
+        product_id (int): Identifier of the product to delete.
+    
+    Returns:
+        dict: A success message confirming that the product was deleted.
+    
+    Raises:
+        HTTPException: If the product does not exist.
+    """
     try:
         success = service.delete_product(product_id, commit=False)
         if not success:
@@ -216,6 +313,15 @@ def delete_product(product_id: int, db: Session = Depends(get_db), current_user=
 
 @router.post("/movements", response_model=MovementResponse, status_code=status.HTTP_201_CREATED)
 def create_movement(data: MovementCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user), service: InventoryService = Depends(get_inventory_service)):
+    """Create a stock movement and record the associated user activity.
+    
+    Parameters:
+    	data (MovementCreate): Stock movement details.
+    	current_user: Authenticated user creating the movement.
+    
+    Returns:
+    	InventoryMovement: The created stock movement.
+    """
     try:
         movement = service.create_stock_movement(
             product_id=data.product_id, movement_type=data.movement_type, quantity=data.quantity,
@@ -234,19 +340,48 @@ def create_movement(data: MovementCreate, db: Session = Depends(get_db), current
 
 @router.get("/movements", response_model=List[MovementResponse])
 def list_movements(product_id: Optional[int] = None, movement_type: Optional[str] = None, skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user=Depends(get_current_user), service: InventoryService = Depends(get_inventory_service)):
+    """List inventory movements with optional product and movement-type filters.
+    
+    Parameters:
+    	product_id (int, optional): The product identifier used to filter movements.
+    	movement_type (str, optional): The movement type used to filter results.
+    	skip (int): The number of movements to skip.
+    	limit (int): The maximum number of movements to return.
+    
+    Returns:
+    	A list of matching inventory movements.
+    """
     return service.get_movements(product_id=product_id, movement_type=movement_type, skip=skip, limit=limit)
 
 
 @router.get("/dashboard", response_model=DashboardResponse)
 def inventory_dashboard(db: Session = Depends(get_db), current_user=Depends(get_current_user), service: InventoryService = Depends(get_inventory_service)):
+    """Retrieve aggregate statistics for the inventory dashboard.
+    
+    Returns:
+    	dashboard_stats (dict): Current inventory dashboard statistics.
+    """
     return service.get_dashboard_stats()
 
 
 @router.get("/alerts/low-stock", response_model=List[ProductResponse])
 def get_low_stock_alerts(limit: int = 50, db: Session = Depends(get_db), current_user=Depends(get_current_user), service: InventoryService = Depends(get_inventory_service)):
+    """Retrieve products whose stock levels are low.
+    
+    Parameters:
+    	limit (int): Maximum number of low-stock products to return.
+    
+    Returns:
+    	list: Low-stock products up to the specified limit.
+    """
     return service.get_low_stock_products(limit=limit)
 
 
 @router.get("/alerts/out-of-stock", response_model=List[ProductResponse])
 def get_out_of_stock_alerts(db: Session = Depends(get_db), current_user=Depends(get_current_user), service: InventoryService = Depends(get_inventory_service)):
+    """Retrieve products that currently have zero stock.
+    
+    Returns:
+    	list[ProductResponse]: Products with no available inventory.
+    """
     return service.get_out_of_stock_products()

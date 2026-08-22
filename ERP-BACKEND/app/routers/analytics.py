@@ -13,7 +13,7 @@ def get_dashboard_analytics(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Return the aggregated ERP dashboard through the read/query service."""
+    """Retrieve aggregated dashboard analytics for the authenticated user."""
     return AnalyticsQueryService(db).get_dashboard()
 
 

@@ -14,6 +14,15 @@ from app.integration_runtime.models import IntegrationCommand, PurchaseOrder, Pu
 
 @pytest.fixture
 def integration_client(db_session):
+    """
+    Provide a test client with seeded users, a pending purchase order, and an overridden database dependency.
+    
+    Parameters:
+    	db_session: Database session used to seed test data and serve application requests.
+    
+    Yields:
+    	tuple: Test client and the seeded database session.
+    """
     db_session.add_all([
         User(id=10, email="approver@example.com", hashed_password="x", full_name="Approver", role="approver", is_active=True),
         User(id=11, email="second@example.com", hashed_password="x", full_name="Second", role="second_approver", is_active=True),
@@ -23,6 +32,7 @@ def integration_client(db_session):
     db_session.commit()
 
     def override_db():
+        """Provide the test database session for dependency overrides."""
         yield db_session
 
     app.dependency_overrides[get_db] = override_db
@@ -34,6 +44,19 @@ def integration_client(db_session):
 
 
 def _claims(actor_id=10, subject="ai-service", service=True, valid_issuer=True, valid_audience=True):
+    """
+    Build authentication claims for integration-service test requests.
+    
+    Parameters:
+    	actor_id: Identifier of the acting principal.
+    	subject: Subject claim identifying the principal.
+    	service: Whether the claims identify a service principal.
+    	valid_issuer: Whether to use the configured integration-service issuer.
+    	valid_audience: Whether to use the configured integration-service audience.
+    
+    Returns:
+    	dict: Authentication claims containing the subject, service flag, actor identifier, issuer, and audience.
+    """
     return {
         "sub": subject,
         "service": service,
