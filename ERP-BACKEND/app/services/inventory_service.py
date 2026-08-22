@@ -222,6 +222,8 @@ class InventoryService:
         """
         Create a stock movement and update the associated product inventory.
         
+        Uses SELECT FOR UPDATE NOWAIT to prevent race conditions in high-concurrency scenarios.
+        
         Parameters:
             product_id (int): ID of the product affected by the movement.
             movement_type (str): Movement type: ``"in"``, ``"out"``, ``"adjustment"``, or ``"transfer"``.
@@ -230,7 +232,14 @@ class InventoryService:
         
         Returns:
             InventoryMovement: The created stock movement.
+        
+        Raises:
+            ValueError: If movement type is invalid, quantity is negative, product not found,
+                       or insufficient stock for 'out' movements.
+            HTTPException: If product is locked by another transaction (409 Conflict).
         """
+        from fastapi import HTTPException
+        
         valid_types = ["in", "out", "adjustment", "transfer"]
         if movement_type not in valid_types:
             raise ValueError(f"Invalid movement type. Must be one of: {valid_types}")
@@ -238,10 +247,11 @@ class InventoryService:
             raise ValueError("Quantity cannot be negative")
 
         try:
+            # Use SELECT FOR UPDATE NOWAIT to prevent deadlocks and fail fast on contention
             product = (
                 self.db.query(Product)
                 .filter(Product.id == product_id)
-                .with_for_update()
+                .with_for_update(nowait=True)
                 .first()
             )
             if not product:
@@ -268,6 +278,7 @@ class InventoryService:
             elif movement_type == "adjustment":
                 product.quantity_in_stock = quantity
             elif movement_type == "transfer":
+                # Transfer logic would require additional destination product handling
                 pass
 
             product.updated_at = datetime.now(timezone.utc)
@@ -278,7 +289,13 @@ class InventoryService:
                 self.db.flush()
             self.db.refresh(movement)
             return movement
-        except Exception:
+        except Exception as e:
+            # Check if this is a row lock timeout/wait error
+            if "could not obtain lock" in str(e).lower() or "nowait" in str(e).lower():
+                raise HTTPException(
+                    status_code=409,
+                    detail="Product is currently locked by another operation. Please retry."
+                )
             self.db.rollback()
             raise
 
