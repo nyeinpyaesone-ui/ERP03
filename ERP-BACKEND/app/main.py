@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -13,10 +14,13 @@ from app.database import engine, Base
 from app.routers import (
     auth, crm, hr, inventory, finance, projects,
     documents, reports, workflows, payments,
-    integrations, analytics, admin, websocket,
-    bulk_import_export, migrations
+    integrations, integration_v1, analytics, admin, websocket, health
 )
 from app.config import settings
+from app.integration_runtime import models as integration_runtime_models  # noqa: F401
+
+
+IS_TEST_MODE = os.getenv("TESTING", "false").lower() == "true" or os.getenv("TEST_MODE", "false").lower() == "true"
 
 
 class JsonFormatter(logging.Formatter):
@@ -44,21 +48,14 @@ if not logger.handlers:
 logger.setLevel(logging.INFO)
 logger.propagate = False
 
-HTTP_REQUESTS = Counter(
-    "http_requests_total",
-    "Total HTTP requests",
-    ["method", "path", "status"],
-)
-HTTP_REQUEST_DURATION = Histogram(
-    "http_request_duration_seconds",
-    "HTTP request duration in seconds",
-    ["method", "path"],
-)
+HTTP_REQUESTS = Counter("http_requests_total", "Total HTTP requests", ["method", "path", "status"])
+HTTP_REQUEST_DURATION = Histogram("http_request_duration_seconds", "HTTP request duration in seconds", ["method", "path"])
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    if not IS_TEST_MODE:
+        Base.metadata.create_all(bind=engine)
     yield
 
 
@@ -81,40 +78,18 @@ async def observability_middleware(request, call_next):
         response.headers["X-Request-ID"] = request_id
         return response
     except Exception:
-        logger.exception(
-            "Unhandled request exception",
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-            },
-        )
+        logger.exception("Unhandled request exception", extra={"request_id": request_id, "method": request.method, "path": request.url.path})
         raise
     finally:
         duration = perf_counter() - start
         path = request.url.path
         HTTP_REQUESTS.labels(request.method, path, str(status_code)).inc()
         HTTP_REQUEST_DURATION.labels(request.method, path).observe(duration)
-        logger.info(
-            "HTTP request",
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": path,
-                "status": status_code,
-                "duration_ms": round(duration * 1000, 2),
-            },
-        )
+        logger.info("HTTP request", extra={"request_id": request_id, "method": request.method, "path": path, "status": status_code, "duration_ms": round(duration * 1000, 2)})
 
 
 cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(crm.router, prefix="/api/v1/crm", tags=["CRM"])
@@ -127,11 +102,14 @@ app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
 app.include_router(workflows.router, prefix="/api/v1/workflows", tags=["Workflows"])
 app.include_router(payments.router, prefix="/api/v1/payments", tags=["Payments"])
 app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["Integrations"])
+app.include_router(integration_v1.router)
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(websocket.router, prefix="/api/v1/ws", tags=["WebSocket"])
-app.include_router(bulk_import_export.router, prefix="/api/v1/bulk", tags=["Bulk Import/Export"])
-app.include_router(migrations.router, prefix="/api/v1/migrations", tags=["Migrations"])
+app.include_router(health.router, prefix="/api/v1", tags=["Health Checks"])
+
+from app.middleware.error_handler import register_exception_handlers
+register_exception_handlers(app)
 
 
 @app.get("/")
@@ -152,6 +130,7 @@ async def root():
             "PWA with Offline Support",
             "Bulk Import/Export",
             "Alembic Migrations",
+            "Versioned ERP-AI Integration",
         ],
     }
 

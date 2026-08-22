@@ -1,16 +1,28 @@
 name: Container Build Validation
 
 on:
-  push:
-    branches: ["main"]
   pull_request:
-    branches: ["main"]
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: container-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  validate-and-build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Compose configuration
+        run: docker compose -f docker-compose.yml config --quiet
 
       - name: Build ERP backend image
         run: docker build ./ERP-BACKEND -f ./ERP-BACKEND/Dockerfile -t erp03-backend:ci

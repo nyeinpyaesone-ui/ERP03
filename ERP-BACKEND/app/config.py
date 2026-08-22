@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    INTEGRATION_SERVICE_ISSUER: str = "erp03"
+    INTEGRATION_SERVICE_AUDIENCE: str = "erp-ai-integration"
 
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
@@ -45,14 +47,18 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
     MAX_UPLOAD_SIZE: int = 50 * 1024 * 1024
     WS_HEARTBEAT_INTERVAL: int = 30
+    TEST_MODE: bool = False
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        case_sensitive=True,
-        extra="ignore",
-    )
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
     def model_post_init(self, __context):
+        if self.TEST_MODE:
+            if not self.DATABASE_URL:
+                self.DATABASE_URL = "sqlite:///:memory:"
+            if not self.SECRET_KEY or len(self.SECRET_KEY) < 32:
+                self.SECRET_KEY = "test_secret_key_for_testing_purposes_only_1234567890"
+            return
+
         database_url = _read_secret("DATABASE_URL")
         secret_key = _read_secret("SECRET_KEY")
         if database_url:
