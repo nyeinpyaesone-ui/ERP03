@@ -30,6 +30,18 @@ SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 def github_get(url: str) -> dict:
+    """
+    Fetch and parse a JSON response from the GitHub API.
+    
+    Parameters:
+    	url (str): GitHub API endpoint to request.
+    
+    Returns:
+    	dict: Parsed JSON response.
+    
+    Raises:
+    	RuntimeError: If the request receives an HTTP error or cannot be completed.
+    """
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "ERP03-pin-github-actions",
@@ -62,12 +74,28 @@ def resolve_ref(owner: str, repo: str, ref: str) -> str:
 
 
 def workflow_files() -> list[Path]:
+    """
+    Find workflow files in the configured workflow directory.
+    
+    Returns:
+    	list[Path]: Sorted paths to `.yml` and `.yaml` workflow files, or an empty list if the directory does not exist.
+    """
     if not WORKFLOW_DIR.is_dir():
         return []
     return sorted([*WORKFLOW_DIR.glob("*.yml"), *WORKFLOW_DIR.glob("*.yaml")])
 
 
 def scan_file(path: Path, fix: bool) -> tuple[str, list[str]]:
+    """
+    Scan a workflow file for mutable GitHub Actions references and optionally pin them.
+    
+    Parameters:
+        path (Path): Workflow file to inspect.
+        fix (bool): Whether to replace mutable references with resolved commit SHAs.
+    
+    Returns:
+        tuple[str, list[str]]: The resulting file content and the mutable references found.
+    """
     original = path.read_text(encoding="utf-8")
     changed = original
     findings: list[str] = []
@@ -113,6 +141,12 @@ def scan_file(path: Path, fix: bool) -> tuple[str, list[str]]:
 
 
 def main() -> int:
+    """
+    Run the GitHub Actions reference audit or replace mutable references with commit SHAs.
+    
+    Returns:
+    	int: Exit status: 0 for success, 1 when unpinned references are found in check mode, or 2 when processing errors occur.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="fail if any action is not SHA pinned")

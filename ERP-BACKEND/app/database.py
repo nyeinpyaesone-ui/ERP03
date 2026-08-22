@@ -41,6 +41,15 @@ else:
 Base = declarative_base()
 
 def get_db():
+    """
+    Provide a synchronous database session for dependency injection.
+    
+    Yields:
+        Session: An open database session.
+    
+    Raises:
+        NotImplementedError: If the database is configured for asynchronous access.
+    """
     if is_async:
         raise NotImplementedError("Async DB session not implemented in sync getter")
     db = SessionLocal()

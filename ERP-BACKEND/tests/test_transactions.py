@@ -22,6 +22,12 @@ from app.main import app
 def client(db_session):
     """
     Provide a test client configured to use the supplied database session.
+    
+    Parameters:
+    	db_session: The database session used by the application's database dependency.
+    
+    Yields:
+    	TestClient: A client whose requests use the supplied database session.
     """
     def override_get_db():
         """
@@ -68,10 +74,11 @@ def authenticated_headers(client, test_user):
     from app.auth import get_current_user
     
     def override_get_current_user():
-        """Provide the test user for authentication dependency overrides.
+        """
+        Provide the authenticated test user for dependency overrides.
         
         Returns:
-        	test_user: The authenticated test user.
+            test_user: The authenticated test user.
         """
         return test_user
     
@@ -163,7 +170,14 @@ class TestMultiEntityTransactions:
         assert company.name == "Rollback Test Inc"
     
     def test_invoice_payment_atomic_transaction(self, client, db_session, authenticated_headers):
-        """Verify that an invoice is created with the expected total for a company."""
+        """
+        Verify that an invoice is created with the expected total for a company.
+        
+        Parameters:
+        	client: Test client used to submit API requests.
+        	db_session: Database session used to verify persisted invoice data.
+        	authenticated_headers: Headers for authenticated API requests.
+        """
         # First create a company for the invoice
         company_data = {
             "name": "Invoice Customer Ltd",
@@ -336,7 +350,9 @@ class TestRollbackVerification:
         assert employee is None or employee.is_deleted
     
     def test_nested_transaction_rollback(self, client, db_session, authenticated_headers):
-        """Test rollback in nested transaction scenarios"""
+        """
+        Verify that a nested transaction failure does not remove an existing parent company.
+        """
         # Create parent company
         parent_data = {
             "name": "Parent Corporation",

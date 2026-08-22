@@ -10,9 +10,13 @@ class QueryStub:
         self.all_result = all_result or []
 
     def one(self):
+        """Return the configured single query result."""
         return self.one_result
 
     def group_by(self, *_args, **_kwargs):
+        """
+        Support query chaining by returning this query stub unchanged.
+        """
         return self
 
     def all(self):

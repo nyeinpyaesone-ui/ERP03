@@ -59,7 +59,15 @@ class CRMAdapter:
     
     @staticmethod
     def company_to_customer(company: Any) -> ContractCustomerSchema:
-        """Convert internal Company model to integration CustomerSchema."""
+        """
+        Convert an internal company model to a customer contract schema.
+        
+        Parameters:
+            company (Any): Company data containing identity, contact, address, and audit fields.
+        
+        Returns:
+            ContractCustomerSchema: Customer data mapped from the company.
+        """
         return ContractCustomerSchema(
             id=company.id,
             name=company.name,
@@ -81,7 +89,15 @@ class CRMAdapter:
     
     @staticmethod
     def contact_to_contract(contact: Any) -> ContractContactSchema:
-        """Convert internal Contact model to integration ContactSchema."""
+        """
+        Convert an internal contact into the standardized contact contract schema.
+        
+        Parameters:
+        	contact (Any): Internal contact object containing personal, company, and contact details.
+        
+        Returns:
+        	ContractContactSchema: Contact data mapped to the integration contract schema.
+        """
         return ContractContactSchema(
             id=contact.id,
             customer_id=contact.company_id if hasattr(contact, 'company_id') else None,
@@ -98,7 +114,15 @@ class CRMAdapter:
     
     @staticmethod
     def deal_to_opportunity(deal: Any) -> ContractOpportunitySchema:
-        """Convert internal Deal model to integration OpportunitySchema."""
+        """
+        Convert an internal deal into an integration opportunity.
+        
+        Parameters:
+            deal (Any): Internal deal containing opportunity details and ownership information.
+        
+        Returns:
+            ContractOpportunitySchema: Opportunity populated from the deal, using USD as the currency and an empty tag list.
+        """
         return ContractOpportunitySchema(
             id=deal.id,
             customer_id=deal.company_id if hasattr(deal, 'company_id') else None,
@@ -122,7 +146,15 @@ class InventoryAdapter:
     
     @staticmethod
     def product_to_contract(product: Any) -> ContractProductSchema:
-        """Convert internal Product model to integration ProductSchema."""
+        """
+        Convert an internal product model into an integration product schema.
+        
+        Parameters:
+            product (Any): Internal product model containing product identity, pricing, inventory, and status data.
+        
+        Returns:
+            ContractProductSchema: Product data mapped to the integration contract, with defaults for missing optional attributes.
+        """
         return ContractProductSchema(
             id=product.id,
             sku=getattr(product, 'sku', f'PRD-{product.id}'),

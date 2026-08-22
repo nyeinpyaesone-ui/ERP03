@@ -20,7 +20,25 @@ def log_activity(
     status: str = "SUCCESS",
     commit: bool = True,
 ):
-    """Record an audit event, optionally joining the caller's transaction."""
+    """
+    Record an audit event and persist it to the database.
+    
+    Parameters:
+        user_id (Optional[int]): Identifier of the user associated with the event.
+        action (str): Action recorded by the event.
+        entity_type (Optional[str]): Type of entity affected by the event.
+        entity_id (Optional[int]): Identifier of the affected entity.
+        details (Optional[Dict[str, Any]]): Additional event-specific information.
+        ip_address (Optional[str]): Client IP address associated with the event.
+        user_agent (Optional[str]): Client user-agent string.
+        correlation_id (Optional[str]): Identifier used to correlate related operations.
+        request_id (Optional[str]): Identifier of the request that produced the event.
+        status (str): Outcome status recorded for the event.
+        commit (bool): Whether to commit the transaction; when false, flushes the record instead.
+    
+    Returns:
+        ActivityLog: The created audit log record.
+    """
     log = ActivityLog(
         user_id=user_id,
         action=action,
@@ -52,7 +70,18 @@ def log_before_after(
     after_state: Optional[Dict[str, Any]],
     **kwargs
 ):
-    """Create an audit log entry containing entity state and detected changes."""
+    """
+    Create an audit log entry containing entity states and field-level changes.
+    
+    Parameters:
+        before_state (Optional[Dict[str, Any]]): State before the operation.
+        after_state (Optional[Dict[str, Any]]): State after the operation.
+        kwargs: Additional activity log arguments; any ``details`` values are
+            merged into the generated audit details.
+    
+    Returns:
+        ActivityLog: The created audit log record.
+    """
     changes = {}
     if before_state and after_state:
         all_keys = set(before_state.keys()) | set(after_state.keys())

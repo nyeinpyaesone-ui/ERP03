@@ -6,6 +6,13 @@ from app.services.analytics_service import AnalyticsQueryService
 
 class QueryStub:
     def __init__(self, *, one_result=None, scalar_result=None, all_result=None):
+        """Initialize the query stub with optional results for each query method.
+        
+        Parameters:
+        	one_result: Value returned by the stub's ``one()`` method.
+        	scalar_result: Value returned by the stub's ``scalar()`` method.
+        	all_result: Values returned by the stub's ``all()`` method; defaults to an empty list.
+        """
         self.one_result = one_result
         self.scalar_result = scalar_result
         self.all_result = all_result or []
