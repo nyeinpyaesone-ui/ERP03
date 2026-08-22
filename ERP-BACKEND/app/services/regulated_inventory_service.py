@@ -199,7 +199,7 @@ class RegulatedInventoryService:
         release_record = {
             "batchId": batch_id,
             "releasedBy": released_by_user_id,
-            "releasedAt": datetime.utcnow().isoformat(),
+            "releasedAt": datetime.now(timezone.utc).isoformat(),
             "qualityNotes": quality_notes,
             "status": "RELEASED"
         }

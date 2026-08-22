@@ -1,7 +1,7 @@
 import os
 import re
 from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, and_, text, cast
 from sqlalchemy.types import String
@@ -42,8 +42,8 @@ class SearchService:
                 searchable_text=searchable,
                 meta_data=metadata or {},
                 tags=tags or [],
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
             ).on_conflict_do_update(
                 index_elements=['entity_type', 'entity_id'],
                 set_={
@@ -52,7 +52,7 @@ class SearchService:
                     'searchable_text': searchable,
                     'meta_data': metadata or {},
                     'tags': tags or [],
-                    'updated_at': datetime.utcnow()
+                    'updated_at': datetime.now(timezone.utc)
                 }
             )
             self.db.execute(stmt)
@@ -71,7 +71,7 @@ class SearchService:
                 existing.searchable_text = searchable
                 existing.meta_data = metadata or {}
                 existing.tags = tags or []
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = datetime.now(timezone.utc)
             else:
                 index = SearchIndex(
                     entity_type=entity_type,
@@ -229,7 +229,7 @@ class SearchService:
         Returns:
         	Tuple[List[Dict[str, Any]], int, int]: Formatted search results, total matching count, and execution time in milliseconds.
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         # Build base query
         base_query = self.db.query(SearchIndex)
@@ -299,7 +299,7 @@ class SearchService:
                 "updated_at": r.updated_at.isoformat() if r.updated_at else None
             })
 
-        execution_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+        execution_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
         return formatted, total, execution_time
 
@@ -400,7 +400,7 @@ class SearchService:
 
         if existing:
             existing.frequency += 1
-            existing.last_used = datetime.utcnow()
+            existing.last_used = datetime.now(timezone.utc)
         else:
             suggestion = SearchSuggestion(
                 query_text=query.lower().strip(),
@@ -431,7 +431,7 @@ class SearchService:
         """Get search analytics."""
         from datetime import datetime, timedelta
 
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         # Total queries
         total_queries = self.db.query(SearchQuery).filter(
