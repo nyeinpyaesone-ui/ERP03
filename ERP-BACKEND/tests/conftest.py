@@ -28,7 +28,9 @@ def test_settings():
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_jsonb_mock():
-    """Setup JSONB mock for SQLite compatibility at session start."""
+    """
+    Temporarily replaces the model JSONB type with a SQLite-compatible JSON type for tests.
+    """
     import sqlalchemy.types as types
     from unittest.mock import patch
     

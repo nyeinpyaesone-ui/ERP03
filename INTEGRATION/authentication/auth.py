@@ -56,6 +56,15 @@ class JWTValidator:
         audience: str = "ai-backend",
         algorithm: str = "HS256"
     ):
+        """
+        Initialize JWT signing and validation configuration.
+        
+        Parameters:
+            secret_key (str): Secret used to sign and verify tokens.
+            issuer (str): Expected token issuer.
+            audience (str): Expected token audience.
+            algorithm (str): JWT signing algorithm.
+        """
         self.secret_key = secret_key.encode('utf-8')
         self.issuer = issuer
         self.audience = audience
@@ -70,17 +79,17 @@ class JWTValidator:
         metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """
-        Create a signed JWT token.
+        Create a signed JWT for a subject with scopes and optional metadata.
         
-        Args:
-            subject: Token subject (user_id or service_id)
-            token_type: Type of token (access/refresh/service)
-            expires_in: Token validity duration
-            scopes: List of permission scopes
-            metadata: Additional metadata to include
-            
+        Parameters:
+            subject (str): Identifier of the user or service represented by the token.
+            token_type (TokenType): Token classification.
+            expires_in (timedelta): Duration for which the token remains valid.
+            scopes (Optional[List[str]]): Permission scopes granted to the token.
+            metadata (Optional[Dict[str, Any]]): Additional claims to include.
+        
         Returns:
-            Signed JWT token string
+            str: The signed JWT token.
         """
         now = datetime.utcnow()
         
@@ -102,19 +111,19 @@ class JWTValidator:
     
     def validate_token(self, token: str) -> TokenPayload:
         """
-        Validate and decode a JWT token.
+        Validate the JWT and convert its claims into a token payload.
         
-        Args:
-            token: JWT token string
-            
+        Parameters:
+            token (str): JWT string to validate.
+        
         Returns:
-            Decoded token payload
-            
+            TokenPayload: Validated token claims.
+        
         Raises:
-            jwt.InvalidTokenError: If token is invalid
-            jwt.ExpiredSignatureError: If token has expired
-            jwt.InvalidIssuerError: If issuer is invalid
-            jwt.InvalidAudienceError: If audience is invalid
+            jwt.ExpiredSignatureError: If the token has expired.
+            jwt.InvalidIssuerError: If the issuer is invalid.
+            jwt.InvalidAudienceError: If the audience is invalid.
+            jwt.InvalidTokenError: If the token is otherwise invalid.
         """
         try:
             payload = jwt.decode(
@@ -190,14 +199,14 @@ class JWTValidator:
     
     def verify_scope(self, token: str, required_scope: str) -> bool:
         """
-        Verify that a token has a specific scope.
+        Determine whether a token grants a specific scope.
         
-        Args:
-            token: JWT token string
-            required_scope: Required permission scope
-            
+        Parameters:
+            token (str): JWT token to validate.
+            required_scope (str): Scope to check.
+        
         Returns:
-            True if token has the required scope
+            bool: `true` if the token is valid and includes the required scope, `false` otherwise.
         """
         try:
             payload = self.validate_token(token)
@@ -207,14 +216,14 @@ class JWTValidator:
     
     def verify_scopes(self, token: str, required_scopes: List[str]) -> bool:
         """
-        Verify that a token has all required scopes.
+        Determine whether a token grants every required scope.
         
-        Args:
-            token: JWT token string
-            required_scopes: List of required permission scopes
-            
+        Parameters:
+        	token (str): JWT token to validate
+        	required_scopes (List[str]): Permission scopes that must be present
+        
         Returns:
-            True if token has all required scopes
+        	bool: `true` if the token contains all required scopes, `false` otherwise.
         """
         try:
             payload = self.validate_token(token)
@@ -246,17 +255,15 @@ class APIKeyManager:
         metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """
-        Generate a new API key.
+        Create an API key for a service with optional permissions, expiration, and metadata.
         
-        Args:
-            name: Human-readable name for the key
-            service_id: Service identifier
-            scopes: Allowed permission scopes
-            expires_at: Optional expiration time
-            metadata: Additional metadata
-            
+        Parameters:
+        	scopes (Optional[List[str]]): Permission scopes granted to the key.
+        	expires_at (Optional[datetime]): Time at which the key expires.
+        	metadata (Optional[Dict[str, Any]]): Additional metadata associated with the key.
+        
         Returns:
-            Generated API key (store this securely, it won't be shown again)
+        	str: The generated API key, which must be stored securely because it cannot be retrieved later.
         """
         # Generate random key
         raw_key = secrets.token_urlsafe(32)
@@ -281,13 +288,14 @@ class APIKeyManager:
     
     def validate_key(self, api_key: str) -> Optional[Dict[str, Any]]:
         """
-        Validate an API key and return its metadata.
+        Validate an API key and retrieve its associated service information.
         
-        Args:
-            api_key: API key to validate
-            
+        Parameters:
+            api_key (str): The API key to validate.
+        
         Returns:
-            Key metadata if valid, None otherwise
+            Optional[Dict[str, Any]]: Service ID, scopes, and metadata for a valid active,
+            unexpired key; `None` otherwise.
         """
         key_hash = hashlib.sha256(api_key.encode()).hexdigest()
         
@@ -338,14 +346,14 @@ class APIKeyManager:
         new_name: Optional[str] = None
     ) -> Optional[str]:
         """
-        Rotate an API key (revoke old, create new).
+        Rotate an API key while preserving its service, scopes, expiration, and metadata.
         
-        Args:
-            old_api_key: Current API key
-            new_name: Optional new name for the key
-            
+        Parameters:
+            old_api_key (str): The active API key to replace.
+            new_name (Optional[str]): Optional name for the replacement key.
+        
         Returns:
-            New API key if rotation successful, None otherwise
+            Optional[str]: The replacement API key, or None if the existing key is invalid.
         """
         # Validate old key
         key_data = self.validate_key(old_api_key)
@@ -369,13 +377,13 @@ class APIKeyManager:
     
     def list_keys(self, service_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        List all API keys, optionally filtered by service.
+        List API key metadata, optionally filtered by service.
         
-        Args:
-            service_id: Optional service ID filter
-            
+        Parameters:
+        	service_id (Optional[str]): Service ID used to filter the keys.
+        
         Returns:
-            List of key metadata (without hashes)
+        	List[Dict[str, Any]]: Metadata for matching API keys without exposing key hashes.
         """
         keys = []
         for key_hash, key_data in self._keys.items():
@@ -401,13 +409,10 @@ class APIKeyManager:
 
 def extract_token_from_header(headers: Dict[str, str]) -> Optional[str]:
     """
-    Extract JWT token from Authorization header.
+    Extracts a JWT from a Bearer Authorization header.
     
-    Args:
-        headers: Request headers dictionary
-        
     Returns:
-        Token string if found, None otherwise
+    	str: The token value, or None if the header is absent or does not use the Bearer scheme.
     """
     auth_header = headers.get("Authorization", "")
     

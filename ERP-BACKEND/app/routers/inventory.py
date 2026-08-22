@@ -34,6 +34,18 @@ class ProductCreate(BaseModel):
 
     @validator('status')
     def validate_status(cls, v):
+        """
+        Validate that a product status is active, discontinued, or draft.
+        
+        Parameters:
+            v: The status value to validate.
+        
+        Returns:
+            The validated status value.
+        
+        Raises:
+            ValueError: If the status is not one of the allowed values.
+        """
         allowed = ['active', 'discontinued', 'draft']
         if v not in allowed:
             raise ValueError(f'Status must be one of: {allowed}')
@@ -60,6 +72,18 @@ class ProductUpdate(BaseModel):
 
     @validator('status')
     def validate_status(cls, v):
+        """
+        Validate that a product status is one of the supported values.
+        
+        Parameters:
+            v (str | None): The status to validate.
+        
+        Returns:
+            str | None: The validated status, or None when no status is provided.
+        
+        Raises:
+            ValueError: If the status is not `active`, `discontinued`, or `draft`.
+        """
         if v is None:
             return v
         allowed = ['active', 'discontinued', 'draft']
@@ -79,6 +103,18 @@ class MovementCreate(BaseModel):
 
     @validator('movement_type')
     def validate_movement_type(cls, v):
+        """
+        Validate that a stock movement type is supported.
+        
+        Parameters:
+            v (str): Movement type to validate.
+        
+        Returns:
+            str: The validated movement type.
+        
+        Raises:
+            ValueError: If the movement type is not `in`, `out`, `adjustment`, or `transfer`.
+        """
         allowed = ['in', 'out', 'adjustment', 'transfer']
         if v not in allowed:
             raise ValueError(f'Movement type must be one of: {allowed}')
@@ -148,13 +184,17 @@ def create_product(
     service: InventoryService = Depends(get_inventory_service)
 ):
     """
-    Create a new product.
+    Create a product and record its creation activity.
     
-    - **sku**: Unique product identifier (required)
-    - **name**: Product name (required)
-    - **unit_price**: Selling price (required, must be >= 0)
-    - **category**: Optional product category
-    - **quantity_in_stock**: Initial stock level (default: 0)
+    Parameters:
+    	data (ProductCreate): Validated product details.
+    	current_user: Authenticated user associated with the product creation.
+    
+    Returns:
+    	ProductResponse: The newly created product.
+    
+    Raises:
+    	HTTPException: With status 400 when product creation fails validation.
     """
     try:
         product = service.create_product(
@@ -203,14 +243,18 @@ def list_products(
     service: InventoryService = Depends(get_inventory_service)
 ):
     """
-    List products with optional filters.
+    List products with optional filtering and pagination.
     
-    - **category**: Filter by category
-    - **status**: Filter by status (active/discontinued/draft)
-    - **low_stock**: Show only products below reorder level
-    - **search**: Search in product name
-    - **skip**: Pagination offset
-    - **limit**: Maximum results (default: 100)
+    Parameters:
+        category (str, optional): Restrict results to a product category.
+        status (str, optional): Restrict results to a product status.
+        low_stock (bool): Restrict results to products below their reorder level.
+        search (str, optional): Filter products by name.
+        skip (int): Number of products to skip.
+        limit (int): Maximum number of products to return.
+    
+    Returns:
+        list: Products matching the specified filters.
     """
     return service.list_products(
         category=category,
@@ -229,7 +273,17 @@ def get_product(
     current_user = Depends(get_current_user),
     service: InventoryService = Depends(get_inventory_service)
 ):
-    """Get a product by ID."""
+    """Retrieve a product by its ID.
+    
+    Parameters:
+    	product_id (int): The ID of the product to retrieve.
+    
+    Returns:
+    	ProductResponse: The requested product.
+    
+    Raises:
+    	HTTPException: If the product does not exist.
+    """
     product = service.get_product(product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -245,9 +299,17 @@ def update_product(
     service: InventoryService = Depends(get_inventory_service)
 ):
     """
-    Update a product.
+    Update the specified product with the provided fields.
     
-    Only provided fields will be updated.
+    Parameters:
+        product_id (int): The identifier of the product to update.
+        data (ProductUpdate): The fields and values to update.
+    
+    Returns:
+        Product: The updated product.
+    
+    Raises:
+        HTTPException: If no fields are provided, the product does not exist, or the update is invalid.
     """
     # Filter out None values
     updates = {k: v for k, v in data.dict().items() if v is not None}
@@ -287,9 +349,13 @@ def delete_product(
     service: InventoryService = Depends(get_inventory_service)
 ):
     """
-    Delete a product.
+    Delete a product and its associated stock movements.
     
-    This will also delete all associated stock movements.
+    Parameters:
+        product_id (int): Identifier of the product to delete.
+    
+    Returns:
+        dict: Confirmation message indicating that the product was deleted.
     """
     success = service.delete_product(product_id)
     if not success:
@@ -315,14 +381,16 @@ def create_movement(
     service: InventoryService = Depends(get_inventory_service)
 ):
     """
-    Create a stock movement.
+    Create a stock movement and update the associated product inventory.
     
-    This atomically updates both the movement record and product stock level.
+    Parameters:
+    	data (MovementCreate): Movement details, including the product, movement type, quantity, and optional cost or reference information.
     
-    - **movement_type**: Type of movement (in/out/adjustment/transfer)
-    - **quantity**: Quantity for movement (must be >= 0)
-    - **unit_cost**: Optional unit cost for valuation
-    - **reference**: Optional reference number (e.g., PO/SO number)
+    Returns:
+    	MovementResponse: The created stock movement.
+    
+    Raises:
+    	HTTPException: With status 400 when the movement data is invalid.
     """
     try:
         movement = service.create_stock_movement(
@@ -360,12 +428,16 @@ def list_movements(
     service: InventoryService = Depends(get_inventory_service)
 ):
     """
-    List inventory movements with optional filters.
+    List inventory movements with optional product, type, and pagination filters.
     
-    - **product_id**: Filter by product
-    - **movement_type**: Filter by movement type
-    - **skip**: Pagination offset
-    - **limit**: Maximum results (default: 100)
+    Parameters:
+        product_id (int, optional): Product identifier used to filter movements.
+        movement_type (str, optional): Movement type used to filter results.
+        skip (int): Number of movements to skip.
+        limit (int): Maximum number of movements to return.
+    
+    Returns:
+        list: Matching inventory movements.
     """
     return service.get_movements(
         product_id=product_id,
@@ -401,7 +473,15 @@ def get_low_stock_alerts(
     current_user = Depends(get_current_user),
     service: InventoryService = Depends(get_inventory_service)
 ):
-    """Get products below reorder level."""
+    """
+    Retrieve products whose stock is below their reorder level.
+    
+    Parameters:
+    	limit (int): Maximum number of products to include.
+    
+    Returns:
+    	list: Products below their reorder levels.
+    """
     return service.get_low_stock_products(limit=limit)
 
 

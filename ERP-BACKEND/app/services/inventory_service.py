@@ -39,31 +39,30 @@ class InventoryService:
         created_by: Optional[int] = None
     ) -> Product:
         """
-        Create a new product with validation.
+        Create and persist a product after validating its SKU, prices, and stock levels.
         
         Args:
-            sku: Unique product SKU
-            name: Product name
-            unit_price: Selling price
-            description: Optional description
-            category: Optional category
-            cost_price: Optional cost price
-            quantity_in_stock: Initial stock level
-            reorder_level: Stock level triggering reorder
-            reorder_quantity: Quantity to reorder
-            supplier: Supplier name
-            supplier_contact: Supplier contact info
-            status: Product status (active/discontinued)
-            barcode: Optional barcode
-            weight: Optional weight
-            dimensions: Optional dimensions
-            created_by: User ID creating the product
-            
+            sku: Unique product SKU.
+            name: Product name.
+            unit_price: Selling price.
+            description: Optional product description.
+            category: Optional product category.
+            cost_price: Optional cost price.
+            quantity_in_stock: Initial stock quantity.
+            reorder_level: Stock quantity at which reordering is triggered.
+            reorder_quantity: Quantity to reorder.
+            supplier: Optional supplier name.
+            supplier_contact: Optional supplier contact information.
+            status: Product status.
+            barcode: Optional product barcode.
+            weight: Optional product weight.
+            dimensions: Optional product dimensions.
+        
         Returns:
-            Created Product instance
-            
+            The newly created product.
+        
         Raises:
-            ValueError: If SKU already exists
+            ValueError: If the SKU already exists or a price or stock value is negative.
         """
         # Check for duplicate SKU
         existing = self.db.query(Product).filter(Product.sku == sku).first()
@@ -126,18 +125,18 @@ class InventoryService:
         limit: int = 100
     ) -> List[Product]:
         """
-        List products with optional filters.
+        List products with optional category, status, stock, name, and pagination filters.
         
-        Args:
-            category: Filter by category
-            status: Filter by status
-            low_stock: Filter to show only low stock items
-            search: Search in product name
-            skip: Pagination offset
-            limit: Maximum results
-            
+        Parameters:
+            category (Optional[str]): Category to filter by.
+            status (Optional[str]): Status to filter by.
+            low_stock (bool): Whether to include only products at or below their reorder level.
+            search (Optional[str]): Case-insensitive text to search for in product names.
+            skip (int): Number of matching products to skip.
+            limit (int): Maximum number of products to return.
+        
         Returns:
-            List of Product instances
+            List[Product]: Matching products.
         """
         query = self.db.query(Product)
         
@@ -159,15 +158,18 @@ class InventoryService:
         updated_by: Optional[int] = None
     ) -> Optional[Product]:
         """
-        Update a product with validation.
+        Update a product and persist the changes.
         
-        Args:
-            product_id: Product ID to update
-            updates: Dictionary of fields to update
-            updated_by: User ID performing the update
-            
+        Parameters:
+            product_id (int): Identifier of the product to update.
+            updates (dict): Product fields and values to change.
+            updated_by (Optional[int]): Identifier of the user performing the update.
+        
         Returns:
-            Updated Product instance or None if not found
+            Optional[Product]: The updated product, or `None` if the product does not exist.
+        
+        Raises:
+            ValueError: If the SKU is already used, a price is negative, or stock quantity is negative.
         """
         product = self.get_product(product_id)
         if not product:
@@ -204,13 +206,13 @@ class InventoryService:
     
     def delete_product(self, product_id: int) -> bool:
         """
-        Delete a product.
+        Delete a product by its identifier.
         
-        Args:
-            product_id: Product ID to delete
-            
+        Parameters:
+            product_id (int): Identifier of the product to delete.
+        
         Returns:
-            True if deleted, False if not found
+            bool: `true` if the product was deleted, `false` if it was not found.
         """
         product = self.get_product(product_id)
         if not product:
@@ -231,25 +233,24 @@ class InventoryService:
         created_by: Optional[int] = None
     ) -> InventoryMovement:
         """
-        Create a stock movement with transaction safety.
-        
-        This method ensures atomic updates to both the movement record
-        and the product stock level.
+        Create an inventory movement and update the product stock atomically.
         
         Args:
-            product_id: Product ID
-            movement_type: Type of movement (in/out/adjustment/transfer)
-            quantity: Quantity for movement
-            unit_cost: Optional unit cost
-            reference: Optional reference number
-            notes: Optional notes
-            created_by: User ID creating the movement
-            
+            product_id: ID of the product affected by the movement.
+            movement_type: Movement type: ``"in"``, ``"out"``, ``"adjustment"``, or
+                ``"transfer"``.
+            quantity: Movement quantity, which must be nonnegative.
+            unit_cost: Optional cost per unit.
+            reference: Optional reference number for the movement.
+            notes: Optional notes about the movement.
+            created_by: Optional ID of the user who created the movement.
+        
         Returns:
-            Created InventoryMovement instance
-            
+            The created inventory movement.
+        
         Raises:
-            ValueError: If product not found or insufficient stock
+            ValueError: If the movement type is invalid, the quantity is negative, the
+                product does not exist, or an outbound movement exceeds available stock.
         """
         valid_types = ["in", "out", "adjustment", "transfer"]
         if movement_type not in valid_types:
@@ -311,16 +312,16 @@ class InventoryService:
         limit: int = 100
     ) -> List[InventoryMovement]:
         """
-        Get inventory movements with optional filters.
+        List inventory movements with optional product and movement-type filters.
         
-        Args:
-            product_id: Filter by product
-            movement_type: Filter by movement type
-            skip: Pagination offset
-            limit: Maximum results
-            
+        Parameters:
+            product_id (Optional[int]): ID of the product whose movements should be listed.
+            movement_type (Optional[str]): Type of movement to include.
+            skip (int): Number of movements to skip.
+            limit (int): Maximum number of movements to return.
+        
         Returns:
-            List of InventoryMovement instances
+            List[InventoryMovement]: Movements ordered from newest to oldest.
         """
         query = self.db.query(InventoryMovement)
         
@@ -333,10 +334,12 @@ class InventoryService:
     
     def get_dashboard_stats(self) -> dict:
         """
-        Get inventory dashboard statistics.
+        Collect aggregate inventory metrics for dashboard reporting.
         
         Returns:
-            Dictionary with inventory metrics
+            dict: A dictionary containing total product count, total stock value,
+            low-stock count, out-of-stock count, and per-category product counts
+            and stock values.
         """
         total_products = self.db.query(Product).count()
         
@@ -378,13 +381,13 @@ class InventoryService:
     
     def get_low_stock_products(self, limit: int = 50) -> List[Product]:
         """
-        Get products below reorder level.
+        Identify products whose stock is at or below their reorder level.
         
-        Args:
-            limit: Maximum number of products to return
-            
+        Parameters:
+            limit (int): Maximum number of products to return.
+        
         Returns:
-            List of Products needing reorder
+            List[Product]: Products ordered by increasing stock quantity.
         """
         return self.db.query(Product).filter(
             Product.quantity_in_stock <= Product.reorder_level

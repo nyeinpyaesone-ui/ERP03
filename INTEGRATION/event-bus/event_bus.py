@@ -80,7 +80,19 @@ class Event:
         correlation_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None
     ) -> 'Event':
-        """Create a new event with auto-generated fields."""
+        """
+        Create an event with generated identity, version, and UTC timestamp.
+        
+        Parameters:
+            event_type (str): Event type identifier.
+            data (Dict[str, Any]): Event payload.
+            source (str): System that originated the event.
+            correlation_id (Optional[str]): Identifier linking the event to a related operation.
+            metadata (Optional[Dict[str, Any]]): Additional event metadata.
+        
+        Returns:
+            Event: A newly initialized event with version ``v1``.
+        """
         return cls(
             event_id=str(uuid.uuid4()),
             event_type=event_type,
@@ -93,12 +105,23 @@ class Event:
         )
     
     def to_json(self) -> str:
-        """Serialize event to JSON string."""
+        """Serialize the event as a JSON string.
+        
+        Returns:
+        	str: The JSON representation of the event.
+        """
         return json.dumps(asdict(self))
     
     @classmethod
     def from_json(cls, json_str: str) -> 'Event':
-        """Deserialize event from JSON string."""
+        """Deserialize an event from a JSON string.
+        
+        Parameters:
+            json_str (str): JSON representation of the event.
+        
+        Returns:
+            Event: The deserialized event.
+        """
         data = json.loads(json_str)
         return cls(**data)
 
@@ -120,6 +143,12 @@ class EventBus:
         redis_url: str = "redis://localhost:6379",
         channel_prefix: str = "erp03.events"
     ):
+        """Initialize an asynchronous event bus with Redis connection settings and empty subscription state.
+        
+        Parameters:
+        	redis_url (str): Redis connection URL.
+        	channel_prefix (str): Prefix used for event channels.
+        """
         self.redis_url = redis_url
         self.channel_prefix = channel_prefix
         self._redis: Optional[redis.Redis] = None
@@ -137,7 +166,7 @@ class EventBus:
         logger.info(f"EventBus connected to Redis: {self.redis_url}")
     
     async def disconnect(self):
-        """Close Redis connection."""
+        """Close the Redis connection and release associated event bus resources."""
         if self._listen_task:
             self._listen_task.cancel()
             try:
@@ -154,7 +183,13 @@ class EventBus:
         logger.info("EventBus disconnected from Redis")
     
     def _get_channel_name(self, event_type: str) -> str:
-        """Get full channel name for an event type."""
+        """Build the Redis channel name for an event type.
+        
+        Parameters:
+        	event_type (str): Dot-separated event type used to derive the channel topic.
+        
+        Returns:
+        	str: The channel prefix followed by the event topic."""
         # Convert event type to channel format (e.g., "crm.customer.created" -> "crm.customer.*")
         parts = event_type.split('.')
         if len(parts) >= 2:
@@ -164,10 +199,13 @@ class EventBus:
     
     async def publish(self, event: Event):
         """
-        Publish an event to the event bus.
+        Publish an event to the Redis event bus.
         
         Args:
-            event: Event to publish
+            event: Event to publish.
+        
+        Raises:
+            RuntimeError: If the event bus is not connected.
         """
         if not self._redis:
             raise RuntimeError("EventBus not connected. Call connect() first.")
@@ -184,11 +222,11 @@ class EventBus:
         handler: Callable[[Event], Awaitable[None]]
     ):
         """
-        Subscribe to events of a specific type.
+        Register an asynchronous handler for events matching the specified type.
         
-        Args:
-            event_type: Event type to subscribe to (supports wildcards)
-            handler: Async callback function to handle events
+        Parameters:
+            event_type (str): Event type pattern to subscribe to, including supported wildcards.
+            handler (Callable[[Event], Awaitable[None]]): Callback invoked for matching events.
         """
         if event_type not in self._subscribers:
             self._subscribers[event_type] = []
@@ -206,11 +244,11 @@ class EventBus:
         handler: Optional[Callable[[Event], Awaitable[None]]] = None
     ):
         """
-        Unsubscribe from events.
+        Remove one handler or all handlers registered for an event type.
         
-        Args:
-            event_type: Event type to unsubscribe from
-            handler: Specific handler to remove (if None, removes all)
+        Parameters:
+        	event_type (str): Event type whose subscriptions should be removed.
+        	handler (Optional[Callable[[Event], Awaitable[None]]]): Specific handler to remove; when omitted, remove all handlers for the event type.
         """
         if event_type in self._subscribers:
             if handler:
@@ -250,7 +288,13 @@ class EventBus:
             raise
     
     async def _handle_message(self, channel: str, data: str):
-        """Handle incoming event message."""
+        """
+        Dispatch an incoming event message to matching subscribers.
+        
+        Parameters:
+        	channel (str): Redis channel that delivered the message.
+        	data (str): JSON-encoded event message.
+        """
         try:
             event = Event.from_json(data)
             logger.debug(f"Received event {event.event_id} ({event.event_type}) on {channel}")
@@ -272,7 +316,15 @@ class EventBus:
             logger.error(f"Failed to handle message: {e}")
     
     def _matches_event_type(self, event_type: str, pattern: str) -> bool:
-        """Check if event type matches pattern (supports wildcards)."""
+        """Determine whether an event type matches an exact pattern or trailing-prefix wildcard.
+        
+        Parameters:
+        	event_type (str): The event type to evaluate.
+        	pattern (str): The exact event type or trailing-prefix wildcard pattern.
+        
+        Returns:
+        	bool: `true` if the event type matches the pattern, `false` otherwise.
+        """
         if pattern.endswith('*'):
             prefix = pattern[:-1]
             return event_type.startswith(prefix)
@@ -284,14 +336,16 @@ class EventBus:
         limit: int = 100
     ) -> List[Event]:
         """
-        Get recent event history (requires Redis Stream).
+        Get event history when persistence support is available.
+        
+        Currently returns an empty list because Redis Streams history is not implemented.
         
         Args:
-            event_type: Filter by event type (optional)
-            limit: Maximum number of events to return
-            
+            event_type: Optional event type filter.
+            limit: Maximum number of events to retrieve.
+        
         Returns:
-            List of recent events
+            An empty list.
         """
         # This would require Redis Streams implementation
         # For now, return empty list
@@ -311,6 +365,12 @@ class EventBusSync:
         redis_url: str = "redis://localhost:6379",
         channel_prefix: str = "erp03.events"
     ):
+        """Initialize the synchronous event bus with Redis connection settings and no subscribers.
+        
+        Parameters:
+        	redis_url (str): Redis server URL.
+        	channel_prefix (str): Prefix used for event channel names.
+        """
         self.redis_url = redis_url
         self.channel_prefix = channel_prefix
         self._redis: Optional[redis.Redis] = None
@@ -340,7 +400,15 @@ class EventBusSync:
         return f"{self.channel_prefix}.{event_type}"
     
     def publish(self, event: Event):
-        """Publish an event to the event bus."""
+        """
+        Publish an event to the synchronous event bus.
+        
+        Parameters:
+            event (Event): The event to publish.
+        
+        Raises:
+            RuntimeError: If the event bus is not connected.
+        """
         if not self._redis:
             raise RuntimeError("EventBusSync not connected. Call connect() first.")
         
@@ -355,7 +423,13 @@ class EventBusSync:
         event_type: str,
         handler: Callable[[Event], None]
     ):
-        """Subscribe to events of a specific type."""
+        """
+        Subscribe a synchronous handler to events of a specified type.
+        
+        Parameters:
+        	event_type (str): Event type to receive.
+        	handler (Callable[[Event], None]): Function invoked for matching events.
+        """
         if event_type not in self._subscribers:
             self._subscribers[event_type] = []
         
@@ -367,7 +441,13 @@ class EventBusSync:
         event_type: str,
         handler: Optional[Callable[[Event], None]] = None
     ):
-        """Unsubscribe from events."""
+        """
+        Remove a synchronous event handler subscription.
+        
+        Parameters:
+            event_type (str): Event type whose subscriptions are updated.
+            handler (Optional[Callable[[Event], None]]): Handler to remove. When omitted, all handlers for the event type are removed.
+        """
         if event_type in self._subscribers:
             if handler:
                 self._subscribers[event_type].remove(handler)
