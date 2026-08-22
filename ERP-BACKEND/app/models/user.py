@@ -1,8 +1,13 @@
 """User model."""
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from datetime import datetime, timezone
 from app.database import Base
+
+
+def _now_utc():
+    """Return current UTC timestamp for default values."""
+    return datetime.now(timezone.utc)
 
 
 class User(Base):
@@ -16,8 +21,8 @@ class User(Base):
     is_active = Column(Boolean, nullable=False, server_default="true")
     avatar_url = Column(String(500), nullable=True)
     last_login = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now_utc)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now_utc, onupdate=_now_utc)
 
     # Relationships
     roles = relationship("Role", secondary="user_roles", back_populates="users")

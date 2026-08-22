@@ -4,7 +4,7 @@ Unit tests for the search service module (app/services/search_service.py).
 import os
 import pytest
 from unittest.mock import MagicMock, patch, call
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from app.services.search_service import SearchService
@@ -468,7 +468,7 @@ class TestSearch:
         result1.content = long_content
         result1.meta_data = {}
         result1.tags = []
-        result1.updated_at = datetime.utcnow()
+        result1.updated_at = datetime.now(timezone.utc)
         
         mock_db.query.return_value.filter.return_value.count.return_value = 1
         mock_db.query.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [result1]
