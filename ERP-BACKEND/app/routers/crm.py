@@ -1,104 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional, List
-from datetime import datetime, date
-from decimal import Decimal
 
 from app.database import get_db
 from app.models import Contact, Company, Deal
 from app.auth import get_current_user, require_admin
 from app.services.activity_log import log_activity
+from app.schemas.crm import (
+    CompanyCreate, CompanyUpdate, CompanyResponse,
+    ContactCreate, ContactUpdate, ContactResponse,
+    DealCreate, DealUpdate, DealResponse
+)
 
 router = APIRouter()
-
-# Schemas
-class CompanyCreate(BaseModel):
-    name: str
-    industry: Optional[str] = None
-    size: Optional[str] = None
-    website: Optional[str] = None
-    address: Optional[str] = None
-    phone: Optional[str] = None
-
-class CompanyResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
-    name: str
-    industry: Optional[str] = None
-    size: Optional[str] = None
-    website: Optional[str] = None
-    address: Optional[str] = None
-    phone: Optional[str] = None
-    logo_url: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-
-class ContactCreate(BaseModel):
-    first_name: str
-    last_name: str
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = None
-    title: Optional[str] = None
-    company_id: Optional[int] = None
-    status: str = "lead"
-    source: Optional[str] = None
-    notes: Optional[str] = None
-
-class ContactResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
-    first_name: str
-    last_name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    title: Optional[str] = None
-    company_id: Optional[int] = None
-    status: str
-    source: Optional[str] = None
-    notes: Optional[str] = None
-    assigned_to: Optional[int] = None
-    lifetime_value: float = 0.0
-    created_at: datetime
-    updated_at: datetime
-
-class DealCreate(BaseModel):
-    title: str
-    contact_id: Optional[int] = None
-    company_id: Optional[int] = None
-    value: float = 0
-    stage: str = "prospect"
-    probability: int = 0
-    expected_close_date: Optional[date] = None
-    description: Optional[str] = None
-
-class DealUpdate(BaseModel):
-    title: Optional[str] = None
-    value: Optional[float] = None
-    stage: Optional[str] = None
-    probability: Optional[int] = None
-    expected_close_date: Optional[date] = None
-    actual_close_date: Optional[date] = None
-
-class DealResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
-    title: str
-    contact_id: Optional[int] = None
-    company_id: Optional[int] = None
-    value: float
-    stage: str
-    probability: int
-    expected_close_date: Optional[date] = None
-    actual_close_date: Optional[date] = None
-    assigned_to: Optional[int] = None
-    description: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
 
 # Companies
 @router.post("/companies", response_model=CompanyResponse)
@@ -107,10 +22,10 @@ def create_company(data: CompanyCreate, db: Session = Depends(get_db), current_u
     Create a company and record its creation activity.
     
     Parameters:
-    	data (CompanyCreate): Company details used to create the record.
+        data (CompanyCreate): Company details used to create the record.
     
     Returns:
-    	Company: The newly created company.
+        Company: The newly created company.
     """
     company = Company(**data.model_dump())
     db.add(company)
@@ -163,16 +78,19 @@ def get_company(company_id: int, db: Session = Depends(get_db), current_user = D
     return company
 
 @router.put("/companies/{company_id}", response_model=CompanyResponse)
-def update_company(company_id: int, data: CompanyCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def update_company(company_id: int, data: CompanyUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
-    Update a company's stored details.
+    Update the stored details for a company.
     
     Parameters:
     	company_id (int): Identifier of the company to update.
-    	data (CompanyCreate): Replacement company details.
+    	data (CompanyUpdate): Fields and values to apply to the company.
     
     Returns:
     	Company: The updated company.
+    
+    Raises:
+    	HTTPException: If the company does not exist.
     """
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
@@ -193,6 +111,9 @@ def delete_company(company_id: int, db: Session = Depends(get_db), current_user 
     
     Returns:
     	dict: Confirmation message indicating that the company was deleted.
+    
+    Raises:
+    	HTTPException: If the company does not exist.
     """
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
@@ -203,12 +124,12 @@ def delete_company(company_id: int, db: Session = Depends(get_db), current_user 
 
 # Contacts
 @router.post("/contacts", response_model=ContactResponse)
-def create_contact(data: ContactCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def create_contact(data: ContactUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Create a contact assigned to the authenticated user.
     
     Parameters:
-    	data (ContactCreate): Contact details used to create the record.
+    	data (ContactUpdate): Contact details for the new contact.
     
     Returns:
     	Contact: The newly created contact.
@@ -237,7 +158,7 @@ def list_contacts(
     	search (Optional[str]): Text matched case-insensitively against the contact's full name or email.
     
     Returns:
-    	list[Contact]: Contacts matching the filters and pagination settings.
+    	list[Contact]: Contacts matching the filters and pagination parameters.
     """
     query = db.query(Contact)
     if status:
@@ -268,13 +189,13 @@ def get_contact(contact_id: int, db: Session = Depends(get_db), current_user = D
     return contact
 
 @router.put("/contacts/{contact_id}", response_model=ContactResponse)
-def update_contact(contact_id: int, data: ContactCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def update_contact(contact_id: int, data: ContactUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Update a contact with the supplied details.
     
     Parameters:
     	contact_id (int): The identifier of the contact to update.
-    	data (ContactCreate): The contact details to apply.
+    	data (ContactUpdate): The fields to apply to the contact.
     
     Returns:
     	Contact: The updated contact.
@@ -317,7 +238,7 @@ def create_deal(data: DealCreate, db: Session = Depends(get_db), current_user = 
     Create a deal assigned to the authenticated user.
     
     Parameters:
-    	data (DealCreate): Deal details used to create the record.
+    	data (DealCreate): Details for the new deal.
     
     Returns:
     	Deal: The newly created deal.
@@ -392,11 +313,11 @@ def get_deal(deal_id: int, db: Session = Depends(get_db), current_user = Depends
 @router.put("/deals/{deal_id}", response_model=DealResponse)
 def update_deal(deal_id: int, data: DealUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
-    Update a deal and apply stage-based closing details.
+    Update a deal and apply stage-dependent probability and closing-date changes.
     
     Parameters:
         deal_id (int): Identifier of the deal to update.
-        data (DealUpdate): Fields to change on the deal.
+        data (DealUpdate): Fields to apply to the deal.
     
     Raises:
         HTTPException: If the deal does not exist.
@@ -427,7 +348,7 @@ def update_deal(deal_id: int, data: DealUpdate, db: Session = Depends(get_db), c
     if deal.stage == "closed_won" and not deal.actual_close_date:
         deal.actual_close_date = date.today()
 
-    from datetime import timezone
+    from datetime import datetime, timezone
     deal.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(deal)

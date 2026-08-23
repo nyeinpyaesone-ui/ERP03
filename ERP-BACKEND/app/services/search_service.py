@@ -1,9 +1,10 @@
 import os
 import re
 from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_, and_, text
+from sqlalchemy import func, or_, and_, text, cast
+from sqlalchemy.types import String
 from sqlalchemy.dialects.postgresql import array, insert as postgresql_insert
 import httpx
 
@@ -54,8 +55,8 @@ class SearchService:
                 searchable_text=searchable,
                 meta_data=metadata or {},
                 tags=tags or [],
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
             ).on_conflict_do_update(
                 index_elements=['entity_type', 'entity_id'],
                 set_={
@@ -64,7 +65,7 @@ class SearchService:
                     'searchable_text': searchable,
                     'meta_data': metadata or {},
                     'tags': tags or [],
-                    'updated_at': datetime.utcnow()
+                    'updated_at': datetime.now(timezone.utc)
                 }
             )
             self.db.execute(stmt)
@@ -345,8 +346,20 @@ class SearchService:
         limit: int = 20,
         offset: int = 0
     ) -> Tuple[List[Dict[str, Any]], int]:
-        """Full-text search with PostgreSQL."""
-        start_time = datetime.utcnow()
+        """
+        Search indexed entities using PostgreSQL full-text search and optional filters.
+
+        Parameters:
+            query (str): Text to search for.
+            entity_types (List[str], optional): Entity types to include.
+            filters (Dict[str, Any], optional): Tag or metadata filters to apply.
+            limit (int): Maximum number of results to return.
+            offset (int): Number of matching results to skip.
+
+        Returns:
+            Tuple[List[Dict[str, Any]], int, int]: Formatted search results, total matching count, and execution time in milliseconds.
+        """
+        start_time = datetime.now(timezone.utc)
 
         # Build base query
         base_query = self.db.query(SearchIndex)
@@ -381,9 +394,18 @@ class SearchService:
                             SearchIndex.meta_data[meta_key].as_boolean() == value
                         )
                     else:
-                        base_query = base_query.filter(
-                            SearchIndex.meta_data[meta_key].astext == str(value)
-                        )
+                        # For JSON column, use json_each or direct comparison depending on DB
+                        # Using PostgreSQL JSONB syntax with ->> operator via astext
+                        try:
+                            base_query = base_query.filter(
+                                SearchIndex.meta_data[meta_key].astext.cast(String) == str(value)
+                            )
+                        except AttributeError:
+                            # Fallback for databases that don't support astext (e.g., SQLite in tests)
+                            # Use a workaround by casting the whole JSON and comparing
+                            base_query = base_query.filter(
+                                cast(SearchIndex.meta_data[meta_key], String) == f'"{str(value)}"'
+                            )
 
         # Get total count
         total = base_query.count()
@@ -407,7 +429,7 @@ class SearchService:
                 "updated_at": r.updated_at.isoformat() if r.updated_at else None
             })
 
-        execution_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+        execution_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
         return formatted, total, execution_time
 
@@ -508,7 +530,7 @@ class SearchService:
 
         if existing:
             existing.frequency += 1
-            existing.last_used = datetime.utcnow()
+            existing.last_used = datetime.now(timezone.utc)
         else:
             suggestion = SearchSuggestion(
                 query_text=query.lower().strip(),
@@ -536,10 +558,18 @@ class SearchService:
         self.db.commit()
 
     def get_search_analytics(self, days: int = 30) -> Dict[str, Any]:
-        """Get search analytics."""
+        """
+        Summarize search activity and usage patterns for a recent period.
+        
+        Parameters:
+        	days (int): Number of preceding days to include in the analytics.
+        
+        Returns:
+        	Dict[str, Any]: Analytics containing query totals, zero-result statistics, average execution time, top queries, daily volume, and popular filters.
+        """
         from datetime import datetime, timedelta
 
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         # Total queries
         total_queries = self.db.query(SearchQuery).filter(
