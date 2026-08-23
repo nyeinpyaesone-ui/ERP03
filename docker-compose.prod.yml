@@ -1,27 +1,74 @@
-# Production environment overrides
 services:
   postgres:
-    restart: unless-stopped
-    volumes:
-      - ./backups:/backups
-
-  redis:
-    restart: unless-stopped
-
-  erp-backend:
+    image: postgres:15-alpine
+    container_name: erp-postgres
     restart: unless-stopped
     environment:
+      POSTGRES_USER: ${DB_USER:?DB_USER must be set}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+      POSTGRES_DB: ${DB_NAME:?DB_NAME must be set}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${DB_USER} -d $${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [erp-network]
+
+  redis:
+    image: redis:7-alpine
+    container_name: erp-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "$${REDIS_PASSWORD}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [erp-network]
+
+  erp-backend:
+    image: ghcr.io/nyeinpyaesone-ui/erp03-backend:${BACKEND_IMAGE_TAG:?BACKEND_IMAGE_TAG must be set}
+    container_name: erp-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
       ENVIRONMENT: production
       DEBUG: "false"
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://erp.anynoob.com}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - backend_logs:/app/logs
+    networks: [erp-network]
 
   frontend:
+    image: ghcr.io/nyeinpyaesone-ui/erp03-frontend:${FRONTEND_IMAGE_TAG:?FRONTEND_IMAGE_TAG must be set}
+    container_name: erp-frontend
     restart: unless-stopped
+    depends_on:
+      erp-backend:
+        condition: service_started
+    networks: [erp-network]
 
   ollama:
+    image: ollama/ollama:latest
+    container_name: erp-ollama
     restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    networks: [erp-network]
 
   nginx:
     image: nginx:1.29-alpine
@@ -44,4 +91,11 @@ services:
     networks: [erp-network]
 
 volumes:
+  postgres_data:
+  redis_data:
+  ollama_data:
   backend_logs:
+
+networks:
+  erp-network:
+    driver: bridge

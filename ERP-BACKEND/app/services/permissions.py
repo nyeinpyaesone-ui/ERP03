@@ -52,15 +52,25 @@ def get_user_permissions(user: User, db: Session) -> List[str]:
     return list(permissions)
 
 def get_field_permissions(user: User, resource: str, db: Session) -> Dict[str, str]:
-    """Get field-level access map for a user on a resource."""
+    """
+    Build a field access map for a user and resource.
+    
+    Parameters:
+        user (User): User whose role-based field permissions are evaluated.
+        resource (str): Resource for which to retrieve field permissions.
+        db (Session): Database session.
+    
+    Returns:
+        Dict[str, str]: Mapping of field names to their highest assigned access level.
+    """
     field_map = {}
     for role in user.roles:
         for fp in role.field_permissions:
             if fp.resource == resource:
                 # Higher access wins: write > read > hidden
-                existing = field_map.get(fp.field_name, "hidden")
+                existing = field_map.get(fp.field_name, None)
                 levels = {"hidden": 0, "read": 1, "write": 2}
-                if levels.get(fp.access_level, 0) > levels.get(existing, 0):
+                if existing is None or levels.get(fp.access_level, 0) > levels.get(existing, 0):
                     field_map[fp.field_name] = fp.access_level
     return field_map
 

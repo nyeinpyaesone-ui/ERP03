@@ -1,155 +1,71 @@
-variable "cluster_id" {
-  description = "ElastiCache cluster identifier"
-  type        = string
+# ElastiCache Module for ERP Redis
+variable "environment" { type = string }
+variable "vpc_id" { type = string }
+variable "subnet_ids" { type = list(string) }
+variable "node_type" { type = string; default = "cache.t3.medium" }
+variable "num_cache_nodes" { type = number; default = 2 }
+variable "cluster_mode_enabled" { type = bool; default = false }
+variable "num_node_groups" { type = number; default = 1 }
+variable "replicas_per_node_group" { type = number; default = 1 }
+
+resource "aws_elasticache_subnet_group" "main" {
+  name       = "erp-${var.environment}-redis-subnet-group"
+  subnet_ids = var.subnet_ids
+  tags = { Name = "erp-${var.environment}-redis-subnet-group", Environment = var.environment }
 }
 
-variable "node_type" {
-  description = "Cache node type"
-  type        = string
-  default     = "cache.r6g.large"
+resource "aws_security_group" "redis" {
+  name        = "erp-${var.environment}-redis-sg"
+  description = "Security group for ElastiCache Redis"
+  vpc_id      = var.vpc_id
+  tags = { Name = "erp-${var.environment}-redis-sg", Environment = var.environment }
 }
 
-variable "num_cache_nodes" {
-  description = "Number of cache nodes"
-  type        = number
-  default     = 3
+resource "aws_security_group_rule" "ingress_from_vpc" {
+  type              = "ingress"
+  from_port         = 6379
+  to_port           = 6379
+  protocol          = "tcp"
+  cidr_blocks       = ["10.0.0.0/8"]
+  security_group_id = aws_security_group.redis.id
 }
 
-variable "engine_version" {
-  description = "Redis engine version"
-  type        = string
-  default     = "7.0"
+resource "aws_security_group_rule" "egress_all" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.redis.id
 }
 
-variable "port" {
-  description = "Redis port"
-  type        = number
-  default     = 6379
-}
-
-variable "parameter_group_name" {
-  description = "Parameter group name"
-  type        = string
-  default     = ""
-}
-
-variable "subnet_group_name" {
-  description = "Subnet group name"
-  type        = string
-}
-
-variable "security_group_ids" {
-  description = "List of security group IDs"
-  type        = list(string)
-}
-
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
-variable "snapshot_retention_limit" {
-  description = "Snapshot retention period in days"
-  type        = number
-  default     = 30
-}
-
-variable "maintenance_window" {
-  description = "Maintenance window"
-  type        = string
-  default     = "mon:04:00-mon:05:00"
-}
-
-locals {
-  common_tags = {
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Project     = "erp_solution"
-  }
-}
-
-# Parameter Group
-resource "aws_elasticache_parameter_group" "main" {
-  count  = var.parameter_group_name == "" ? 1 : 0
-  family = "redis${split(".", var.engine_version)[0]}"
-  name   = "${var.cluster_id}-params"
-
-  parameter {
-    name  = "maxmemory-policy"
-    value = "allkeys-lru"
-  }
-
-  parameter {
-    name  = "timeout"
-    value = "300"
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${var.cluster_id}-params"
-  })
-}
-
-# Replication Group (Cluster Mode Enabled)
 resource "aws_elasticache_replication_group" "main" {
-  replication_group_id          = var.cluster_id
-  description                   = "ERP Redis Cluster"
-  
-  engine                        = "redis"
-  engine_version                = var.engine_version
+  replication_group_id          = "erp-${var.environment}-redis"
+  description                   = "ERP Redis cluster for ${var.environment}"
   node_type                     = var.node_type
-  num_node_groups               = 1
-  replicas_per_node_group       = var.num_cache_nodes - 1
-  port                          = var.port
-  
-  parameter_group_name          = var.parameter_group_name != "" ? var.parameter_group_name : aws_elasticache_parameter_group.main[0].name
-  subnet_group_name             = var.subnet_group_name
-  security_group_ids            = var.security_group_ids
-  
-  automatic_failover_enabled    = true
-  multi_az_enabled              = true
-  
+  num_cache_clusters            = var.cluster_mode_enabled ? null : var.num_cache_nodes
+  num_node_groups               = var.cluster_mode_enabled ? var.num_node_groups : null
+  replicas_per_node_group       = var.cluster_mode_enabled ? var.replicas_per_node_group : null
+  cluster_mode                  = var.cluster_mode_enabled ? [{ num_node_groups: var.num_node_groups, replicas_per_node_group: var.replicas_per_node_group }] : []
+  subnet_group_name             = aws_elasticache_subnet_group.main.name
+  security_group_ids            = [aws_security_group.redis.id]
+  engine                        = "redis"
+  engine_version                = "7.0"
+  port                          = 6379
+  parameter_group_name          = "default.redis7"
+  automatic_failover_enabled    = var.num_cache_nodes > 1 || (var.cluster_mode_enabled && var.replicas_per_node_group > 0)
+  multi_az_enabled              = var.num_cache_nodes > 1 || var.cluster_mode_enabled
   at_rest_encryption_enabled    = true
   transit_encryption_enabled    = true
-  auth_token_update_strategy    = "ROTATE_CURRENT"
-  
-  snapshot_retention_limit      = var.snapshot_retention_limit
-  snapshot_window               = "02:00-03:00"
-  maintenance_window            = var.maintenance_window
-  
+  auth_token_update_strategy    = "ROTATE"
+  maintenance_window            = "sun:05:00-sun:09:00"
+  snapshot_window               = "03:00-04:00"
+  snapshot_retention_limit      = var.environment == "dev" ? 1 : 7
+  apply_immediately             = var.environment == "dev"
   auto_minor_version_upgrade    = true
-  
-  notification_topic_arn        = null # TODO: Add SNS topic for alerts
-  
-  tags = merge(local.common_tags, {
-    Name = var.cluster_id
-  })
-
-  lifecycle {
-    prevent_destroy = true
-  }
+  tags = { Name = "erp-${var.environment}-redis", Environment = var.environment, ManagedBy = "terraform" }
 }
 
-output "primary_endpoint_address" {
-  description = "Primary endpoint address"
-  value       = aws_elasticache_replication_group.main.primary_endpoint_address
-}
-
-output "reader_endpoint_address" {
-  description = "Reader endpoint address"
-  value       = aws_elasticache_replication_group.reader_endpoint_address
-}
-
-output "arn" {
-  description = "Cache cluster ARN"
-  value       = aws_elasticache_replication_group.main.arn
-}
-
-output "configuration_endpoint_address" {
-  description = "Configuration endpoint address"
-  value       = aws_elasticache_replication_group.main.configuration_endpoint_address
-}
-
-output "port" {
-  description = "Redis port"
-  value       = aws_elasticache_replication_group.main.port
-}
+output "redis_endpoint" { value = var.cluster_mode_enabled ? aws_elasticache_replication_group.main.configuration_endpoint_address : aws_elasticache_replication_group.main.primary_endpoint_address }
+output "redis_reader_endpoint" { value = aws_elasticache_replication_group.main.reader_endpoint_address }
+output "security_group_id" { value = aws_security_group.redis.id }

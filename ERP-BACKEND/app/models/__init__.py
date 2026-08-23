@@ -1,76 +1,88 @@
-# App Models Package
-from app.models.regulated_inventory import (
-    ERP_ItemMaster,
-    ERP_InventoryDimension,
-    ERP_InventoryTransaction,
-    EBMR_BatchRecord
-)
+# App Models Package - Centralized model imports
 
-# Import legacy models from models_legacy.py for backward compatibility
-from app.models_legacy import (
-    User,
-    Company,
-    Contact,
-    Deal,
-    Project,
-    Task,
-    Notification,
-    ActivityLog,
+# Import domain models from refactored model files
+from app.models.user import User
+from app.models.crm import Company, Contact, Deal
+from app.models.hr import Department, Employee
+from app.models.inventory import Product, InventoryMovement
+from app.models.finance import Invoice, InvoiceItem, Payment
+from app.models.project import Project, Task
+from app.models.system import ActivityLog, Notification, Report, Forecast, Setting
+from app.models.search import SearchIndex, SearchQuery, SearchSuggestion
+from app.models.workflow import (
     Document,
-    SearchIndex,
-    Employee,
-    Department,
-    Product,
-    InventoryMovement,
-    Invoice,
-    InvoiceItem,
-    Payment,
-    Forecast,
-    Report,
-    Setting,
-    Integration,
+    Workflow,
+    WorkflowStep,
+    WorkflowExecution,
     Webhook,
     WebhookDelivery,
-    Workflow,
-    WorkflowExecution,
-    WorkflowStep,
-    SearchQuery,
-    SearchSuggestion
+    Integration
+)
+from app.models.permissions import (
+    Role,
+    Permission,
+    RolePermission,
+    UserRole,
+    FieldPermission,
+    DataPolicy
+)
+
+# Import regulated inventory models (GMP/FDA 21 CFR Part 11 compliant)
+from app.models.regulated_inventory import (
+    ERPItemMaster,
+    ERPInventoryDimension,
+    ERPInventoryTransaction,
+    EBMRBatchRecord
 )
 
 __all__ = [
-    # Regulated Inventory (GMP/FDA Compliant)
-    "ERP_ItemMaster",
-    "ERP_InventoryDimension",
-    "ERP_InventoryTransaction",
-    "EBMR_BatchRecord",
-    # Legacy CRM/ERP Models
+    # User Management
     "User",
+    # CRM Models
     "Company",
     "Contact",
     "Deal",
-    "Project",
-    "Task",
-    "Notification",
-    "ActivityLog",
-    "Document",
-    "SearchIndex",
-    "Employee",
+    # HR Models
     "Department",
+    "Employee",
+    # Inventory Models
     "Product",
     "InventoryMovement",
+    # Finance Models
     "Invoice",
     "InvoiceItem",
     "Payment",
-    "Forecast",
+    # Project Management
+    "Project",
+    "Task",
+    # System Models
+    "ActivityLog",
+    "Notification",
     "Report",
+    "Forecast",
     "Setting",
-    "Integration",
+    # Search Models
+    "SearchIndex",
+    "SearchQuery",
+    "SearchSuggestion",
+    # Workflow Models
+    "Document",
+    "Workflow",
+    "WorkflowStep",
+    "WorkflowExecution",
     "Webhook",
     "WebhookDelivery",
-    "Workflow",
-    "WorkflowExecution",
-    "WorkflowStep",
-    "SearchQuery",
-    "SearchSuggestion"
+    "Integration",
+    # Permission Models
+    "Role",
+    "Permission",
+    "RolePermission",
+    "UserRole",
+    "FieldPermission",
+    "DataPolicy",
+    # Regulated Inventory (GMP/FDA Compliant)
+    "ERPItemMaster",
+    "ERPInventoryDimension",
+    "ERPInventoryTransaction",
+    "EBMRBatchRecord",
 ]

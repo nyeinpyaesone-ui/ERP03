@@ -1,74 +1,162 @@
-# Base docker-compose configuration (shared settings)
+version: '3.8'
+
 services:
-  postgres:
+  db:
     image: postgres:15-alpine
-    container_name: erp-postgres
+    container_name: erp03-db
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USER:-erp}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
-      POSTGRES_DB: ${DB_NAME:-erp_solution}
+      POSTGRES_USER_FILE: /run/secrets/db_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_DB: ${POSTGRES_DB:-erp03_prod}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - erp03_internal
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${DB_USER:-erp} -d $${DB_NAME:-erp_solution}"]
+      test: ["CMD-SHELL", "pg_isready -U $$(cat /run/secrets/db_user) -d ${POSTGRES_DB:-erp03_prod}"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks: [erp-network]
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+    secrets:
+      - db_user
+      - db_password
 
   redis:
     image: redis:7-alpine
-    container_name: erp-redis
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "$${REDIS_PASSWORD}"]
+    container_name: erp03-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
+    networks:
+      - erp03_internal
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks: [erp-network]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
-  erp-backend:
+  api:
     build:
       context: ./ERP-BACKEND
       dockerfile: Dockerfile
-    container_name: erp-backend
+      target: production
+    container_name: erp03-api
+    restart: unless-stopped
+    env_file:
+      - .env.production
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-erp}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-erp_solution}
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-erp03_prod}
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: production
+      LOG_LEVEL: INFO
+    secrets:
+      - source: db_user
+        target: /run/secrets/db_user
+      - source: db_password
+        target: /run/secrets/db_password
+      - source: jwt_secret
+        target: /run/secrets/jwt_secret
+    ports:
+      - "8000:8000"
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks: [erp-network]
+    networks:
+      - erp03_internal
+      - erp03_public
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app
+             --host 0.0.0.0
+             --port 8000
+             --workers 4
+             --loop uvloop
+             --http httptools
+             --log-level info"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   frontend:
     build:
-      context: ./ERP-BACKEND/frontend-react
+      context: ./frontend
       dockerfile: Dockerfile
-    container_name: erp-frontend
+      args:
+        - VITE_API_BASE_URL=/api/v1
+    container_name: erp03-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
     depends_on:
-      - erp-backend
-    networks: [erp-network]
+      api:
+        condition: service_healthy
+    networks:
+      - erp03_public
+      - erp03_internal
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: erp-ollama
-    volumes:
-      - ollama_data:/root/.ollama
-    networks: [erp-network]
+networks:
+  erp03_internal:
+    driver: bridge
+    internal: true
+  erp03_public:
+    driver: bridge
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
-  ollama_data:
+    driver: local
 
-networks:
-  erp-network:
-    driver: bridge
+secrets:
+  db_user:
+    file: ./secrets/db_user.txt
+  db_password:
+    file: ./secrets/db_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt

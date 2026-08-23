@@ -1,97 +1,79 @@
-# ERP Solution Infrastructure
+# Terraform Infrastructure for ERP Backend
 
-This directory contains Terraform configurations for provisioning cloud infrastructure.
+Complete Infrastructure as Code (IaC) for deploying ERP backend on AWS.
 
 ## Structure
 
 ```
 terraform/
-├── modules/                 # Reusable Terraform modules
-│   ├── vpc/                # VPC and networking
-│   ├── eks/                # Kubernetes cluster (EKS/GKE)
-│   ├── rds/                # Managed PostgreSQL (RDS/Cloud SQL)
-│   └── elasticache/        # Managed Redis (ElastiCache/Memorystore)
-├── environments/           # Environment-specific configurations
-│   ├── dev/               # Development environment
-│   ├── staging/           # Staging environment
-│   └── production/        # Production environment
-└── backend.tf             # Remote state configuration (to be added)
+├── modules/           # Reusable infrastructure components
+│   ├── vpc/          # VPC, subnets, routing, NAT gateways
+│   ├── rds/          # Managed PostgreSQL (RDS)
+│   └── elasticache/  # Managed Redis (ElastiCache)
+└── environments/      # Environment-specific configurations
+    ├── dev/          # Development (cost-optimized)
+    ├── staging/      # Staging (production-like)
+    └── production/   # Production (highly available)
 ```
 
-## Getting Started
+## Quick Start
 
 ### Prerequisites
-- Terraform >= 1.5.0
-- AWS CLI / GCP CLI configured with appropriate credentials
-- kubectl configured for target cluster
+- Terraform >= 1.0
+- AWS CLI configured (`aws configure`)
+- IAM user with appropriate permissions
 
-### Initial Setup (TO DO)
+### Deploy Development Environment
 
-1. **Initialize Backend** (for remote state storage):
-   ```bash
-   # Create S3 bucket and DynamoDB table for state locking
-   # Then configure backend.tf
-   ```
+```bash
+cd infra/terraform/environments/dev
+terraform init
+terraform plan -out=tfplan
+terraform apply tfplan
+```
 
-2. **Initialize Terraform**:
-   ```bash
-   cd environments/production
-   terraform init
-   ```
+### Outputs
+After deployment, you'll get:
+- `vpc_id`: VPC ID for Kubernetes cluster
+- `db_endpoint`: RDS PostgreSQL endpoint
+- `redis_endpoint`: ElastiCache Redis endpoint
 
-3. **Plan and Apply**:
-   ```bash
-   terraform plan -out=tfplan
-   terraform apply tfplan
-   ```
+Use these values in your Kubernetes configuration or `.env` file.
 
-## Modules to Implement
+## Modules
 
-### 1. VPC Module (`modules/vpc`)
-- VPC with public/private subnets
-- Internet Gateway and NAT Gateway
-- Route tables
-- Security groups
+### VPC Module
+Creates a complete network foundation:
+- Multi-AZ VPC with public/private subnets
+- Internet Gateway for public access
+- NAT Gateways for private subnet egress
+- Route tables and associations
 
-### 2. EKS Module (`modules/eks`)
-- EKS cluster with managed node groups
-- IAM roles and policies
-- OIDC provider for IRSA
-- Cluster autoscaler configuration
-
-### 3. RDS Module (`modules/rds`)
-- PostgreSQL instance (managed)
-- Multi-AZ for production
+### RDS Module
+Provisions managed PostgreSQL:
+- Multi-AZ support (staging/production)
 - Automated backups
-- Parameter groups
+- Encryption at rest
+- Integration with AWS Secrets Manager
 
-### 4. ElastiCache Module (`modules/elasticache`)
-- Redis cluster (managed)
-- Multi-AZ replication group
-- Parameter groups
-- Subnet groups
+### ElastiCache Module
+Deploys managed Redis:
+- Cluster mode support
+- Multi-AZ replication
+- Encryption in transit and at rest
+- Automatic failover
 
-## Migration from Current Setup
+## Security
 
-Current Kubernetes manifests use StatefulSets for PostgreSQL and Redis. These should be:
-1. **Replaced with managed services** (RDS/ElastiCache or Cloud SQL/Memorystore)
-2. **Remove StatefulSets** from `infra/k8s/base/postgres.yaml` and `redis.yaml`
-3. **Update connection strings** in ConfigMap/Secrets to point to managed services
+- All secrets stored in AWS Secrets Manager
+- Security groups restrict access to VPC CIDR only
+- Encryption enabled for all data stores
+- No hardcoded credentials
 
-## Security Considerations
+## Cleanup
 
-- Use AWS Secrets Manager or HashiCorp Vault for sensitive values
-- Enable encryption at rest for all datastores
-- Implement least-privilege IAM policies
-- Use private subnets for databases and cache
-- Enable VPC Flow Logs for network monitoring
+```bash
+terraform destroy
+```
 
-## Next Steps
-
-1. [ ] Implement VPC module
-2. [ ] Implement EKS module  
-3. [ ] Implement RDS module (replace StatefulSet)
-4. [ ] Implement ElastiCache module (replace StatefulSet)
-5. [ ] Configure remote state backend
-6. [ ] Add CI/CD integration for Terraform
-7. [ ] Document migration path from current setup
+⚠️ **Warning**: This will delete all resources including databases. Backup data first!

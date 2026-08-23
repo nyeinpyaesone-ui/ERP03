@@ -1,190 +1,73 @@
-variable "identifier" {
-  description = "RDS instance identifier"
-  type        = string
-}
+# RDS Module for ERP PostgreSQL Database
+variable "environment" { type = string }
+variable "vpc_id" { type = string }
+variable "subnet_ids" { type = list(string) }
+variable "db_name" { type = string; default = "erp_db" }
+variable "db_username" { type = string; default = "erp_admin" }
+variable "db_password_secret_arn" { type = string }
+variable "instance_class" { type = string; default = "db.t3.medium" }
+variable "multi_az" { type = bool; default = false }
+variable "allocated_storage" { type = number; default = 100 }
+variable "max_allocated_storage" { type = number; default = 500 }
 
-variable "db_name" {
-  description = "Database name"
-  type        = string
-  default     = "erpdb"
-}
-
-variable "username" {
-  description = "Master username"
-  type        = string
-  sensitive   = true
-}
-
-variable "password" {
-  description = "Master password"
-  type        = string
-  sensitive   = true
-}
-
-variable "instance_class" {
-  description = "DB instance class"
-  type        = string
-  default     = "db.r6g.large"
-}
-
-variable "allocated_storage" {
-  description = "Allocated storage in GB"
-  type        = number
-  default     = 100
-}
-
-variable "max_allocated_storage" {
-  description = "Maximum allocated storage for autoscaling"
-  type        = number
-  default     = 500
-}
-
-variable "multi_az" {
-  description = "Enable Multi-AZ deployment"
-  type        = bool
-  default     = true
-}
-
-variable "engine_version" {
-  description = "PostgreSQL engine version"
-  type        = string
-  default     = "15.4"
-}
-
-variable "backup_retention_period" {
-  description = "Backup retention period in days"
-  type        = number
-  default     = 30
-}
-
-variable "vpc_security_group_ids" {
-  description = "List of VPC security group IDs"
-  type        = list(string)
-}
-
-variable "db_subnet_group_name" {
-  description = "DB subnet group name"
-  type        = string
-}
-
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
-locals {
-  common_tags = {
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Project     = "erp_solution"
-  }
-}
-
-# DB Subnet Group (if not provided)
 resource "aws_db_subnet_group" "main" {
-  count      = var.db_subnet_group_name == "" ? 1 : 0
-  name       = "${var.identifier}-subnet-group"
-  subnet_ids = var.vpc_security_group_ids # This should be subnet IDs, fix in implementation
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.identifier}-subnet-group"
-  })
+  name       = "erp-${var.environment}-db-subnet-group"
+  subnet_ids = var.subnet_ids
+  tags = { Name = "erp-${var.environment}-db-subnet-group", Environment = var.environment }
 }
 
-# Parameter Group
-resource "aws_db_parameter_group" "main" {
-  family = "postgres${split(".", var.engine_version)[0]}"
-  name   = "${var.identifier}-params"
-
-  parameter {
-    name  = "log_statement"
-    value = "all"
-  }
-
-  parameter {
-    name  = "log_min_duration_statement"
-    value = "1000"
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${var.identifier}-params"
-  })
+resource "aws_security_group" "rds" {
+  name        = "erp-${var.environment}-rds-sg"
+  description = "Security group for RDS instance"
+  vpc_id      = var.vpc_id
+  tags = { Name = "erp-${var.environment}-rds-sg", Environment = var.environment }
 }
 
-# RDS Instance
+resource "aws_security_group_rule" "ingress_from_vpc" {
+  type              = "ingress"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  cidr_blocks       = ["10.0.0.0/8"]
+  security_group_id = aws_security_group.rds.id
+}
+
+resource "aws_security_group_rule" "egress_all" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.rds.id
+}
+
 resource "aws_db_instance" "main" {
-  identifier = var.identifier
-
+  identifier           = "erp-${var.environment}-postgres"
   engine               = "postgres"
-  engine_version       = var.engine_version
+  engine_version       = "15.7"
   instance_class       = var.instance_class
-  allocated_storage    = var.allocated_storage
-  max_allocated_storage = var.max_allocated_storage
-  storage_type         = "gp3"
-  storage_encrypted    = true
-
-  db_name  = var.db_name
-  username = var.username
-  password = var.password
-
-  db_subnet_group_name   = var.db_subnet_group_name != "" ? var.db_subnet_group_name : aws_db_subnet_group.main[0].name
-  vpc_security_group_ids = var.vpc_security_group_ids
-  parameter_group_name   = aws_db_parameter_group.main.name
-
+  db_name              = var.db_name
+  username             = var.db_username
+  password             = data.aws_secretsmanager_secret_version.db_password.secret_string
+  vpc_security_group_ids = [aws_security_group.rds.id]
+  db_subnet_group_name   = aws_db_subnet_group.main.name
   multi_az               = var.multi_az
-  publicly_accessible    = false
-  deletion_protection    = var.multi_az
-  skip_final_snapshot    = false
-  final_snapshot_identifier = "${var.identifier}-final-snapshot"
-
-  backup_retention_period = var.backup_retention_period
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "Mon:04:00-Mon:05:00"
-
+  allocated_storage     = var.allocated_storage
+  max_allocated_storage = var.max_allocated_storage
+  storage_type          = "gp3"
+  storage_encrypted     = true
+  backup_retention_period = var.environment == "dev" ? 1 : 7
+  skip_final_snapshot   = var.environment == "dev" ? true : false
+  final_snapshot_identifier = var.environment == "dev" ? null : "erp-${var.environment}-final-snapshot"
   auto_minor_version_upgrade = true
-  copy_tags_to_snapshot      = true
-
-  performance_insights_enabled = true
-  performance_insights_retention_period = 7
-
-  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
-
-  tags = merge(local.common_tags, {
-    Name = var.identifier
-  })
-
-  lifecycle {
-    prevent_destroy = true
-  }
+  deletion_protection = var.environment != "dev"
+  tags = { Name = "erp-${var.environment}-postgres", Environment = var.environment, ManagedBy = "terraform" }
 }
 
-output "endpoint" {
-  description = "RDS instance endpoint"
-  value       = aws_db_instance.main.endpoint
+data "aws_secretsmanager_secret_version" "db_password" {
+  secret_id = var.db_password_secret_arn
 }
 
-output "address" {
-  description = "RDS instance address"
-  value       = aws_db_instance.main.address
-}
-
-output "port" {
-  description = "RDS instance port"
-  value       = aws_db_instance.main.port
-}
-
-output "arn" {
-  description = "RDS instance ARN"
-  value       = aws_db_instance.main.arn
-}
-
-output "database_name" {
-  description = "Database name"
-  value       = aws_db_instance.main.db_name
-}
-
-output "username" {
-  description = "Master username"
-  value       = aws_db_instance.main.username
-  sensitive   = true
-}
+output "db_endpoint" { value = aws_db_instance.main.endpoint }
+output "db_instance_id" { value = aws_db_instance.main.identifier }
+output "security_group_id" { value = aws_security_group.rds.id }

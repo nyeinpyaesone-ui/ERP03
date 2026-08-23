@@ -1,195 +1,62 @@
-# Development Environment Configuration
-
 terraform {
-  required_version = ">= 1.5.0"
-  
+  required_version = ">= 1.0"
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
+    aws = { source = "hashicorp/aws"; version = "~> 5.0" }
   }
 }
 
 provider "aws" {
-  region = var.aws_region
-  
+  region = "ap-southeast-1"
   default_tags {
     tags = {
+      Project   = "erp-backend"
+      ManagedBy = "terraform"
       Environment = "dev"
-      Project     = "erp_solution"
-      ManagedBy   = "terraform"
     }
   }
 }
 
-variable "aws_region" {
-  description = "AWS region for resources"
-  type        = string
-  default     = "us-east-1"
-}
-
-variable "vpc_cidr" {
-  description = "VPC CIDR block"
-  type        = string
-  default     = "10.0.0.0/16"
-}
-
-# VPC Module
 module "vpc" {
   source = "../../modules/vpc"
-  
-  vpc_cidr           = var.vpc_cidr
-  environment        = "dev"
-  availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
-  enable_nat_gateway = true
-  single_nat_gateway = true # Cost optimization for dev
+  environment = "dev"
+  vpc_cidr = "10.0.0.0/16"
+  availability_zones = ["ap-southeast-1a", "ap-southeast-1b"]
+  single_nat_gateway = true
 }
 
-# Security Group for RDS
-resource "aws_security_group" "rds" {
-  name        = "dev-erp-rds-sg"
-  description = "Security group for RDS"
-  vpc_id      = module.vpc.vpc_id
-
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [] # TODO: Add EKS security group
-    cidr_blocks     = ["10.0.0.0/16"] # Allow from VPC only
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "dev-erp-rds-sg"
-  }
-}
-
-# Security Group for ElastiCache
-resource "aws_security_group" "redis" {
-  name        = "dev-erp-redis-sg"
-  description = "Security group for ElastiCache"
-  vpc_id      = module.vpc.vpc_id
-
-  ingress {
-    from_port       = 6379
-    to_port         = 6379
-    protocol        = "tcp"
-    security_groups = [] # TODO: Add EKS security group
-    cidr_blocks     = ["10.0.0.0/16"] # Allow from VPC only
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "dev-erp-redis-sg"
-  }
-}
-
-# Subnet Group for ElastiCache
-resource "aws_elasticache_subnet_group" "main" {
-  name       = "dev-erp-cache-subnet-group"
-  subnet_ids = module.vpc.private_subnet_ids
-
-  tags = {
-    Name = "dev-erp-cache-subnet-group"
-  }
-}
-
-# RDS Module
 module "rds" {
   source = "../../modules/rds"
-  
-  identifier               = "dev-erp-db"
-  db_name                  = "erpdb"
-  username                 = "erpadmin"
-  password                 = var.db_password
-  instance_class           = "db.t3.medium"
-  allocated_storage        = 50
-  multi_az                 = false # Single AZ for dev
-  vpc_security_group_ids   = [aws_security_group.rds.id]
-  db_subnet_group_name     = ""
-  environment              = "dev"
+  environment = "dev"
+  vpc_id = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnet_ids
+  db_name = "erp_dev"
+  db_username = "erp_admin"
+  db_password_secret_arn = aws_secretsmanager_secret.db_password.arn
+  instance_class = "db.t3.small"
+  multi_az = false
+  allocated_storage = 50
 }
 
-# ElastiCache Module
 module "elasticache" {
   source = "../../modules/elasticache"
-  
-  cluster_id           = "dev-erp-redis"
-  node_type            = "cache.t3.small"
-  num_cache_nodes      = 2
-  parameter_group_name = ""
-  subnet_group_name    = aws_elasticache_subnet_group.main.name
-  security_group_ids   = [aws_security_group.redis.id]
-  environment          = "dev"
+  environment = "dev"
+  vpc_id = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnet_ids
+  node_type = "cache.t3.small"
+  num_cache_nodes = 2
+  cluster_mode_enabled = false
 }
 
-# S3 Bucket for Backups
-resource "aws_s3_bucket" "backups" {
-  bucket = "dev-erp-backups-${random_id.bucket_suffix.hex}"
-  
-  tags = {
-    Name        = "dev-erp-backups"
-    Environment = "dev"
-  }
+resource "aws_secretsmanager_secret" "db_password" {
+  name = "erp/dev/db-password"
+  description = "Development database password"
 }
 
-resource "random_id" "bucket_suffix" {
-  byte_length = 4
+resource "aws_secretsmanager_secret_version" "db_password" {
+  secret_id = aws_secretsmanager_secret.db_password.id
+  generate_password = true
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "backups" {
-  bucket = aws_s3_bucket.backups.id
-
-  rule {
-    id     = "backup-retention"
-    status = "Enabled"
-
-    expiration {
-      days = 30
-    }
-
-    filter {
-      prefix = ""
-    }
-  }
-}
-
-# Outputs
-output "vpc_id" {
-  value = module.vpc.vpc_id
-}
-
-output "private_subnet_ids" {
-  value = module.vpc.private_subnet_ids
-}
-
-output "public_subnet_ids" {
-  value = module.vpc.public_subnet_ids
-}
-
-output "rds_endpoint" {
-  value     = module.rds.endpoint
-  sensitive = true
-}
-
-output "redis_primary_endpoint" {
-  value = module.elasticache.primary_endpoint_address
-}
-
-output "backup_bucket" {
-  value = aws_s3_bucket.backups.bucket
-}
+output "vpc_id" { value = module.vpc.vpc_id }
+output "db_endpoint" { value = module.rds.db_endpoint }
+output "redis_endpoint" { value = module.elasticache.redis_endpoint }

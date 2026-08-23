@@ -1,136 +1,200 @@
-# GMP/FDA 21 CFR Part 11 Compliant Inventory Module
+# Regulated Manufacturing Inventory Module
 
 ## Overview
-This module implements regulated manufacturing inventory management compliant with:
-- **FDA 21 CFR Part 11**: Electronic Records and Signatures
-- **GMP (Good Manufacturing Practice)**: Quality control for pharmaceutical/food production
-- **ISO 9001**: Quality management systems
+Production-grade inventory management system compliant with **FDA 21 CFR Part 11**, **GMP (Good Manufacturing Practice)**, and **ISO 22000** standards for regulated manufacturing environments.
 
-## Key Features
+## Standards Compliance
+- **FDA 21 CFR Part 11**: Electronic records and signatures
+- **GMP (cGMP)**: Current Good Manufacturing Practice
+- **ISO 22000**: Food safety management
+- **APICS SCOR**: Supply chain operations reference
+- **ISA-95**: Enterprise-control system integration
 
-### 1. Batch Traceability
-- Full lot tracking from raw material to finished goods
-- Expiry date monitoring for perishable items
-- Serial number tracking for high-value items
+## Architecture
 
-### 2. Immutable Audit Trail
-- Every stock movement recorded in `ERP_InventoryTransaction`
-- Cannot be deleted or modified once created
-- Includes: who, what, when, why (performed_by, transaction_type, date, reference)
+### Data Models (`app/models/regulated_inventory.py`)
 
-### 3. Electronic Batch Records (EBMR)
-- Complete production history per batch
-- QA approval workflow (PENDING → APPROVED/REJECTED)
-- Links production orders to inventory movements
+| Table | Purpose | Key Fields |
+| :--- | :--- | :--- |
+| `ERP_ItemMaster` | Core item definition | ItemId, ItemType, IsBatchTracked, ValuationMethod |
+| `ERP_InventoryDimension` | Normalized storage dimensions | InventDimId (hash), SiteId, WarehouseId, BatchId |
+| `ERP_InventoryTransaction` | Immutable movement ledger | TransactionId, StatusReceipt, StatusIssue, CostAmount |
+| `EBMR_BatchRecord` | Electronic batch record | batchId, sourcingAndProcurement (JSON), productionExecutionLog (JSON) |
 
-## Data Models
+### Service Layer (`app/services/regulated_inventory_service.py`)
 
-### ERP_ItemMaster
-Core item definition with regulatory flags:
-- `is_batch_managed`: Enable batch tracking
-- `is_serial_managed`: Enable serial number tracking
-- `is_expiry_tracked`: Enable expiry date monitoring
+#### Core Operations
+- `register_item_master()` - Create new item in master data
+- `process_goods_receipt()` - Inbound logistics (GRN)
+- `process_goods_issue()` - Outbound consumption/shipment
+- `allocate_inventory_fefo()` - First-Expired-First-Out allocation
+- `release_quality_hold()` - Quality release sign-off
 
-### ERP_InventoryDimension
-Multi-dimensional inventory tracking:
-- Warehouse + Bin location
-- Batch number
-- Serial number
-- Expiry date
-- Real-time quantity status
+#### EBMR & Traceability
+- `create_ebmr_batch_record()` - Create electronic batch record
+- `generate_genealogy_report()` - Full upstream/downstream traceability
+- `get_stock_by_batch()` - Query inventory by batch
+- `query_near_expiry_lots()` - Expiry alerts
 
-### ERP_InventoryTransaction
-Immutable ledger of all movements:
-- Transaction types: RECEIPT, ISSUE, ADJUST, TRANSFER
-- Reference document linking (PO, SO, Production Order)
-- User attribution for audit
+## Usage Examples
 
-### EBMR_BatchRecord
-Electronic Batch Manufacturing Record:
-- Production order linkage
-- Start/end timestamps
-- QA status and user approval
-- Comments for rejection reasons
-
-## Usage Example
-
+### Register Raw Material
 ```python
 from app.services.regulated_inventory_service import RegulatedInventoryService
 
-# Create service instance
-service = RegulatedInventoryService(db)
+service = RegulatedInventoryService(db_session)
 
-# Create a batch-managed item
-item = service.create_item(
-    item_code="API-001",
-    description="Active Pharmaceutical Ingredient",
-    is_batch_managed=True,
-    is_expiry_tracked=True
-)
-
-# Receive inventory with batch info
-dimension = service.add_inventory(
-    item_id=item.id,
-    warehouse_code="WH-RAW",
-    quantity=100.0,
-    batch_number="BATCH-2024-001",
-    expiry_date=datetime(2026, 12, 31),
-    reference_document="PO-12345",
-    performed_by="operator_john"
-)
-
-# Issue inventory for production
-transaction = service.issue_inventory(
-    dimension_id=dimension.id,
-    quantity=25.0,
-    reference_document="WO-67890",
-    performed_by="operator_jane"
-)
-
-# Create and complete batch record
-batch_record = service.create_batch_record(
-    batch_number="FG-BATCH-001",
-    item_id=finished_goods_id,
-    production_order="WO-67890"
-)
-
-service.complete_batch_record(
-    batch_number="FG-BATCH-001",
-    qa_user="qa_manager",
-    qa_status="APPROVED",
-    qa_comments="All specifications met"
+# Register API active ingredient
+item = service.register_item_master(
+    item_id="RM-API-5510",
+    item_name="Active Pharmaceutical Ingredient X",
+    item_type="RawMaterial",
+    base_uom="KG",
+    valuation_method="FIFO",
+    is_batch_tracked=True
 )
 ```
 
-## Compliance Checklist
+### Process Goods Receipt
+```python
+from decimal import Decimal
 
-- [x] Electronic signatures (QA user field)
-- [x] Audit trail (immutable transactions)
-- [x] Batch traceability (full lineage)
-- [x] Expiry tracking (shelf-life management)
-- [x] User attribution (performed_by on all actions)
-- [x] Document linking (reference_document field)
-- [x] Status workflow (PENDING → APPROVED/REJECTED)
+transaction = service.process_goods_receipt(
+    item_id="RM-API-5510",
+    quantity=Decimal("250.00"),
+    site_id="SITE-EU-01",
+    warehouse_id="WH-RM-01",
+    location_id="LOC-A-001",
+    batch_id="LOT-SUP-98214",
+    reference_document_id="GRN-2026-004812",
+    supplier_id="SUP-BIOMED-GLOBAL",
+    cost_amount=Decimal("12500.00")
+)
+```
+
+### Create EBMR Record
+```python
+ebmr = service.create_ebmr_batch_record(
+    batch_id="BATCH-REG-2026-0817-099X",
+    product_id="SKU-PHARMA-99201",
+    production_order_number="PO-PROD-778392",
+    facility_site_id="SITE-EU-01",
+    master_batch_record_version="MBR-REV-4.2",
+    sourcing_and_procurement=[
+        {
+            "materialId": "RM-API-5510",
+            "supplierId": "SUP-BIOMED-GLOBAL",
+            "supplierLotNumber": "LOT-SUP-98214",
+            "erpReceiptDocumentId": "GRN-2026-004812",
+            "certificateOfAnalysisId": "COA-2026-991",
+            "quantityDispensed": 250.00,
+            "unitOfMeasure": "KG"
+        }
+    ],
+    production_execution_log=[
+        {
+            "stepId": "STEP-01",
+            "operationName": "Weighing and Dispensing",
+            "timestamp": "2026-08-17T06:30:00Z",
+            "criticalProcessParameters": {
+                "temperatureCelsius": 21.5,
+                "pressureBar": 1.02
+            },
+            "operatorId": "OP-8821",
+            "supervisorSignOffId": "SUPV-104",
+            "deviationLogged": False
+        }
+    ]
+)
+```
+
+### Generate Genealogy Report
+```python
+report = service.generate_genealogy_report(batch_id="BATCH-REG-2026-0817-099X")
+
+# Returns full traceability:
+# - Upstream: raw materials, suppliers, CoA references
+# - Downstream: production steps, operators, CPP data
+# - Compliance: FDA/ISO status, electronic signatures
+```
 
 ## Database Migration
 
-Run Alembic migration to create tables:
-```bash
-cd ERP-BACKEND
-alembic revision --autogenerate -m "Add regulated inventory models"
-alembic upgrade head
+Add to Alembic migration script:
+```python
+def upgrade():
+    op.create_table('ERP_ItemMaster',
+        sa.Column('ItemId', sa.String(50), nullable=False),
+        sa.Column('ItemName', sa.String(150), nullable=False),
+        # ... additional columns
+        sa.PrimaryKeyConstraint('ItemId')
+    )
+
+    op.create_table('ERP_InventoryDimension',
+        sa.Column('InventDimId', sa.String(36), nullable=False),
+        # ... additional columns
+        sa.PrimaryKeyConstraint('InventDimId')
+    )
+
+    op.create_table('ERP_InventoryTransaction',
+        sa.Column('TransactionId', sa.Integer, autoincrement=True, nullable=False),
+        # ... additional columns
+        sa.PrimaryKeyConstraint('TransactionId')
+    )
+
+    op.create_table('EBMR_BatchRecord',
+        sa.Column('id', sa.Integer, autoincrement=True, nullable=False),
+        # ... additional columns
+        sa.PrimaryKeyConstraint('id'),
+        sa.UniqueConstraint('batchId')
+    )
+
+def downgrade():
+    op.drop_table('EBMR_BatchRecord')
+    op.drop_table('ERP_InventoryTransaction')
+    op.drop_table('ERP_InventoryDimension')
+    op.drop_table('ERP_ItemMaster')
 ```
 
-## Security Considerations
+## Key Features
 
-1. **Access Control**: Only authorized users can perform inventory transactions
-2. **Data Integrity**: Transactions are immutable; corrections require reverse entries
-3. **Audit Logs**: All actions logged with user ID and timestamp
-4. **Validation**: Input validation prevents invalid quantities/dates
+### 1. Immutable Transaction Ledger
+Every stock movement recorded with:
+- StatusReceipt (0=None, 1=Registered, 2=Received, 3=Purchased)
+- StatusIssue (0=None, 1=OnOrder, 2=Reserved, 3=Deducted, 4=Sold)
+- DatePhysical / DateFinancial separation
+- Cost tracking (Physical vs Posted)
 
-## Future Enhancements
+### 2. FEFO Allocation
+Automatic First-Expired-First-Out allocation for perishable goods:
+- Minimizes waste due to expiry
+- Compliant with pharma/food regulations
+- Configurable exclusion lists (quarantined batches)
 
-- Digital signature integration for QA approvals
-- Barcode/RFID scanning interface
-- Automated expiry alerts
-- Integration with LIMS (Laboratory Information Management System)
+### 3. Electronic Batch Records (EBMR)
+Complete digital thread from sourcing to shipment:
+- Raw material genealogy with supplier lot numbers
+- Certificate of Analysis (CoA) tracking
+- Production step execution with timestamps
+- Critical Process Parameters (CPP) logging
+- Operator and supervisor electronic signatures
+
+### 4. Regulatory Compliance
+- **21 CFR Part 11**: Electronic signatures, audit trails
+- **GMP**: Quality holds, batch release workflows
+- **ISO 22000**: Hazard analysis, traceability
+- **Audit Ready**: Instant genealogy reports for recalls
+
+## Testing
+
+```bash
+cd ERP-BACKEND
+pytest tests/test_regulated_inventory.py -v --cov=app/services/regulated_inventory_service
+```
+
+## Next Steps
+1. Create API router endpoints (`routers/regulated_inventory.py`)
+2. Implement Pydantic schemas for request/response validation
+3. Write integration tests for FEFO and EBMR workflows
+4. Create Alembic migration for database tables
+5. Integrate with Quality Management module for release workflows
