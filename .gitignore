@@ -23,10 +23,10 @@ wheels/
 
 # Virtual environments
 venv/
-ENV/
-env.bak/
-.venv/
 env/
+ENV/
+.venv/
+.env/
 
 # IDE
 .vscode/
@@ -34,56 +34,26 @@ env/
 *.swp
 *.swo
 
+# Logs
+*.log
+
 # Environment
 .env
 .env.local
 *.env.*
 
-# Logs
-*.log
-
 # Coverage
 .coverage
 htmlcov/
 .coverage.*
-.cache
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Pytest
+# Testing
 .pytest_cache/
-
-# MyPy
 .mypy_cache/
 
-# Alembic
-alembic/
-
-# Docker
-.dockerenv
-Dockerfile*
-docker-compose*
-
-# OS
-.DS_Store
-Thumbs.db
+# Distribution / packaging
+.pybuild/
+.tox/
+.coverage
+.nox/
 ```
