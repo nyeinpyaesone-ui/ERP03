@@ -80,13 +80,13 @@ services:
       - erp03_internal
       - erp03_public
     command: >
-      sh -c "alembic upgrade head && 
-             uvicorn app.main:app 
-             --host 0.0.0.0 
-             --port 8000 
-             --workers 4 
-             --loop uvloop 
-             --http httptools 
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app
+             --host 0.0.0.0
+             --port 8000
+             --workers 4
+             --loop uvloop
+             --http httptools
              --log-level info"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]

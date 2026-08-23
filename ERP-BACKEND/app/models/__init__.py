@@ -1,23 +1,14 @@
-"""ERP Solution SQLAlchemy models.
+# App Models Package - Centralized model imports
 
-This package contains all database models organized by domain:
-- user: User authentication and profile
-- crm: Company, Contact, Deal (Customer Relationship Management)
-- inventory: Product, InventoryMovement
-- finance: Invoice, InvoiceItem, Payment
-- project: Project, Task
-- hr: Department, Employee
-- workflow: Document, Workflow, WorkflowStep, WorkflowExecution, Webhook, WebhookDelivery, Integration
-- system: ActivityLog, Notification, Report, Forecast, Setting
-- search: SearchIndex, SearchQuery, SearchSuggestion
-"""
-
+# Import domain models from refactored model files
 from app.models.user import User
 from app.models.crm import Company, Contact, Deal
+from app.models.hr import Department, Employee
 from app.models.inventory import Product, InventoryMovement
 from app.models.finance import Invoice, InvoiceItem, Payment
 from app.models.project import Project, Task
-from app.models.hr import Department, Employee
+from app.models.system import ActivityLog, Notification, Report, Forecast, Setting
+from app.models.search import SearchIndex, SearchQuery, SearchSuggestion
 from app.models.workflow import (
     Document,
     Workflow,
@@ -25,34 +16,56 @@ from app.models.workflow import (
     WorkflowExecution,
     Webhook,
     WebhookDelivery,
-    Integration,
+    Integration
 )
-from app.models.permissions import Role, Permission, RolePermission, UserRole, FieldPermission, DataPolicy
-from app.models.system import ActivityLog, Notification, Report, Forecast, Setting
-from app.models.search import SearchIndex, SearchQuery, SearchSuggestion
+from app.models.permissions import (
+    Role,
+    Permission,
+    RolePermission,
+    UserRole,
+    FieldPermission,
+    DataPolicy
+)
 
-# Export all models for backward compatibility
+# Import regulated inventory models (GMP/FDA 21 CFR Part 11 compliant)
+from app.models.regulated_inventory import (
+    ERPItemMaster,
+    ERPInventoryDimension,
+    ERPInventoryTransaction,
+    EBMRBatchRecord
+)
+
 __all__ = [
-    # User
+    # User Management
     "User",
-    # CRM
+    # CRM Models
     "Company",
     "Contact",
     "Deal",
-    # Inventory
+    # HR Models
+    "Department",
+    "Employee",
+    # Inventory Models
     "Product",
     "InventoryMovement",
-    # Finance
+    # Finance Models
     "Invoice",
     "InvoiceItem",
     "Payment",
-    # Project
+    # Project Management
     "Project",
     "Task",
-    # HR
-    "Department",
-    "Employee",
-    # Workflow & Integration
+    # System Models
+    "ActivityLog",
+    "Notification",
+    "Report",
+    "Forecast",
+    "Setting",
+    # Search Models
+    "SearchIndex",
+    "SearchQuery",
+    "SearchSuggestion",
+    # Workflow Models
     "Document",
     "Workflow",
     "WorkflowStep",
@@ -60,21 +73,16 @@ __all__ = [
     "Webhook",
     "WebhookDelivery",
     "Integration",
-    # Permissions & RBAC
+    # Permission Models
     "Role",
     "Permission",
     "RolePermission",
     "UserRole",
     "FieldPermission",
     "DataPolicy",
-    # System
-    "ActivityLog",
-    "Notification",
-    "Report",
-    "Forecast",
-    "Setting",
-    # Search
-    "SearchIndex",
-    "SearchQuery",
-    "SearchSuggestion",
+    # Regulated Inventory (GMP/FDA Compliant)
+    "ERPItemMaster",
+    "ERPInventoryDimension",
+    "ERPInventoryTransaction",
+    "EBMRBatchRecord",
 ]

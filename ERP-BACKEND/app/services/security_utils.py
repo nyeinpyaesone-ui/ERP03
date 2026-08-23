@@ -26,56 +26,56 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 def validate_password_strength(password: str) -> Tuple[bool, str]:
     """
     Validate a password against the required strength criteria.
-    
+
     The password must contain at least eight characters, one uppercase letter,
     one lowercase letter, one digit, and one special character.
-    
+
     Returns:
         Tuple[bool, str]: A validity flag and an error message. The message is
             empty when the password meets all requirements.
     """
     if len(password) < 8:
         return False, "Password must be at least 8 characters long."
-    
+
     if not any(c.isupper() for c in password):
         return False, "Password must contain at least one uppercase letter."
-    
+
     if not any(c.islower() for c in password):
         return False, "Password must contain at least one lowercase letter."
-    
+
     if not any(c.isdigit() for c in password):
         return False, "Password must contain at least one digit."
-    
+
     special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
     if not any(c in special_chars for c in password):
         return False, f"Password must contain at least one special character ({special_chars})."
-    
+
     return True, ""
 
 
 def validate_file_upload(file_content: bytes, filename: str) -> Tuple[bool, str, Optional[str]]:
     """
     Validate an uploaded file's size, type, and extension, then generate a safe filename for valid files.
-    
+
     Parameters:
         file_content (bytes): The contents of the uploaded file.
         filename (str): The original filename, including its extension.
-    
+
     Returns:
         Tuple[bool, str, Optional[str]]: A tuple containing the validation result, an error message, and a randomized filename when valid.
     """
     # Check file size
     if len(file_content) > MAX_FILE_SIZE:
         return False, f"File size exceeds maximum limit of {MAX_FILE_SIZE // (1024*1024)}MB.", None
-    
+
     # Check extension
     file_ext = Path(filename).suffix.lower()
     if not file_ext:
         return False, "File must have a valid extension.", None
-    
+
     # Get MIME type from magic bytes
     mime_type, _ = mimetypes.guess_type(filename)
-    
+
     # If mimetypes fails, try to detect from content (basic check)
     if not mime_type:
         # Basic magic byte checking for common types
@@ -89,19 +89,19 @@ def validate_file_upload(file_content: bytes, filename: str) -> Tuple[bool, str,
             mime_type = "image/gif"
         else:
             return False, "Unable to determine file type. Unsupported format.", None
-    
+
     # Validate MIME type against allowlist
     if mime_type not in ALLOWED_MIME_TYPES:
         return False, f"File type '{mime_type}' is not allowed.", None
-    
+
     # Verify extension matches MIME type
     expected_ext = ALLOWED_MIME_TYPES[mime_type]
     if file_ext != expected_ext:
         return False, f"File extension mismatch. Expected {expected_ext} for {mime_type}.", None
-    
+
     # Generate safe filename to prevent directory traversal
     safe_filename = f"{secrets.token_hex(16)}{file_ext}"
-    
+
     return True, "", safe_filename
 
 
