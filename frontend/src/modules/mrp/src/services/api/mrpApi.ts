@@ -1,6 +1,5 @@
 import axios from 'axios';
 import { env } from '../config/env';
-import { createApiClient } from '../../../shared/services/apiClient';
 import {
   BillOfMaterials,
   WorkOrder,
@@ -11,11 +10,32 @@ import {
   Routing,
 } from '../types/mrp';
 
-// Create API client with module-specific configuration
-const api = createApiClient({
+const api = axios.create({
   baseURL: `${env.apiUrl}/manufacturing`,
-  moduleName: 'mrp',
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
+
+// Request interceptor for auth token
+api.interceptors.request.use(async (config) => {
+  const token = await getAuthToken(); // Your existing auth utility
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Response interceptor for error handling
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Handle token refresh or logout
+    }
+    return Promise.reject(error);
+  }
+);
 
 // BOM APIs
 export const bomAPI = {
@@ -100,6 +120,9 @@ export const routingAPI = {
     api.post<Routing>('/routings', data).then((r) => r.data),
 };
 
-// Note: Authentication token handling is now managed by the shared apiClient
-// No need for local getAuthToken function
+// Helper function - replace with your actual auth token retrieval
+async function getAuthToken(): Promise<string | null> {
+  // Import from your existing auth utility
+  return null;
+}
 

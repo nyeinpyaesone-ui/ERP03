@@ -4,7 +4,7 @@ Unit tests for the search service module (app/services/search_service.py).
 import os
 import pytest
 from unittest.mock import MagicMock, patch, call
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from app.services.search_service import SearchService
@@ -118,6 +118,39 @@ class TestIndexEntity:
         assert existing_index.content == "Updated content"
         assert "Jane Doe" in existing_index.searchable_text
         assert existing_index.updated_at is not None
+
+    def test_index_entity_fallback_update_sets_timezone_aware_updated_at(self, mock_db):
+        """
+        Regression test: the fallback (query-and-update) path in index_entity()
+        sets `existing.updated_at` using datetime.now(timezone.utc) instead of
+        the deprecated datetime.utcnow(), so it must be timezone-aware.
+        """
+        from sqlalchemy.exc import IntegrityError
+
+        service = SearchService(db=mock_db)
+        mock_db.execute.side_effect = IntegrityError('test', 'params', 'orig')
+
+        existing_index = MagicMock()
+        existing_index.title = "Old Title"
+        existing_index.content = "Old Content"
+        existing_index.searchable_text = "old text"
+        existing_index.meta_data = {}
+        existing_index.tags = []
+        existing_index.updated_at = None
+        mock_db.query.return_value.filter.return_value.first.return_value = existing_index
+
+        before = datetime.now(timezone.utc)
+        service.index_entity(
+            entity_type="contact",
+            entity_id=1,
+            title="Jane Doe",
+            content="Updated content"
+        )
+        after = datetime.now(timezone.utc)
+
+        assert existing_index.updated_at.tzinfo is not None
+        assert existing_index.updated_at.tzinfo == timezone.utc
+        assert before <= existing_index.updated_at <= after
 
     def test_index_entity_with_metadata_values(self, mock_db):
         """Test indexing entity with various metadata value types."""
@@ -468,7 +501,7 @@ class TestSearch:
         result1.content = long_content
         result1.meta_data = {}
         result1.tags = []
-        result1.updated_at = datetime.utcnow()
+        result1.updated_at = datetime.now(timezone.utc)
         
         mock_db.query.return_value.filter.return_value.count.return_value = 1
         mock_db.query.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [result1]
@@ -501,6 +534,29 @@ class TestSearch:
         assert results[0]["metadata"] == {}
         assert results[0]["tags"] == []
         assert results[0]["updated_at"] is None
+
+    @patch('app.services.search_service.datetime')
+    def test_search_execution_time_uses_timezone_aware_clock(self, mock_datetime, mock_db):
+        """
+        Regression test: search() measures `execution_time` from two
+        datetime.now(timezone.utc) calls (start and end). This verifies the
+        elapsed-time computation relies on a timezone-aware clock rather than
+        the deprecated naive datetime.utcnow(), and that milliseconds are
+        computed correctly.
+        """
+        start = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        end = start + timedelta(milliseconds=250)
+        mock_datetime.now.side_effect = [start, end]
+
+        service = SearchService(db=mock_db)
+
+        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.query.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
+
+        _, _, execution_time = service.search(query="test")
+
+        assert execution_time == 250
+        mock_datetime.now.assert_any_call(timezone.utc)
 
 
 class TestGetFacets:
@@ -688,6 +744,26 @@ class TestRecordSuggestion:
         recorded = mock_db.add.call_args[0][0]
         assert recorded.query_text == "search term"
 
+    def test_record_suggestion_existing_sets_timezone_aware_last_used(self, mock_db):
+        """
+        Regression test: record_suggestion() sets `last_used` using
+        datetime.now(timezone.utc) instead of the deprecated
+        datetime.utcnow(), so the resulting timestamp must be timezone-aware.
+        """
+        service = SearchService(db=mock_db)
+
+        existing_suggestion = MagicMock(spec=MockSearchSuggestion)
+        existing_suggestion.frequency = 5
+        mock_db.query.return_value.filter.return_value.first.return_value = existing_suggestion
+
+        before = datetime.now(timezone.utc)
+        service.record_suggestion(query="existing search", entity_type="contact")
+        after = datetime.now(timezone.utc)
+
+        assert existing_suggestion.last_used.tzinfo is not None
+        assert existing_suggestion.last_used.tzinfo == timezone.utc
+        assert before <= existing_suggestion.last_used <= after
+
 
 class TestLogQuery:
     """Tests for log_query method."""
@@ -843,3 +919,32 @@ class TestGetSearchAnalytics:
         assert status_filter["count"] == 2
         assert type_filter is not None
         assert type_filter["count"] == 1
+
+    def test_get_search_analytics_filters_using_timezone_aware_start_date(self, mock_db):
+        """
+        Regression test: get_search_analytics() computes `start_date` using
+        datetime.now(timezone.utc) - timedelta(days=days). This exercises the
+        real (unmocked) datetime call so a missing `timezone` import would
+        surface here as a NameError, and verifies the lookback window honors
+        the `days` parameter.
+        """
+        service = SearchService(db=mock_db)
+
+        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.query.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = []
+        mock_db.query.return_value.filter.return_value.scalar.return_value = None
+        mock_db.query.return_value.filter.return_value.group_by.return_value.order_by.return_value.all.return_value = []
+        mock_db.query.return_value.filter.return_value.filter.return_value.all.return_value = []
+
+        before = datetime.now(timezone.utc)
+        service.get_search_analytics(days=14)
+        after = datetime.now(timezone.utc)
+
+        # The first filter() call on the SearchQuery query chain is the
+        # `total_queries` lookup: SearchQuery.created_at >= start_date.
+        first_filter_call = mock_db.query.return_value.filter.call_args_list[0]
+        start_date = first_filter_call[0][0].right.value
+
+        assert start_date.tzinfo is not None
+        assert start_date.tzinfo == timezone.utc
+        assert before - timedelta(days=14) <= start_date <= after - timedelta(days=14)

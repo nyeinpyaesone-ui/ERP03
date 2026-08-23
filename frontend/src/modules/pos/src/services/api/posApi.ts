@@ -1,6 +1,5 @@
 import axios from 'axios';
 import { env } from '../config/env';
-import { createApiClient } from '../../../shared/services/apiClient';
 import {
   POSProduct,
   POSCategory,
@@ -12,10 +11,15 @@ import {
   Payment,
 } from '../types/pos';
 
-// Create API client with module-specific configuration
-const api = createApiClient({
+const api = axios.create({
   baseURL: `${env.apiUrl}/pos`,
-  moduleName: 'pos',
+  headers: { 'Content-Type': 'application/json' },
+});
+
+api.interceptors.request.use(async (config) => {
+  const token = await getAuthToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
 });
 
 // Product APIs
@@ -87,6 +91,7 @@ export const posKPIAPI = {
     api.get('/reports/sales', { params }).then((r) => r.data),
 };
 
-// Note: Authentication token handling is now managed by the shared apiClient
-// No need for local getAuthToken function
+async function getAuthToken(): Promise<string | null> {
+  return null;
+}
 

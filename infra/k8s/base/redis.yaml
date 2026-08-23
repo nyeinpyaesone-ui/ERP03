@@ -34,6 +34,9 @@ spec:
         command:
         - redis-server
         - /etc/redis/redis.conf
+        args:
+        - --requirepass
+        - $(REDIS_PASSWORD)
         env:
         - name: REDIS_PASSWORD
           valueFrom:
@@ -109,7 +112,6 @@ data:
   redis.conf: |
     bind 0.0.0.0
     port 6379
-    requirepass $(REDIS_PASSWORD)
     maxmemory 768mb
     maxmemory-policy allkeys-lru
     appendonly yes

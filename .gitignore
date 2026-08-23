@@ -1,67 +1,59 @@
-# Environment variables
-.env
-.env.local
-*.env.*
-!.env.example
-
+```
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
-env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
 venv/
+env/
+ENV/
 .venv/
-.ENV
-.python-version
-.python_history
-*.pot
-*.pot.*
-*.mo
-*.log
-*.tmp
+.env/
+
+# IDE
+.vscode/
+.idea/
 *.swp
 *.swo
 
-# Build and distribution artifacts
-build/
-dist/
-*.egg
-*.egg-info/
-MANIFEST
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Coverage
 .coverage
 htmlcov/
 .coverage.*
-.nyc_output
-istanbul*
-.mypy_cache/
+
+# Testing
 .pytest_cache/
+.mypy_cache/
+
+# Distribution / packaging
+.pybuild/
 .tox/
-.hypothesis/
-
-# Editors and IDEs
-.vscode/
-.idea/
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Coverage reports
-coverage/
-coverage.xml
-*.gcov
-*.lcov
-*.profraw
-*.profdata
-
-# Dependency directories
-node_modules/
-target/
-.gradle/
+.coverage
+.nox/
+```
