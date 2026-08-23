@@ -10,7 +10,7 @@ import hashlib
 import secrets
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 from dataclasses import dataclass
 from enum import Enum
 
@@ -56,15 +56,6 @@ class JWTValidator:
         audience: str = "ai-backend",
         algorithm: str = "HS256"
     ):
-        """
-        Initialize JWT signing and validation configuration.
-        
-        Parameters:
-            secret_key (str): Secret used to sign and verify tokens.
-            issuer (str): Expected token issuer.
-            audience (str): Expected token audience.
-            algorithm (str): JWT signing algorithm.
-        """
         self.secret_key = secret_key.encode('utf-8')
         self.issuer = issuer
         self.audience = audience
@@ -79,17 +70,17 @@ class JWTValidator:
         metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """
-        Create a signed JWT for a subject with scopes and optional metadata.
+        Create a signed JWT token.
         
-        Parameters:
-            subject (str): Identifier of the user or service represented by the token.
-            token_type (TokenType): Token classification.
-            expires_in (timedelta): Duration for which the token remains valid.
-            scopes (Optional[List[str]]): Permission scopes granted to the token.
-            metadata (Optional[Dict[str, Any]]): Additional claims to include.
-        
+        Args:
+            subject: Token subject (user_id or service_id)
+            token_type: Type of token (access/refresh/service)
+            expires_in: Token validity duration
+            scopes: List of permission scopes
+            metadata: Additional metadata to include
+            
         Returns:
-            str: The signed JWT token.
+            Signed JWT token string
         """
         now = datetime.utcnow()
         
@@ -111,19 +102,19 @@ class JWTValidator:
     
     def validate_token(self, token: str) -> TokenPayload:
         """
-        Validate a JWT and convert its claims into a token payload.
+        Validate and decode a JWT token.
         
-        Parameters:
-            token (str): JWT string to validate.
-        
+        Args:
+            token: JWT token string
+            
         Returns:
-            TokenPayload: Validated token claims.
-        
+            Decoded token payload
+            
         Raises:
-            jwt.ExpiredSignatureError: If the token has expired.
-            jwt.InvalidIssuerError: If the issuer is invalid.
-            jwt.InvalidAudienceError: If the audience is invalid.
-            jwt.InvalidTokenError: If the token is otherwise invalid.
+            jwt.InvalidTokenError: If token is invalid
+            jwt.ExpiredSignatureError: If token has expired
+            jwt.InvalidIssuerError: If issuer is invalid
+            jwt.InvalidAudienceError: If audience is invalid
         """
         try:
             payload = jwt.decode(
@@ -171,16 +162,17 @@ class JWTValidator:
     
     def refresh_token(self, refresh_token: str) -> str:
         """
-        Creates a new one-hour access token from a valid refresh token.
+        Refresh an access token using a refresh token.
         
-        Parameters:
-            refresh_token (str): The refresh token to validate.
-        
+        Args:
+            refresh_token: Valid refresh token
+            
         Returns:
-            str: A new access token preserving the subject, scopes, and metadata.
-        
+            New access token
+            
         Raises:
-            ValueError: If the supplied token is not a refresh token.
+            jwt.InvalidTokenError: If refresh token is invalid
+            ValueError: If token is not a refresh token
         """
         payload = self.validate_token(refresh_token)
         
@@ -198,14 +190,14 @@ class JWTValidator:
     
     def verify_scope(self, token: str, required_scope: str) -> bool:
         """
-        Determine whether a token grants a specific scope.
+        Verify that a token has a specific scope.
         
-        Parameters:
-            token (str): JWT token to validate.
-            required_scope (str): Scope to check.
-        
+        Args:
+            token: JWT token string
+            required_scope: Required permission scope
+            
         Returns:
-            bool: `true` if the token is valid and includes the required scope, `false` otherwise.
+            True if token has the required scope
         """
         try:
             payload = self.validate_token(token)
@@ -215,14 +207,14 @@ class JWTValidator:
     
     def verify_scopes(self, token: str, required_scopes: List[str]) -> bool:
         """
-        Determine whether a token grants every required scope.
+        Verify that a token has all required scopes.
         
-        Parameters:
-        	token (str): JWT token to validate
-        	required_scopes (List[str]): Permission scopes that must be present
-        
+        Args:
+            token: JWT token string
+            required_scopes: List of required permission scopes
+            
         Returns:
-        	bool: `true` if the token contains all required scopes, `false` otherwise.
+            True if token has all required scopes
         """
         try:
             payload = self.validate_token(token)
@@ -254,23 +246,30 @@ class APIKeyManager:
         metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """
-        Create an API key associated with a service.
+        Generate and store an API key for a service.
         
-        Parameters:
-            name (str): Human-readable name for the key.
-            service_id (str): Identifier of the service that owns the key.
-            scopes (Optional[List[str]]): Permission scopes granted to the key.
-            expires_at (Optional[datetime]): Time at which the key expires.
-            metadata (Optional[Dict[str, Any]]): Additional metadata associated with the key.
+        Args:
+            name: Human-readable name for the key.
+            service_id: Identifier of the associated service.
+            scopes: Permission scopes granted to the key.
+            expires_at: Optional time when the key expires.
+            metadata: Additional information associated with the key.
         
         Returns:
-            str: The generated API key. Store it securely because it cannot be retrieved later.
+            The generated API key. Store it securely because it cannot be retrieved later.
         """
         # Generate random key
         raw_key = secrets.token_urlsafe(32)
         
-        # Hash the key for storage
-        key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        # Derive a computationally expensive hash for storage
+        salt = secrets.token_bytes(16)
+        iterations = 210000
+        key_hash = hashlib.pbkdf2_hmac(
+            "sha256",
+            raw_key.encode(),
+            salt,
+            iterations
+        ).hex()
         
         # Store key metadata
         self._keys[key_hash] = {
@@ -281,7 +280,9 @@ class APIKeyManager:
             "metadata": metadata or {},
             "created_at": datetime.utcnow(),
             "last_used_at": None,
-            "is_active": True
+            "is_active": True,
+            "salt": salt,
+            "iterations": iterations
         }
         
         logger.info(f"Generated API key '{name}' for service {service_id}")
@@ -289,18 +290,16 @@ class APIKeyManager:
     
     def validate_key(self, api_key: str) -> Optional[Dict[str, Any]]:
         """
-        Validate an API key and retrieve its associated service information.
+        Validate an API key and provide its associated service information.
         
         Parameters:
-            api_key (str): The API key to validate.
+            api_key (str): API key to validate.
         
         Returns:
-            Optional[Dict[str, Any]]: Service ID, scopes, and metadata for a valid active,
-                unexpired key; `None` otherwise.
+            Optional[Dict[str, Any]]: Service ID, scopes, and metadata for an active,
+            unexpired key; None if the key is missing, inactive, or expired.
         """
-        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
-        
-        key_data = self._keys.get(key_hash)
+        key_hash, key_data = self._find_key_record(api_key)
         if not key_data:
             logger.warning("API key not found")
             return None
@@ -324,17 +323,16 @@ class APIKeyManager:
     
     def revoke_key(self, api_key: str) -> bool:
         """
-        Mark a stored API key as inactive.
+        Revoke an API key.
         
-        Parameters:
-            api_key (str): The raw API key to revoke.
-        
+        Args:
+            api_key: API key to revoke
+            
         Returns:
-            bool: True if the API key exists, otherwise False.
+            True if key was revoked, False if not found
         """
-        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
-        
-        if key_hash in self._keys:
+        key_hash, key_data = self._find_key_record(api_key)
+        if key_hash and key_data:
             self._keys[key_hash]["is_active"] = False
             logger.info(f"Revoked API key '{self._keys[key_hash]['name']}'")
             return True
@@ -347,22 +345,23 @@ class APIKeyManager:
         new_name: Optional[str] = None
     ) -> Optional[str]:
         """
-        Rotate an API key while preserving its service, scopes, expiration, and metadata.
+        Replace a valid API key with a new key that preserves its service, scopes, expiration, and metadata.
         
         Parameters:
-            old_api_key (str): The active API key to replace.
-            new_name (Optional[str]): Optional name for the replacement key.
+        	old_api_key (str): The API key to revoke and replace.
+        	new_name (Optional[str]): Optional name for the replacement key.
         
         Returns:
-            Optional[str]: The replacement API key, or None if the existing key is invalid.
+        	Optional[str]: The replacement API key, or `None` if the existing key is invalid or cannot be located.
         """
         # Validate old key
         key_data = self.validate_key(old_api_key)
         if not key_data:
             return None
         
-        key_hash = hashlib.sha256(old_api_key.encode()).hexdigest()
-        old_key_data = self._keys[key_hash]
+        key_hash, old_key_data = self._find_key_record(old_api_key)
+        if not key_hash or not old_key_data:
+            return None
         
         # Revoke old key
         self.revoke_key(old_api_key)
@@ -376,15 +375,36 @@ class APIKeyManager:
             metadata=old_key_data["metadata"]
         )
     
-    def list_keys(self, service_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """
-        List API key metadata, optionally filtered by service.
-        
-        Parameters:
-        	service_id (Optional[str]): Service ID used to filter the keys.
+    def _find_key_record(self, api_key: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        """Find the stored record matching an API key.
         
         Returns:
-        	List[Dict[str, Any]]: Metadata for matching API keys without exposing key hashes.
+        	tuple: The stored hash and key metadata when the key matches; otherwise, `(None, None)`.
+        """
+        for stored_hash, key_data in self._keys.items():
+            salt = key_data.get("salt")
+            iterations = key_data.get("iterations", 210000)
+            if not salt:
+                continue
+            candidate_hash = hashlib.pbkdf2_hmac(
+                "sha256",
+                api_key.encode(),
+                salt,
+                iterations
+            ).hex()
+            if secrets.compare_digest(candidate_hash, stored_hash):
+                return stored_hash, key_data
+        return None, None
+
+    def list_keys(self, service_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        List API keys with optional filtering by service ID.
+        
+        Parameters:
+            service_id (Optional[str]): Service ID used to filter the results.
+        
+        Returns:
+            List[Dict[str, Any]]: Metadata for matching API keys, excluding key hashes.
         """
         keys = []
         for key_hash, key_data in self._keys.items():
@@ -410,10 +430,13 @@ class APIKeyManager:
 
 def extract_token_from_header(headers: Dict[str, str]) -> Optional[str]:
     """
-    Extracts a token from a Bearer authorization header.
+    Extract JWT token from Authorization header.
     
+    Args:
+        headers: Request headers dictionary
+        
     Returns:
-    	str: The token value, or None if the header is absent or uses another scheme.
+        Token string if found, None otherwise
     """
     auth_header = headers.get("Authorization", "")
     

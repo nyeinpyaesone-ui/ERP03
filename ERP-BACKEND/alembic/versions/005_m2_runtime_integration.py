@@ -15,6 +15,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    """Create ERP-AI integration tables and their supporting indexes."""
     op.create_table(
         "integration_purchase_orders",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -62,6 +63,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """
+    Remove the ERP-AI integration tables and their associated indexes.
+    """
     op.drop_index("ix_integration_command_correlation", table_name="integration_commands")
     op.drop_index("ix_integration_command_id", table_name="integration_commands")
     op.drop_table("integration_commands")

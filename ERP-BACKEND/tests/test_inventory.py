@@ -14,12 +14,7 @@ from sqlalchemy.pool import StaticPool
 
 @pytest.fixture
 def test_db_session():
-    """
-    Create an in-memory database session and simplified inventory models for tests.
-    
-    Yields:
-        tuple: The database session, product model, and inventory movement model.
-    """
+    """Create a test database session with simplified inventory models."""
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},

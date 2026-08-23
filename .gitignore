@@ -1,10 +1,15 @@
 ```
-# Python
+# Python - Bytecode
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
 *.py[cod]
 *$py.class
 *.so
 .Python
+
+# Python - Packaging & Distribution
 build/
 develop-eggs/
 dist/
@@ -20,32 +25,71 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Python - Virtual Environments
+env/
+venv/
+.venv/
+ENV/
+.ENV
+.ENV.local
+.ENV.*
+.python-version
+.python_history
+.python-eggs
 
 # Testing
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 .mypy_cache/
-
-# Environment
-*.env.*
-.env
-.env.local
-.venv/
-venv/
-ENV/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
 
 # Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Editor/IDE
+# Database
+*.db
+*.db-journal
+
+# Environment & Secrets
+.env*
+!.env.example
+*.env.*
+.env
+.env.local
+.secrets
+secrets/
+
+# Frontend
+node_modules/
+dist/
+build/
+.DS_Store
+Thumbs.db
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *.tmp
 
-# OS
-.DS_Store
-Thumbs.db
-```.ipynb_checkpoints/
+# Docker
+.dockerenv
+Dockerfile*
+
+# Alembic
+alembic/versions/
+```

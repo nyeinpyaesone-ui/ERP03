@@ -63,13 +63,13 @@ class EmployeeResponse(BaseModel):
 @router.post("/departments", response_model=DepartmentResponse)
 def create_department(data: DepartmentCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
-    Create a department from the supplied data.
+    Create and persist a department from the supplied details.
     
     Parameters:
     	data (DepartmentCreate): Department details used to create the record.
     
     Returns:
-    	Department: The newly created department.
+    	DepartmentResponse: The newly created department.
     """
     dept = Department(**data.model_dump())
     db.add(dept)
@@ -80,19 +80,26 @@ def create_department(data: DepartmentCreate, db: Session = Depends(get_db), cur
 
 @router.get("/departments", response_model=List[DepartmentResponse])
 def list_departments(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """Return all departments accessible to the authenticated user."""
+    """List all departments available to the authenticated user.
+    
+    Returns:
+        list[Department]: The departments.
+    """
     return db.query(Department).all()
 
 @router.post("/employees", response_model=EmployeeResponse)
 def create_employee(data: EmployeeCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
-    Create an employee record after confirming that its employee code is unique.
+    Create and persist an employee after confirming that its employee code is unique.
     
     Parameters:
     	data (EmployeeCreate): Employee details used to create the record.
     
     Returns:
-    	Employee: The persisted employee record.
+    	EmployeeResponse: The newly created employee record.
+    
+    Raises:
+    	HTTPException: With status code 400 if the employee code already exists.
     """
     existing = db.query(Employee).filter(Employee.employee_code == data.employee_code).first()
     if existing:
@@ -116,8 +123,8 @@ def list_employees(
     List employees with optional status and department filters.
     
     Parameters:
-    	status (str, optional): Employee status used to filter the results.
-    	department_id (int, optional): Department ID used to filter the results.
+    	status (str, optional): Employee status to filter by.
+    	department_id (int, optional): ID of the department to filter by.
     
     Returns:
     	list[Employee]: Employees matching the supplied filters.
@@ -159,6 +166,9 @@ def update_employee(employee_id: int, data: EmployeeCreate, db: Session = Depend
     
     Returns:
         Employee: The updated employee record.
+    
+    Raises:
+        HTTPException: If no employee with the specified ID exists.
     """
     emp = db.query(Employee).filter(Employee.id == employee_id).first()
     if not emp:

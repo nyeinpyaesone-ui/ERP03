@@ -36,13 +36,13 @@ class ProductCreate(BaseModel):
     def validate_status(cls, v):
         """
         Validate that a product status is active, discontinued, or draft.
-        
+
         Parameters:
             v: The status value to validate.
-        
+
         Returns:
             The validated status value.
-        
+
         Raises:
             ValueError: If the status is not one of the allowed values.
         """
@@ -74,13 +74,13 @@ class ProductUpdate(BaseModel):
     def validate_status(cls, v):
         """
         Validate that a product status is one of the supported values.
-        
+
         Parameters:
             v (str | None): The status to validate.
-        
+
         Returns:
             str | None: The validated status, or None when no status is provided.
-        
+
         Raises:
             ValueError: If the status is not `active`, `discontinued`, or `draft`.
         """
@@ -105,13 +105,13 @@ class MovementCreate(BaseModel):
     def validate_movement_type(cls, v):
         """
         Validate that a stock movement type is supported.
-        
+
         Parameters:
             v (str): Movement type to validate.
-        
+
         Returns:
             str: The validated movement type.
-        
+
         Raises:
             ValueError: If the movement type is not `in`, `out`, `adjustment`, or `transfer`.
         """
@@ -185,14 +185,14 @@ def create_product(
 ):
     """
     Create a product and record its creation activity.
-    
+
     Parameters:
     	data (ProductCreate): Validated product details.
     	current_user: Authenticated user associated with the product creation.
-    
+
     Returns:
     	ProductResponse: The newly created product.
-    
+
     Raises:
     	HTTPException: With status 400 when the inventory service rejects the product.
     """
@@ -215,7 +215,7 @@ def create_product(
             dimensions=data.dimensions,
             created_by=current_user.id
         )
-        
+
         # Log activity
         log_activity(
             db,
@@ -224,7 +224,7 @@ def create_product(
             entity_type="product",
             entity_id=product.id
         )
-        
+
         return product
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -244,7 +244,7 @@ def list_products(
 ):
     """
     List products with optional category, status, stock, search, and pagination filters.
-    
+
     Parameters:
     	category (str, optional): Restrict results to a product category.
     	status (str, optional): Restrict results to a product status.
@@ -252,7 +252,7 @@ def list_products(
     	search (str, optional): Filter results by a search term.
     	skip (int): Number of matching products to skip.
     	limit (int): Maximum number of products to return.
-    
+
     Returns:
     	list: Products matching the specified filters.
     """
@@ -274,13 +274,13 @@ def get_product(
     service: InventoryService = Depends(get_inventory_service)
 ):
     """Retrieve a product by its ID.
-    
+
     Parameters:
     	product_id (int): The ID of the product to retrieve.
-    
+
     Returns:
     	ProductResponse: The requested product.
-    
+
     Raises:
     	HTTPException: If the product does not exist.
     """
@@ -300,33 +300,33 @@ def update_product(
 ):
     """
     Update the specified product with the provided fields.
-    
+
     Parameters:
         product_id (int): The identifier of the product to update.
         data (ProductUpdate): The fields to change; omitted fields remain unchanged.
-    
+
     Returns:
         Product: The updated product.
-    
+
     Raises:
         HTTPException: If no fields are provided, the product is not found, or the update is invalid.
     """
     # Filter out None values
     updates = {k: v for k, v in data.dict().items() if v is not None}
-    
+
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
-    
+
     try:
         product = service.update_product(
             product_id=product_id,
             updates=updates,
             updated_by=current_user.id
         )
-        
+
         if not product:
             raise HTTPException(status_code=404, detail="Product not found")
-        
+
         # Log activity
         log_activity(
             db,
@@ -335,7 +335,7 @@ def update_product(
             entity_type="product",
             entity_id=product.id
         )
-        
+
         return product
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -350,20 +350,20 @@ def delete_product(
 ):
     """
     Delete a product and its associated stock movements.
-    
+
     Parameters:
         product_id (int): Identifier of the product to delete.
-    
+
     Returns:
         dict: Confirmation message indicating successful deletion.
-    
+
     Raises:
         HTTPException: If the product does not exist.
     """
     success = service.delete_product(product_id)
     if not success:
         raise HTTPException(status_code=404, detail="Product not found")
-    
+
     # Log activity
     log_activity(
         db,
@@ -372,7 +372,7 @@ def delete_product(
         entity_type="product",
         entity_id=product_id
     )
-    
+
     return {"message": "Product deleted successfully"}
 
 
@@ -385,13 +385,13 @@ def create_movement(
 ):
     """
     Create a stock movement and update the associated product inventory.
-    
+
     Parameters:
     	data (MovementCreate): Movement details, including the product, movement type, quantity, and optional cost or reference information.
-    
+
     Returns:
     	MovementResponse: The created stock movement.
-    
+
     Raises:
     	HTTPException: With status 400 when the movement data is invalid.
     """
@@ -405,7 +405,7 @@ def create_movement(
             notes=data.notes,
             created_by=current_user.id
         )
-        
+
         # Log activity
         log_activity(
             db,
@@ -414,7 +414,7 @@ def create_movement(
             entity_type="inventory_movement",
             entity_id=movement.id
         )
-        
+
         return movement
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -432,13 +432,13 @@ def list_movements(
 ):
     """
     List inventory movements with optional product, type, and pagination filters.
-    
+
     Parameters:
         product_id (int, optional): Product identifier used to filter movements.
         movement_type (str, optional): Movement type used to filter results.
         skip (int): Number of movements to skip.
         limit (int): Maximum number of movements to return.
-    
+
     Returns:
         list: Matching inventory movements.
     """
@@ -458,7 +458,7 @@ def inventory_dashboard(
 ):
     """
     Get inventory dashboard statistics.
-    
+
     Returns:
     - Total number of products
     - Total stock value
@@ -478,10 +478,10 @@ def get_low_stock_alerts(
 ):
     """
     Retrieve products whose stock is below their reorder level.
-    
+
     Parameters:
     	limit (int): Maximum number of products to include.
-    
+
     Returns:
     	list: Products below their reorder levels.
     """
@@ -496,4 +496,3 @@ def get_out_of_stock_alerts(
 ):
     """Get products with zero stock."""
     return service.get_out_of_stock_products()
-
