@@ -1,89 +1,155 @@
 """
-Regression tests for the regulated-manufacturing inventory models added to
-app/models.py (Location, Batch, StockLevel, StockMovement, QualityStatus).
+Unit tests for app/models/regulated_inventory.py.
 
-The repository contains both a sibling module `app/models.py` and a package
-`app/models/` (with its own `__init__.py`). Python's import system always
-gives precedence to a package over a same-named module in the same parent
-package, so `import app.models` (used everywhere else in the codebase,
-including app/routers/inventory.py and app/services/inventory_service.py)
-resolves to the `app/models/` package -- never to `app/models.py`. As a
-result, the new regulated-manufacturing classes appended to app/models.py in
-this PR are unreachable dead code.
-
-Additionally, app/models.py itself is broken: it defines
-`class QualityStatus(str, enum.Enum)` and uses `CheckConstraint` in
-`StockLevel.__table_args__` without importing either `enum` or
-`CheckConstraint`, so loading the file directly raises `NameError`.
-
-These tests document both defects so they are caught by the test suite
-instead of silently regressing further.
+Covers the migration of `CreatedDateTime` / `LastModifiedDateTime` column
+defaults from the deprecated `datetime.utcnow` to a timezone-aware
+`datetime.now(timezone.utc)` callable.
 """
-import importlib.util
-import os
+from datetime import timezone
 
-import pytest
-
-
-MODELS_PY_PATH = os.path.join(os.path.dirname(__file__), "..", "app", "models.py")
+from app.models.regulated_inventory import ERPItemMaster, EBMRBatchRecord
 
 
-class TestAppModelsResolvesToPackage:
-    """`import app.models` resolves to app/models/__init__.py, not app/models.py."""
+class TestERPItemMasterCreatedDateTimeDefault:
+    """Tests for ERPItemMaster.CreatedDateTime default."""
 
-    def test_app_models_file_is_the_package_init(self):
-        import app.models as models_module
+    def test_default_is_a_callable(self):
+        column = ERPItemMaster.__table__.columns["CreatedDateTime"]
+        assert column.default is not None
+        assert callable(column.default.arg)
 
-        normalized = models_module.__file__.replace(os.sep, "/")
-        assert normalized.endswith("app/models/__init__.py")
+    def test_default_callable_returns_timezone_aware_utc_datetime(self):
+        column = ERPItemMaster.__table__.columns["CreatedDateTime"]
+        value = column.default.arg()
 
-    @pytest.mark.parametrize(
-        "class_name", ["Location", "Batch", "StockLevel", "StockMovement", "QualityStatus"]
-    )
-    def test_new_regulated_inventory_classes_not_importable(self, class_name):
-        import app.models as models_module
+        assert value.tzinfo is not None
+        assert value.tzinfo == timezone.utc
 
-        assert not hasattr(models_module, class_name), (
-            f"'{class_name}' should not be reachable via `import app.models` because "
-            "the app/models/ package shadows the sibling app/models.py file"
+    def test_default_callable_is_evaluated_freshly_each_call(self):
+        """The default must be a callable (lambda) evaluated per-row, not a
+        single value computed once at class-definition/import time."""
+        column = ERPItemMaster.__table__.columns["CreatedDateTime"]
+        first = column.default.arg()
+        second = column.default.arg()
+
+        assert first.tzinfo == timezone.utc
+        assert second.tzinfo == timezone.utc
+        # Second call should not be earlier than the first.
+        assert second >= first
+
+    def test_persisted_item_master_has_created_datetime_populated(self, db_session):
+        """Integration check: inserting a row triggers the Python-side default
+        and populates CreatedDateTime."""
+        item = ERPItemMaster(
+            ItemId="ITEM-TZ-001",
+            ItemName="Test Raw Material",
+            ItemType="RawMaterial",
+            BaseUnitOfMeasure="KG",
+            ValuationMethod="FIFO",
         )
+        db_session.add(item)
+        db_session.commit()
+        db_session.refresh(item)
 
-    def test_existing_models_still_importable_from_package(self):
-        """Sanity check: symbols that DO exist in the package still resolve."""
-        import app.models as models_module
-
-        assert hasattr(models_module, "Product")
-        assert hasattr(models_module, "InventoryMovement")
-        assert hasattr(models_module, "User")
+        assert item.CreatedDateTime is not None
 
 
-class TestModelsPyFileDirectLoad:
-    """
-    Loading app/models.py directly (bypassing the app/models/ package that
-    normally shadows it) demonstrates that the file fails to execute.
-    """
+class TestEBMRBatchRecordDateTimeDefaults:
+    """Tests for EBMRBatchRecord.CreatedDateTime / LastModifiedDateTime defaults."""
 
-    def test_direct_load_raises_name_error_for_missing_enum_import(self):
-        spec = importlib.util.spec_from_file_location(
-            "app_models_standalone_under_test", MODELS_PY_PATH
+    def test_created_datetime_default_is_timezone_aware_utc(self):
+        column = EBMRBatchRecord.__table__.columns["CreatedDateTime"]
+        value = column.default.arg()
+
+        assert value.tzinfo is not None
+        assert value.tzinfo == timezone.utc
+
+    def test_last_modified_datetime_default_is_timezone_aware_utc(self):
+        column = EBMRBatchRecord.__table__.columns["LastModifiedDateTime"]
+        value = column.default.arg()
+
+        assert value.tzinfo is not None
+        assert value.tzinfo == timezone.utc
+
+    def test_last_modified_datetime_onupdate_is_timezone_aware_utc(self):
+        column = EBMRBatchRecord.__table__.columns["LastModifiedDateTime"]
+        assert column.onupdate is not None
+        value = column.onupdate.arg()
+
+        assert value.tzinfo is not None
+        assert value.tzinfo == timezone.utc
+
+    def test_created_and_last_modified_use_independent_callables(self):
+        """CreatedDateTime and LastModifiedDateTime must not share a single
+        pre-computed timestamp; each column has its own default callable."""
+        created_column = EBMRBatchRecord.__table__.columns["CreatedDateTime"]
+        modified_column = EBMRBatchRecord.__table__.columns["LastModifiedDateTime"]
+
+        assert created_column.default.arg is not modified_column.default.arg
+
+    def test_persisted_batch_record_has_datetime_fields_populated(self, db_session):
+        """Integration check: inserting an EBMRBatchRecord (with its required
+        ERPItemMaster parent) triggers the Python-side defaults for both
+        CreatedDateTime and LastModifiedDateTime."""
+        item = ERPItemMaster(
+            ItemId="ITEM-TZ-002",
+            ItemName="Test Finished Good",
+            ItemType="FinishedGood",
+            BaseUnitOfMeasure="EA",
+            ValuationMethod="FIFO",
         )
-        module = importlib.util.module_from_spec(spec)
+        db_session.add(item)
+        db_session.commit()
 
-        with pytest.raises(NameError, match="enum"):
-            spec.loader.exec_module(module)
+        batch = EBMRBatchRecord(
+            batchId="BATCH-TZ-001",
+            masterBatchRecordVersion="1.0",
+            productId="ITEM-TZ-002",
+            productionOrderNumber="PO-001",
+            facilitySiteId="SITE-01",
+            sourcingAndProcurement="{}",
+            productionExecutionLog="{}",
+        )
+        db_session.add(batch)
+        db_session.commit()
+        db_session.refresh(batch)
 
-    def test_source_references_enum_without_importing_it(self):
-        """Static confirmation that `enum` is used but never imported."""
-        with open(MODELS_PY_PATH, "r", encoding="utf-8") as fh:
-            source = fh.read()
+        assert batch.CreatedDateTime is not None
+        assert batch.LastModifiedDateTime is not None
 
-        assert "enum.Enum" in source
-        assert "import enum" not in source
+    def test_persisted_batch_record_last_modified_updates_on_change(self, db_session):
+        """The onupdate default must fire when an existing EBMRBatchRecord row
+        is modified, without raising a NameError for the `timezone` import."""
+        item = ERPItemMaster(
+            ItemId="ITEM-TZ-003",
+            ItemName="Test Finished Good 2",
+            ItemType="FinishedGood",
+            BaseUnitOfMeasure="EA",
+            ValuationMethod="FIFO",
+        )
+        db_session.add(item)
+        db_session.commit()
 
-    def test_source_references_check_constraint_without_importing_it(self):
-        """Static confirmation that `CheckConstraint` is used but never imported."""
-        with open(MODELS_PY_PATH, "r", encoding="utf-8") as fh:
-            source = fh.read()
+        batch = EBMRBatchRecord(
+            batchId="BATCH-TZ-002",
+            masterBatchRecordVersion="1.0",
+            productId="ITEM-TZ-003",
+            productionOrderNumber="PO-002",
+            facilitySiteId="SITE-01",
+            sourcingAndProcurement="{}",
+            productionExecutionLog="{}",
+        )
+        db_session.add(batch)
+        db_session.commit()
+        db_session.refresh(batch)
+        original_last_modified = batch.LastModifiedDateTime
 
-        assert "CheckConstraint(" in source
-        assert "CheckConstraint" not in source.split("class QualityStatus", 1)[0]
+        import time
+        time.sleep(0.01)
+
+        batch.masterBatchRecordVersion = "1.1"
+        db_session.commit()
+        db_session.refresh(batch)
+
+        assert batch.LastModifiedDateTime is not None
+        assert batch.LastModifiedDateTime >= original_last_modified
