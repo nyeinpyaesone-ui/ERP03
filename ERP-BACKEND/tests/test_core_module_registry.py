@@ -55,6 +55,19 @@ class TestModuleRegistryRegisterAndGet:
         with pytest.raises(ValueError, match="already registered"):
             reg.register(ModuleDescriptor(name="finance", version="2.0.0", router_factory=lambda: None))
 
+    def test_register_duplicate_name_does_not_overwrite_original_descriptor(self):
+        """Regression: a failed duplicate registration must leave the
+        originally registered descriptor untouched."""
+        reg = ModuleRegistry()
+        original = ModuleDescriptor(name="finance", version="1.0.0", router_factory=lambda: None)
+        reg.register(original)
+
+        with pytest.raises(ValueError):
+            reg.register(ModuleDescriptor(name="finance", version="2.0.0", router_factory=lambda: None))
+
+        assert reg.get("finance") is original
+        assert reg.get("finance").version == "1.0.0"
+
     def test_get_missing_module_raises_key_error(self):
         reg = ModuleRegistry()
         with pytest.raises(KeyError):

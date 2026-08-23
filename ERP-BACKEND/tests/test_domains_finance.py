@@ -127,6 +127,15 @@ class TestValidatePayment:
         with pytest.raises(ValueError, match="exceed invoice total"):
             validate_payment(30.0, Decimal("100.00"), Decimal("75.00"))
 
+    def test_payment_within_floating_point_epsilon_is_allowed(self):
+        """Boundary case: the 1e-6 tolerance should absorb tiny floating point
+        overshoot caused by binary float arithmetic, without raising."""
+        validate_payment(0.1 + 0.2, 0.3, 0)  # 0.1 + 0.2 == 0.30000000000000004 in binary float
+
+    def test_payment_just_beyond_epsilon_tolerance_raises_value_error(self):
+        with pytest.raises(ValueError, match="exceed invoice total"):
+            validate_payment(100.001, 100, 0)
+
 
 # ---------------------------------------------------------------------------
 # infrastructure.py

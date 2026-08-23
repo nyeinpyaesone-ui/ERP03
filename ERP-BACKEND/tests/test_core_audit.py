@@ -130,6 +130,18 @@ class TestAuditLogRecent:
 
         assert log.recent(limit=0) == []
 
+    def test_recent_negative_limit_uses_python_slice_semantics(self):
+        """Boundary case: `recent` slices with `self._events[-limit:]`, so a
+        negative limit is passed straight through to list slicing (e.g.
+        limit=-1 drops the oldest event rather than raising)."""
+        log = AuditLog()
+        for i in range(3):
+            log.record(actor_id=i, actor_kind="user", domain="d", action="a")
+
+        recent = log.recent(limit=-1)
+
+        assert [e.actor_id for e in recent] == [1, 2]
+
 
 class TestGlobalAuditLogSingleton:
     """Tests for the module-level `audit_log` singleton instance."""

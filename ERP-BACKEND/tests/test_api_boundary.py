@@ -127,6 +127,16 @@ class TestERPBoundaryQuery:
 
         assert result == {"metric": 1}
 
+    def test_query_name_without_domain_separator_raises_value_error(self):
+        """Boundary case: a registered name lacking a '.' cannot be split into
+        (domain, action), so the unpacking itself should raise ValueError
+        rather than silently proceeding."""
+        b = ERPBoundary()
+        b.register_query("dashboard", MagicMock(return_value={}))
+
+        with pytest.raises(ValueError):
+            b.query(name="dashboard", actor=DummyActor(), db=MagicMock())
+
 
 class TestERPBoundaryCommand:
     """Tests for ERPBoundary.command."""
@@ -196,6 +206,13 @@ class TestERPBoundaryCommand:
         result = b.command(name="hr.terminate", actor=actor, db=MagicMock())
 
         assert result == "ok"
+
+    def test_command_name_without_domain_separator_raises_value_error(self):
+        b = ERPBoundary()
+        b.register_command("terminate", MagicMock())
+
+        with pytest.raises(ValueError):
+            b.command(name="terminate", actor=DummyActor(), db=MagicMock())
 
 
 class TestGlobalBoundarySingleton:

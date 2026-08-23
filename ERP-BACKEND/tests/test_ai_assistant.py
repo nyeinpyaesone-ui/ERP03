@@ -1,6 +1,7 @@
 """
 Unit tests for the AI assistant module (app/ai/assistant.py).
 """
+import httpx
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -108,6 +109,20 @@ class TestQueryOllama:
 
         assert result == ""
 
+    @pytest.mark.asyncio
+    async def test_network_error_propagates_and_is_not_swallowed(self):
+        """Negative case: query_ollama has no try/except around the HTTP call,
+        so a connection failure must propagate to the caller instead of being
+        silently converted into an empty/default response."""
+        mock_client = MagicMock()
+        mock_client.post = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.ai.assistant.httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(httpx.ConnectError):
+                await query_ollama("prompt")
+
 
 class TestChatEndpoint:
     """Integration-style tests for the /chat endpoint built by build_router()."""
@@ -186,6 +201,19 @@ class TestChatEndpoint:
 
         assert response.status_code == 200
         assert response.json()["sources"] == []
+
+    def test_chat_propagates_500_when_ollama_backend_is_unreachable(self):
+        """Negative case: the chat endpoint has no error handling around
+        query_ollama, so a downstream failure should surface as a server
+        error rather than a fabricated 200 response."""
+        app = self._make_app(current_user=MagicMock(id=1))
+
+        with patch("app.ai.assistant.boundary.query", return_value=None), \
+             patch("app.ai.assistant.query_ollama", new=AsyncMock(side_effect=httpx.ConnectError("down"))):
+            client = TestClient(app, raise_server_exceptions=False)
+            response = client.post("/chat", json={"message": "hi"})
+
+        assert response.status_code == 500
 
 
 class TestMainAppWiring:
