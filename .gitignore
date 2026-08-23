@@ -1,70 +1,58 @@
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
-env/
-venv/
-.venv/
-.ENV
-.env
-.env.local
-.env.production
-.env.*.production
-!.env.example
-.pytest_cache/
-.mypy_cache/
-.coverage
-coverage/
-
-# Alembic
-alembic/versions/*.py.*
-
-# Build artifacts
-dist/
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
 *.egg-info/
+.installed.cfg
+*.egg
 
-# Logs
-*.log
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.env/
 
-# Environment specific
-.env.local
-.env.production
-.env.*.production
-
-# Secrets - NEVER commit actual secrets
-secrets/*.txt
-secrets/*.key
-secrets/*.pem
-!secrets/README.md
-
-# Editors
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
-.DS_Store
-Thumbs.db
+# Logs
+*.log
 
-# Compressed files
-*.zip
-*.gz
-*.tar
-*.tgz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
+# Environment
+.env
+.env.local
+*.env.*
+
+# Coverage
+.coverage
+htmlcov/
+.coverage.*
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+
+# Distribution / packaging
+.pybuild/
+.tox/
+.coverage
+.nox/
+```
