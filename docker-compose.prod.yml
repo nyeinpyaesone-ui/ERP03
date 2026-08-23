@@ -38,7 +38,9 @@ services:
     networks: [erp-network]
 
   erp-backend:
-    image: powerrangeranikg/erp-solution-backend:latest
+    build:
+      context: ./ERP-BACKEND
+      dockerfile: Dockerfile
     container_name: erp-backend
     restart: unless-stopped
     environment:
@@ -46,7 +48,7 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
       ENVIRONMENT: production
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://yourdomain.com}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://erp.anynoob.com}
     ports:
       - "8000:8000"
     depends_on:
@@ -57,14 +59,13 @@ services:
     networks: [erp-network]
 
   frontend:
-    image: powerrangeranikg/erp-solution-frontend:latest
+    build:
+      context: ./ERP-BACKEND/frontend-react
+      dockerfile: Dockerfile
     container_name: erp-frontend
     restart: unless-stopped
-    environment:
-      REACT_APP_API_URL: ${API_URL:-https://api.yourdomain.com}
-      REACT_APP_WS_URL: ${WS_URL:-wss://api.yourdomain.com}
     ports:
-      - "3000:3000"
+      - "3000:80"
     depends_on: [erp-backend]
     networks: [erp-network]
 
