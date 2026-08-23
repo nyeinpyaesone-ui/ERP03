@@ -126,17 +126,17 @@ def get_project(project_id: int, db: Session = Depends(get_db), current_user = D
 @router.put("/projects/{project_id}", response_model=ProjectResponse)
 def update_project(project_id: int, data: ProjectCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
-    Update a project's supplied fields and refresh its modification timestamp.
+    Update a project with the supplied field values and refresh its modification timestamp.
     
     Parameters:
-    	project_id (int): Identifier of the project to update.
-    	data (ProjectCreate): Fields and values to apply to the project.
+        project_id (int): Identifier of the project to update.
+        data (ProjectCreate): Field values to apply to the project.
     
     Raises:
-    	HTTPException: If the project does not exist.
+        HTTPException: If the project does not exist.
     
     Returns:
-    	Project: The updated project.
+        Project: The updated project.
     """
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
@@ -157,7 +157,10 @@ def create_task(data: TaskCreate, db: Session = Depends(get_db), current_user = 
     	data (TaskCreate): Task details, including the associated project identifier.
     
     Returns:
-    	Task: The persisted task.
+    	Task: The created task.
+    
+    Raises:
+    	HTTPException: If the associated project does not exist.
     """
     project = db.query(Project).filter(Project.id == data.project_id).first()
     if not project:
@@ -185,14 +188,17 @@ def list_project_tasks(project_id: int, db: Session = Depends(get_db), current_u
 @router.put("/tasks/{task_id}", response_model=TaskResponse)
 def update_task(task_id: int, data: dict, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
-    Update an existing task with the supplied fields.
+    Update an existing task with the supplied attribute values.
     
     Parameters:
     	task_id (int): Identifier of the task to update.
-    	data (dict): Field values to apply to the task.
+    	data (dict): Task attributes and values to apply.
     
     Returns:
     	Task: The updated task.
+    
+    Raises:
+    	HTTPException: If the task does not exist.
     """
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:

@@ -475,14 +475,14 @@ def register_exception_handlers(app: FastAPI):
     @app.exception_handler(SQLAlchemyError)
     async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
         """
-        Convert a SQLAlchemy database exception into a standardized JSON error response.
+        Convert a SQLAlchemy exception into a standardized JSON error response.
         
         Parameters:
-        	request (Request): The incoming request associated with the database error.
+        	request (Request): The request associated with the database error.
         	exc (SQLAlchemyError): The database exception that occurred.
         
         Returns:
-        	JSONResponse: A conflict response for integrity violations or an internal server error response for other database exceptions.
+        	JSONResponse: A 409 response for integrity violations or a 500 response for other database errors.
         """
         correlation_id = await get_correlation_id(request)
         logger.error(f"Database error", exc_info=True)
