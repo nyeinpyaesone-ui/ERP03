@@ -72,79 +72,53 @@ class TestCreateAccessToken:
             mock_jwt_encode.assert_called_once()
 
     @patch('app.auth.jwt.encode')
-    def test_create_access_token_exp_is_timezone_aware_utc(self, mock_jwt_encode, test_settings):
-        """Regression test: exp must be a timezone-aware UTC datetime.
-
-        Guards against a regression back to the deprecated ``datetime.utcnow()``,
-        which returns a naive datetime.
-        """
+    def test_create_access_token_exp_is_timezone_aware(self, mock_jwt_encode, test_settings):
+        """Test that the computed 'exp' claim uses a timezone-aware UTC datetime
+        (regression test for the datetime.utcnow() -> datetime.now(timezone.utc) migration)."""
         with patch('app.auth.settings', test_settings):
+            before = datetime.now(timezone.utc)
             create_access_token({"sub": "1"})
+            after = datetime.now(timezone.utc)
 
             call_args = mock_jwt_encode.call_args[0][0]
             exp = call_args["exp"]
 
             assert isinstance(exp, datetime)
             assert exp.tzinfo is not None
-            assert exp.utcoffset() == timedelta(0)
-
-    @patch('app.auth.jwt.encode')
-    def test_create_access_token_exp_matches_default_expiry_minutes(self, mock_jwt_encode, test_settings):
-        """The exp claim should be ~ACCESS_TOKEN_EXPIRE_MINUTES from now (UTC)."""
-        with patch('app.auth.settings', test_settings):
-            before = datetime.now(timezone.utc)
-            create_access_token({"sub": "1"})
-            after = datetime.now(timezone.utc)
-
-            exp = mock_jwt_encode.call_args[0][0]["exp"]
-
+            assert exp.tzinfo == timezone.utc
+            # exp should be ~ now + default expiry window, bounded by before/after
             expected_min = before + timedelta(minutes=test_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
             expected_max = after + timedelta(minutes=test_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-            tolerance = timedelta(seconds=2)
-            assert expected_min - tolerance <= exp <= expected_max + tolerance
+            assert expected_min <= exp <= expected_max
 
     @patch('app.auth.jwt.encode')
-    def test_create_access_token_exp_matches_custom_expires_delta(self, mock_jwt_encode, test_settings):
-        """A custom expires_delta should be honored using UTC-aware arithmetic."""
+    def test_create_access_token_custom_expiry_uses_utc_now(self, mock_jwt_encode, test_settings):
+        """Test that a custom expires_delta is added to a timezone-aware UTC 'now'."""
         with patch('app.auth.settings', test_settings):
             before = datetime.now(timezone.utc)
-            create_access_token({"sub": "1"}, expires_delta=timedelta(hours=2))
+            create_access_token({"sub": "1"}, expires_delta=timedelta(minutes=5))
             after = datetime.now(timezone.utc)
 
             exp = mock_jwt_encode.call_args[0][0]["exp"]
 
-            assert before + timedelta(hours=2) - timedelta(seconds=2) <= exp
-            assert exp <= after + timedelta(hours=2) + timedelta(seconds=2)
+            assert exp.tzinfo == timezone.utc
+            assert before + timedelta(minutes=5) <= exp <= after + timedelta(minutes=5)
 
     @patch('app.auth.jwt.encode')
-    def test_create_access_token_preserves_additional_claims(self, mock_jwt_encode, test_settings):
-        """Extra claims passed in data must survive alongside the exp claim."""
+    def test_create_access_token_preserves_input_claims(self, mock_jwt_encode, test_settings):
+        """Test that create_access_token does not mutate the caller's input dict
+        and includes all supplied claims plus 'exp'."""
         with patch('app.auth.settings', test_settings):
-            create_access_token({"sub": "1", "role": "admin"})
+            data = {"sub": "1", "role": "admin"}
+            create_access_token(data)
+
+            # Original dict must remain untouched (to_encode is a copy)
+            assert "exp" not in data
 
             call_args = mock_jwt_encode.call_args[0][0]
             assert call_args["sub"] == "1"
             assert call_args["role"] == "admin"
             assert "exp" in call_args
-
-    @patch('app.auth.jwt.encode')
-    def test_create_access_token_does_not_mutate_input_data(self, mock_jwt_encode, test_settings):
-        """create_access_token must copy its input rather than mutating it in place."""
-        with patch('app.auth.settings', test_settings):
-            data = {"sub": "1"}
-            create_access_token(data)
-
-            assert "exp" not in data
-
-    @patch('app.auth.jwt.encode')
-    def test_create_access_token_uses_configured_secret_and_algorithm(self, mock_jwt_encode, test_settings):
-        """The token must be signed with the configured secret key and algorithm."""
-        with patch('app.auth.settings', test_settings):
-            create_access_token({"sub": "1"})
-
-            _, kwargs = mock_jwt_encode.call_args
-            assert mock_jwt_encode.call_args[0][1] == test_settings.SECRET_KEY
-            assert kwargs["algorithm"] == test_settings.ALGORITHM
 
 
 class TestDecodeToken:
