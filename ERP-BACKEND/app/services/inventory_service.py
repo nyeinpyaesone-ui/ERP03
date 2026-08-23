@@ -5,7 +5,7 @@ This module contains the core business logic for inventory operations,
 separated from the API layer for better testability and maintainability.
 """
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
@@ -17,6 +17,11 @@ class InventoryService:
     """Service class for inventory business operations."""
 
     def __init__(self, db: Session):
+        """Initialize the service with a database session.
+        
+        Parameters:
+        	db (Session): Database session used for inventory operations.
+        """
         self.db = db
 
     def create_product(
@@ -39,10 +44,15 @@ class InventoryService:
         created_by: Optional[int] = None,
         commit: bool = True,
     ) -> Product:
-        """Create a new product with validation.
-
-        ``commit=False`` lets an API use-case include the mutation and its
-        audit event in one database transaction.
+        """
+        Create and persist a product after validating its pricing and inventory values.
+        
+        Parameters:
+            commit (bool): Whether to commit the transaction immediately. When false,
+                the changes are flushed without committing.
+        
+        Returns:
+            Product: The persisted product.
         """
         existing = self.db.query(Product).filter(Product.sku == sku).first()
         if existing:
@@ -101,7 +111,20 @@ class InventoryService:
         skip: int = 0,
         limit: int = 100,
     ) -> List[Product]:
-        """List products with optional filters."""
+        """
+        List products matching the specified filters and pagination settings.
+        
+        Parameters:
+            category (Optional[str]): Filter by product category.
+            status (Optional[str]): Filter by product status.
+            low_stock (bool): Restrict results to products at or below their reorder level.
+            search (Optional[str]): Case-insensitive substring to search for in product names.
+            skip (int): Number of matching products to skip.
+            limit (int): Maximum number of products to return.
+        
+        Returns:
+            List[Product]: The filtered products.
+        """
         query = self.db.query(Product)
         if category:
             query = query.filter(Product.category == category)
@@ -120,19 +143,20 @@ class InventoryService:
         updated_by: Optional[int] = None,
         commit: bool = True,
     ) -> Optional[Product]:
-        """Update an existing product and return the refreshed product.
-        
+        """
+        Update an existing product with validated field changes.
+
         Parameters:
-            product_id (int): Identifier of the product to update.
-            updates (dict): Product fields and replacement values.
-            updated_by (Optional[int]): Identifier of the user making the update.
-            commit (bool): Whether to commit the transaction instead of flushing it.
-        
+            product_id (int): ID of the product to update.
+            updates (dict): Product fields and values to apply.
+            updated_by (Optional[int]): ID of the user making the update.
+            commit (bool): Whether to commit the transaction immediately.
+
         Returns:
-            Optional[Product]: The updated product, or None if no product matches the identifier.
-        
+            Optional[Product]: The updated product, or None if the product does not exist.
+
         Raises:
-            ValueError: If the replacement SKU already exists or a price or stock quantity is negative.
+            ValueError: If the SKU is already in use or a price or stock quantity is negative.
         """
         product = self.get_product(product_id)
         if not product:
@@ -165,7 +189,15 @@ class InventoryService:
         return product
 
     def delete_product(self, product_id: int, commit: bool = True) -> bool:
-        """Delete a product."""
+        """Delete a product and optionally commit the transaction.
+        
+        Parameters:
+            product_id (int): Identifier of the product to delete.
+            commit (bool): Whether to commit the deletion immediately.
+        
+        Returns:
+            bool: `True` if the product was deleted, `False` if it was not found.
+        """
         product = self.get_product(product_id)
         if not product:
             return False
@@ -188,24 +220,31 @@ class InventoryService:
         commit: bool = True,
     ) -> InventoryMovement:
         """
-        Create an inventory movement and update the associated product stock.
-        
+        Create a stock movement and update the associated product inventory.
+
+        Uses SELECT FOR UPDATE NOWAIT to prevent race conditions in high-concurrency scenarios.
+
         Parameters:
             product_id (int): ID of the product affected by the movement.
-            movement_type (str): Movement type: ``"in"``, ``"out"``, ``"adjustment"``, or ``"transfer"``.
-            quantity (int): Movement quantity, which must be greater than or equal to zero.
+            movement_type (str): Movement type: "in", "out", "adjustment", or "transfer".
+            quantity (int): Movement quantity.
             unit_cost (Optional[Decimal]): Cost per unit for the movement.
             reference (Optional[str]): External reference for the movement.
             notes (Optional[str]): Additional movement notes.
             created_by (Optional[int]): ID of the user who created the movement.
-            commit (bool): Whether to commit the transaction; otherwise, flushes the changes.
-        
+            commit (bool): Whether to commit the transaction immediately.
+
         Returns:
-            InventoryMovement: The created inventory movement.
-        
+            InventoryMovement: The created stock movement.
+
         Raises:
-            ValueError: If the movement type or quantity is invalid, the product does not exist, or an outbound movement exceeds available stock.
+            ValueError: If movement type is invalid, quantity is negative, product not found,
+                       or insufficient stock for 'out' movements.
+            HTTPException: If product is locked by another transaction (409 Conflict).
         """
+        from fastapi import HTTPException
+
+
         valid_types = ["in", "out", "adjustment", "transfer"]
         if movement_type not in valid_types:
             raise ValueError(f"Invalid movement type. Must be one of: {valid_types}")
@@ -213,10 +252,11 @@ class InventoryService:
             raise ValueError("Quantity cannot be negative")
 
         try:
+            # Use SELECT FOR UPDATE NOWAIT to prevent deadlocks and fail fast on contention
             product = (
                 self.db.query(Product)
                 .filter(Product.id == product_id)
-                .with_for_update()
+                .with_for_update(nowait=True)
                 .first()
             )
             if not product:
@@ -243,6 +283,7 @@ class InventoryService:
             elif movement_type == "adjustment":
                 product.quantity_in_stock = quantity
             elif movement_type == "transfer":
+                # Transfer logic would require additional destination product handling
                 pass
 
             product.updated_at = datetime.now(timezone.utc)
@@ -253,7 +294,13 @@ class InventoryService:
                 self.db.flush()
             self.db.refresh(movement)
             return movement
-        except Exception:
+        except Exception as e:
+            # Check if this is a row lock timeout/wait error
+            if "could not obtain lock" in str(e).lower() or "nowait" in str(e).lower():
+                raise HTTPException(
+                    status_code=409,
+                    detail="Product is currently locked by another operation. Please retry."
+                )
             self.db.rollback()
             raise
 
@@ -264,7 +311,18 @@ class InventoryService:
         skip: int = 0,
         limit: int = 100,
     ) -> List[InventoryMovement]:
-        """Get inventory movements with optional filters."""
+        """
+        Retrieve inventory movements with optional product and movement-type filters.
+        
+        Parameters:
+            product_id (Optional[int]): Restricts results to movements for the specified product.
+            movement_type (Optional[str]): Restricts results to movements of the specified type.
+            skip (int): Number of matching movements to skip.
+            limit (int): Maximum number of movements to return.
+        
+        Returns:
+            List[InventoryMovement]: Matching movements ordered from newest to oldest.
+        """
         query = self.db.query(InventoryMovement)
         if product_id:
             query = query.filter(InventoryMovement.product_id == product_id)
@@ -273,7 +331,12 @@ class InventoryService:
         return query.order_by(InventoryMovement.created_at.desc()).offset(skip).limit(limit).all()
 
     def get_dashboard_stats(self) -> dict:
-        """Get inventory dashboard statistics using bounded aggregate queries."""
+        """
+        Calculate summary statistics for inventory and product categories.
+        
+        Returns:
+        	dict: A dictionary containing total product count, total stock value, low-stock count, out-of-stock count, and category-level product counts and values.
+        """
         metrics = self.db.query(
             func.count(Product.id).label("total_products"),
             func.coalesce(func.sum(Product.quantity_in_stock * Product.unit_price), 0).label("total_stock_value"),
@@ -307,7 +370,15 @@ class InventoryService:
         }
 
     def get_low_stock_products(self, limit: int = 50) -> List[Product]:
-        """Get products below reorder level."""
+        """
+        Return products whose stock quantity is at or below their reorder level, ordered by stock quantity.
+        
+        Parameters:
+            limit (int): Maximum number of products to return.
+        
+        Returns:
+            List[Product]: Products with the lowest stock quantities first.
+        """
         return self.db.query(Product).filter(
             Product.quantity_in_stock <= Product.reorder_level
         ).order_by(Product.quantity_in_stock.asc()).limit(limit).all()

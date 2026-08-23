@@ -66,6 +66,6 @@ resource "aws_elasticache_replication_group" "main" {
   tags = { Name = "erp-${var.environment}-redis", Environment = var.environment, ManagedBy = "terraform" }
 }
 
-output "redis_endpoint" { value = var.cluster_mode_enabled ? aws_elasticache_replication_group.main.configuration_endpoint_address : aws_elasticache_replication_group_group.primary_endpoint_address }
-output "redis_reader_endpoint" { value = aws_elasticache_replication_group.reader_endpoint_address }
+output "redis_endpoint" { value = var.cluster_mode_enabled ? aws_elasticache_replication_group.main.configuration_endpoint_address : aws_elasticache_replication_group.main.primary_endpoint_address }
+output "redis_reader_endpoint" { value = aws_elasticache_replication_group.main.reader_endpoint_address }
 output "security_group_id" { value = aws_security_group.redis.id }

@@ -19,14 +19,19 @@ class AnalyticsQueryService:
     """Read-only aggregation service for ERP dashboard and trend queries."""
 
     def __init__(self, db: Session):
+        """Initialize the service with a database session.
+        
+        Parameters:
+        	db (Session): SQLAlchemy session used to execute analytics queries.
+        """
         self.db = db
 
     def get_dashboard(self) -> dict:
-        """Build the dashboard with bounded, read-only aggregate query paths.
-
-        Each domain keeps one aggregate query where practical. CRM contact
-        count is folded into the deal aggregate as a scalar subquery so the
-        dashboard does not issue a separate contacts round trip.
+        """
+        Build a dashboard of aggregated revenue, CRM, workforce, inventory, project, task, and recent activity metrics.
+        
+        Returns:
+        	dict: Nested dashboard metrics, including revenue collection rate and up to ten recent activity records.
         """
         invoice_metrics = (
             self.db.query(
@@ -174,13 +179,13 @@ class AnalyticsQueryService:
     def get_monthly_trends(self, months_back: int = 6) -> dict:
         """
         Aggregate revenue and deal activity by month within the requested UTC lookback period.
-        
+
         Parameters:
             months_back (int): Number of 30-day periods to include in the lookback.
-        
+
         Returns:
-            dict: A dictionary containing monthly ``revenue`` entries with periods and
-                amounts, and monthly ``deals`` entries with periods, counts, and values.
+            dict: A dictionary containing monthly revenue entries with periods and
+                amounts, and monthly deals entries with periods, counts, and values.
         """
         start_date = datetime.now(timezone.utc) - timedelta(days=30 * months_back)
 

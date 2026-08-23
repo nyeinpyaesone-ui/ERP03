@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, field_validator
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from app.database import get_db
@@ -21,7 +21,7 @@ class UserCreate(BaseModel):
     password: str
     full_name: str
     role: str = "user"
-    
+
     @field_validator('password')
     @classmethod
     def validate_password(cls, v: str) -> str:
@@ -76,29 +76,29 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """
     Authenticate a user and issue an access token.
-    
+
     Parameters:
         form_data (OAuth2PasswordRequestForm): Submitted username and password credentials.
-    
+
     Returns:
         dict: Access token, token type, and authenticated user.
-    
+
     Raises:
         HTTPException: If the credentials are invalid.
     """
     user = db.query(User).filter(User.email == form_data.username).first()
-    
+
     # Use constant-time comparison to prevent timing attacks
     # Always perform password check even if user doesn't exist
     dummy_hash = get_password_hash("dummy_password_for_timing")
     password_valid = False
-    
+
     if user:
         password_valid = verify_password(form_data.password, user.hashed_password)
     else:
         # Perform dummy verification to maintain constant time
         verify_password(form_data.password, dummy_hash)
-    
+
     if not user or not password_valid:
         # Generic error message to prevent user enumeration
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -154,4 +154,3 @@ def update_user(
     db.refresh(user)
     log_activity(db, user_id=current_user.id, action="user_updated", entity_type="user", entity_id=user.id)
     return user
-

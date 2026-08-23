@@ -41,14 +41,14 @@ class RegulatedInventoryService:
     Production-grade service for regulated manufacturing inventory.
     Aligns with APICS SCOR and ISA-95 standards.
     """
-    
+
     def __init__(self, db_session: Session):
         self.db = db_session
-    
+
     # =========================================================================
     # ITEM MASTER MANAGEMENT
     # =========================================================================
-    
+
     def register_item_master(
         self,
         item_id: str,
@@ -76,11 +76,11 @@ class RegulatedInventoryService:
         self.db.commit()
         self.db.refresh(item)
         return item
-    
+
     # =========================================================================
     # INVENTORY DIMENSION MANAGEMENT
     # =========================================================================
-    
+
     def _generate_dimension_hash(
         self,
         site_id: str,
@@ -95,7 +95,7 @@ class RegulatedInventoryService:
         """
         dim_string = f"{site_id}|{warehouse_id}|{location_id}|{batch_id or ''}|{serial_number or ''}"
         return hashlib.md5(dim_string.encode()).hexdigest()
-    
+
     def get_or_create_dimension(
         self,
         site_id: str,
@@ -108,11 +108,11 @@ class RegulatedInventoryService:
         Retrieve or create normalized inventory dimension record.
         """
         dim_id = self._generate_dimension_hash(site_id, warehouse_id, location_id, batch_id, serial_number)
-        
+
         existing = self.db.get(ERPInventoryDimension, dim_id)
         if existing:
             return existing
-        
+
         dimension = ERPInventoryDimension(
             InventDimId=dim_id,
             SiteId=site_id,
@@ -125,11 +125,11 @@ class RegulatedInventoryService:
         self.db.commit()
         self.db.refresh(dimension)
         return dimension
-    
+
     # =========================================================================
     # GOODS RECEIPT PROCESSING (Inbound Logistics)
     # =========================================================================
-    
+
     def process_goods_receipt(
         self,
         item_id: str,
@@ -154,12 +154,12 @@ class RegulatedInventoryService:
         item = self.db.get(ERPItemMaster, item_id)
         if not item:
             raise ValueError(f"Item {item_id} not found in Item Master")
-        
+
         # Get/create dimension
         dimension = self.get_or_create_dimension(
             site_id, warehouse_id, location_id, batch_id
         )
-        
+
         # Create transaction (StatusReceipt=2: Received)
         transaction = ERPInventoryTransaction(
             ItemId=item_id,
@@ -173,17 +173,17 @@ class RegulatedInventoryService:
             CostAmountPhysical=cost_amount,
             DataAreaId=data_area_id
         )
-        
+
         self.db.add(transaction)
         self.db.commit()
         self.db.refresh(transaction)
-        
+
         return transaction
-    
+
     # =========================================================================
     # QUALITY RELEASE MANAGEMENT
     # =========================================================================
-    
+
     def release_quality_hold(
         self,
         batch_id: str,
@@ -210,14 +210,14 @@ class RegulatedInventoryService:
             "qualityNotes": quality_notes,
             "status": "RELEASED"
         }
-        
+
         # TODO: Integrate with Quality Management module
         return release_record
-    
+
     # =========================================================================
     # INVENTORY ALLOCATION (FEFO/FIFO Strategies)
     # =========================================================================
-    
+
     def allocate_inventory_fefo(
         self,
         item_id: str,
@@ -232,7 +232,7 @@ class RegulatedInventoryService:
         Returns list of allocated batches with quantities.
         """
         exclude_batch_ids = exclude_batch_ids or []
-        
+
         # Query available stock grouped by batch
         # In production, this would join with Batch table for expiry dates
         query = select(ERPInventoryTransaction).where(
@@ -242,9 +242,9 @@ class RegulatedInventoryService:
                 ERPInventoryTransaction.StatusIssue < 3      # Not Deducted
             )
         )
-        
+
         transactions = self.db.execute(query).scalars().all()
-        
+
         # Group by batch and calculate available quantities
         batch_availability: Dict[str, Decimal] = {}
         for txn in transactions:
@@ -253,17 +253,17 @@ class RegulatedInventoryService:
                 if dim.SiteId == site_id and dim.WarehouseId == warehouse_id:
                     current_qty = batch_availability.get(dim.BatchId, Decimal("0"))
                     batch_availability[dim.BatchId] = current_qty + txn.Quantity
-        
+
         # Sort batches by ID (proxy for expiry - in production use actual expiry date)
         sorted_batches = sorted(batch_availability.keys())
-        
+
         allocations = []
         remaining_needed = quantity_required
-        
+
         for batch_id in sorted_batches:
             available_qty = batch_availability[batch_id]
             allocate_qty = min(available_qty, remaining_needed)
-            
+
             if allocate_qty > 0:
                 allocations.append({
                     "batchId": batch_id,
@@ -271,22 +271,22 @@ class RegulatedInventoryService:
                     "availableQuantity": available_qty
                 })
                 remaining_needed -= allocate_qty
-            
+
             if remaining_needed <= 0:
                 break
-        
+
         if remaining_needed > 0:
             raise StockShortageException(
                 f"Insufficient stock for {item_id}. "
                 f"Required: {quantity_required}, Available: {quantity_required - remaining_needed}"
             )
-        
+
         return allocations
-    
+
     # =========================================================================
     # GOODS ISSUE PROCESSING (Outbound/Consumption)
     # =========================================================================
-    
+
     def process_goods_issue(
         self,
         item_id: str,
@@ -311,12 +311,12 @@ class RegulatedInventoryService:
             )
             # Use first allocation batch
             batch_id = allocations[0]["batchId"]
-        
+
         # Get dimension
         dimension = self.get_or_create_dimension(
             site_id, warehouse_id, "ISSUED", batch_id
         )
-        
+
         # Create negative transaction (StatusIssue=3: Deducted)
         transaction = ERPInventoryTransaction(
             ItemId=item_id,
@@ -329,17 +329,17 @@ class RegulatedInventoryService:
             DatePhysical=date.today(),
             DataAreaId=data_area_id
         )
-        
+
         self.db.add(transaction)
         self.db.commit()
         self.db.refresh(transaction)
-        
+
         return transaction
-    
+
     # =========================================================================
     # ELECTRONIC BATCH MANUFACTURING RECORD (EBMR)
     # =========================================================================
-    
+
     def create_ebmr_batch_record(
         self,
         batch_id: str,
@@ -360,11 +360,11 @@ class RegulatedInventoryService:
         product = self.db.get(ERPItemMaster, product_id)
         if not product:
             raise ValueError(f"Product {product_id} not found")
-        
+
         # Serialize complex structures to JSON
         sourcing_json = json.dumps(sourcing_and_procurement)
         production_json = json.dumps(production_execution_log)
-        
+
         ebmr = EBMRBatchRecord(
             batchId=batch_id,
             masterBatchRecordVersion=master_batch_record_version,
@@ -375,17 +375,17 @@ class RegulatedInventoryService:
             sourcingAndProcurement=sourcing_json,
             productionExecutionLog=production_json
         )
-        
+
         self.db.add(ebmr)
         self.db.commit()
         self.db.refresh(ebmr)
-        
+
         return ebmr
-    
+
     # =========================================================================
     # TRACEABILITY & GENEALOGY REPORTING
     # =========================================================================
-    
+
     def generate_genealogy_report(self, batch_id: str) -> Dict[str, Any]:
         """
         Generate full upstream/downstream traceability report.
@@ -395,14 +395,14 @@ class RegulatedInventoryService:
         ebmr = self.db.query(EBMRBatchRecord).filter(
             EBMRBatchRecord.batchId == batch_id
         ).first()
-        
+
         if not ebmr:
             raise ValueError(f"Batch {batch_id} not found")
-        
+
         # Parse JSON data
         sourcing_data = json.loads(ebmr.sourcingAndProcurement)
         production_data = json.loads(ebmr.productionExecutionLog)
-        
+
         # Build genealogy report
         report = {
             "batchId": ebmr.batchId,
@@ -429,9 +429,9 @@ class RegulatedInventoryService:
                 )
             }
         }
-        
+
         return report
-    
+
     def query_near_expiry_lots(
         self,
         days_threshold: int = 30,
@@ -444,7 +444,7 @@ class RegulatedInventoryService:
         # In production, this would query Batch table with expiry_date column
         # Placeholder implementation
         return []
-    
+
     def get_stock_by_batch(
         self,
         item_id: str,
@@ -457,9 +457,9 @@ class RegulatedInventoryService:
         query = select(ERPInventoryTransaction).where(
             ERPInventoryTransaction.ItemId == item_id
         )
-        
+
         transactions = self.db.execute(query).scalars().all()
-        
+
         # Aggregate by batch
         stock_by_batch: Dict[str, Decimal] = {}
         for txn in transactions:
@@ -469,10 +469,10 @@ class RegulatedInventoryService:
                     continue
                 if warehouse_id and dim.WarehouseId != warehouse_id:
                     continue
-                
+
                 current = stock_by_batch.get(dim.BatchId, Decimal("0"))
                 stock_by_batch[dim.BatchId] = current + txn.Quantity
-        
+
         return [
             {"batchId": batch_id, "quantity": qty}
             for batch_id, qty in stock_by_batch.items()

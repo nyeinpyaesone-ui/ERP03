@@ -218,16 +218,16 @@ class SearchService:
     ) -> Tuple[List[Dict[str, Any]], int]:
         """
         Search indexed entities using PostgreSQL full-text search and optional filters.
-        
+
         Parameters:
             query (str): Text to search for.
             entity_types (List[str], optional): Entity types to include.
             filters (Dict[str, Any], optional): Tag or metadata filters to apply.
             limit (int): Maximum number of results to return.
             offset (int): Number of matching results to skip.
-        
+
         Returns:
-            Tuple[List[Dict[str, Any]], int, int]: Formatted search results, total matching result count, and execution time in milliseconds.
+            Tuple[List[Dict[str, Any]], int, int]: Formatted search results, total matching count, and execution time in milliseconds.
         """
         start_time = datetime.now(timezone.utc)
 

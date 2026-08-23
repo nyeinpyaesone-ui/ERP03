@@ -304,7 +304,32 @@ class TestGetCurrentUserOptional:
     async def test_get_current_user_optional_invalid_token(self, mock_decode, mock_db):
         """Test with invalid token returns None."""
         mock_decode.side_effect = Exception("Invalid token")
-        
+
         result = await get_current_user_optional(token="invalid_token", db=mock_db)
-        
+
         assert result is None
+
+    @pytest.mark.asyncio
+    @patch('app.auth.decode_token')
+    async def test_get_current_user_optional_token_without_sub(self, mock_decode, mock_db):
+        """Test that a successfully decoded token missing 'sub' returns None without querying the DB."""
+        mock_decode.return_value = {"exp": 9999999999}  # No 'sub' field
+
+        result = await get_current_user_optional(token="valid_but_subless_token", db=mock_db)
+
+        assert result is None
+        mock_db.query.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch('app.auth.decode_token')
+    async def test_get_current_user_optional_inactive_user_filtered_out(self, mock_decode, mock_db):
+        """Test that the DB query filters on is_active, so an inactive user yields None."""
+        mock_decode.return_value = {"sub": "1"}
+        mock_query = MagicMock()
+        mock_query.filter.return_value.first.return_value = None
+        mock_db.query.return_value = mock_query
+
+        result = await get_current_user_optional(token="valid_token", db=mock_db)
+
+        assert result is None
+        mock_query.filter.assert_called_once()

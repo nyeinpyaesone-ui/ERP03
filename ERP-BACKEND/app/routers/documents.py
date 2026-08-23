@@ -26,6 +26,21 @@ async def upload_document(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    """
+    Upload and persist a validated document for the authenticated user.
+    
+    Parameters:
+        file (UploadFile): The file to validate and upload.
+        entity_type (Optional[str]): The type of entity associated with the document.
+        entity_id (Optional[int]): The identifier of the associated entity.
+        title (Optional[str]): The document title; defaults to the uploaded filename.
+    
+    Returns:
+        Document: The newly created document record.
+    
+    Raises:
+        HTTPException: With status code 400 if no file is provided or validation fails.
+    """
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 

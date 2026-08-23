@@ -251,16 +251,16 @@ def get_popular_queries(
 ):
     """
     Retrieve the most frequently recorded search queries within a specified period.
-    
+
     Parameters:
         limit (int): Maximum number of queries to return.
         days (int): Number of preceding days to include.
-    
+
     Returns:
         dict: A mapping containing query entries with each query's text, occurrence
             count, and average result count.
     """
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from sqlalchemy import func
 
     start_date = datetime.now(timezone.utc) - timedelta(days=days)

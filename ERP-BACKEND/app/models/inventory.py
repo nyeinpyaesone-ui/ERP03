@@ -1,8 +1,13 @@
 """Inventory models: Product, InventoryMovement."""
 from sqlalchemy import Column, Integer, String, Text, Numeric, ForeignKey, DateTime, Float
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from datetime import datetime, timezone
 from app.database import Base
+
+
+def _now_utc():
+    """Return current UTC timestamp for default values."""
+    return datetime.now(timezone.utc)
 
 
 class Product(Base):
@@ -24,8 +29,8 @@ class Product(Base):
     barcode = Column(String(100), nullable=True)
     weight = Column(Float, nullable=True)
     dimensions = Column(String(100), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now_utc)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now_utc, onupdate=_now_utc)
 
     # Relationships
     movements = relationship("InventoryMovement", back_populates="product", cascade="all, delete-orphan")
@@ -43,7 +48,7 @@ class InventoryMovement(Base):
     reference = Column(String(255), nullable=True)
     notes = Column(Text, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now_utc)
 
     # Relationships
     product = relationship("Product", back_populates="movements")
