@@ -1,0 +1,28 @@
+{
+  "dashboard": {
+    "title": "Business Intelligence",
+    "askAI": "Ask AI",
+    "kpi": {
+      "revenue": "Revenue",
+      "profitMargin": "Profit Margin",
+      "customerAcquisition": "New Customers",
+      "inventoryTurnover": "Inventory Turnover",
+      "averageOrderValue": "Avg Order Value",
+      "collectionPeriod": "Collection Period"
+    },
+    "charts": {
+      "revenue": "Revenue Trend",
+      "forecast": "Sales Forecast (AI)",
+      "inventory": "Inventory Value",
+      "inventoryDist": "Stock Status",
+      "customers": "Customer Acquisition"
+    }
+  },
+  "revenue": {
+    "title": "Revenue Analytics"
+  },
+  "inventory": {
+    "analytics": "Inventory Analytics"
+  }
+}
+
