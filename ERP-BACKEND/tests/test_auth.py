@@ -120,6 +120,37 @@ class TestCreateAccessToken:
             assert call_args["role"] == "admin"
             assert "exp" in call_args
 
+    @patch('app.auth.jwt.encode')
+    def test_create_access_token_empty_data(self, mock_jwt_encode, test_settings):
+        """Test that an empty claims dict still produces a token with only 'exp'."""
+        with patch('app.auth.settings', test_settings):
+            create_access_token({})
+
+            call_args = mock_jwt_encode.call_args[0][0]
+            assert set(call_args.keys()) == {"exp"}
+
+    @patch('app.auth.jwt.encode')
+    def test_create_access_token_zero_expires_delta_falls_back_to_default(
+        self, mock_jwt_encode, test_settings
+    ):
+        """
+        Boundary case: `timedelta(0)` is falsy in Python, so `expires_delta or
+        timedelta(minutes=...)` falls back to the configured default expiry
+        window instead of expiring immediately. This test documents/pins that
+        (perhaps surprising) existing behavior for the timezone-aware `now`
+        computation used in this PR.
+        """
+        with patch('app.auth.settings', test_settings):
+            before = datetime.now(timezone.utc)
+            create_access_token({"sub": "1"}, expires_delta=timedelta(0))
+            after = datetime.now(timezone.utc)
+
+            exp = mock_jwt_encode.call_args[0][0]["exp"]
+
+            expected_min = before + timedelta(minutes=test_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            expected_max = after + timedelta(minutes=test_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            assert expected_min <= exp <= expected_max
+
 
 class TestDecodeToken:
     """Tests for decode_token function."""

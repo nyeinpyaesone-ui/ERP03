@@ -86,3 +86,70 @@ class TestEBMRBatchRecordDateTimeDefaults:
         modified_column = EBMRBatchRecord.__table__.columns["LastModifiedDateTime"]
 
         assert created_column.default.arg is not modified_column.default.arg
+
+    def test_persisted_batch_record_has_datetime_fields_populated(self, db_session):
+        """Integration check: inserting an EBMRBatchRecord (with its required
+        ERPItemMaster parent) triggers the Python-side defaults for both
+        CreatedDateTime and LastModifiedDateTime."""
+        item = ERPItemMaster(
+            ItemId="ITEM-TZ-002",
+            ItemName="Test Finished Good",
+            ItemType="FinishedGood",
+            BaseUnitOfMeasure="EA",
+            ValuationMethod="FIFO",
+        )
+        db_session.add(item)
+        db_session.commit()
+
+        batch = EBMRBatchRecord(
+            batchId="BATCH-TZ-001",
+            masterBatchRecordVersion="1.0",
+            productId="ITEM-TZ-002",
+            productionOrderNumber="PO-001",
+            facilitySiteId="SITE-01",
+            sourcingAndProcurement="{}",
+            productionExecutionLog="{}",
+        )
+        db_session.add(batch)
+        db_session.commit()
+        db_session.refresh(batch)
+
+        assert batch.CreatedDateTime is not None
+        assert batch.LastModifiedDateTime is not None
+
+    def test_persisted_batch_record_last_modified_updates_on_change(self, db_session):
+        """The onupdate default must fire when an existing EBMRBatchRecord row
+        is modified, without raising a NameError for the `timezone` import."""
+        item = ERPItemMaster(
+            ItemId="ITEM-TZ-003",
+            ItemName="Test Finished Good 2",
+            ItemType="FinishedGood",
+            BaseUnitOfMeasure="EA",
+            ValuationMethod="FIFO",
+        )
+        db_session.add(item)
+        db_session.commit()
+
+        batch = EBMRBatchRecord(
+            batchId="BATCH-TZ-002",
+            masterBatchRecordVersion="1.0",
+            productId="ITEM-TZ-003",
+            productionOrderNumber="PO-002",
+            facilitySiteId="SITE-01",
+            sourcingAndProcurement="{}",
+            productionExecutionLog="{}",
+        )
+        db_session.add(batch)
+        db_session.commit()
+        db_session.refresh(batch)
+        original_last_modified = batch.LastModifiedDateTime
+
+        import time
+        time.sleep(0.01)
+
+        batch.masterBatchRecordVersion = "1.1"
+        db_session.commit()
+        db_session.refresh(batch)
+
+        assert batch.LastModifiedDateTime is not None
+        assert batch.LastModifiedDateTime >= original_last_modified
