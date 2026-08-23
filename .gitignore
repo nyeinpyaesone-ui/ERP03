@@ -87,6 +87,3 @@ Thumbs.db
 # Docker
 .dockerenv
 Dockerfile*
-
-# Alembic migrations
-alembic/versions/

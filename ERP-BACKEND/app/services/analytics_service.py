@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import extract, func, case, select
 from sqlalchemy.orm import Session
@@ -178,15 +178,16 @@ class AnalyticsQueryService:
 
     def get_monthly_trends(self, months_back: int = 6) -> dict:
         """
-        Aggregate invoice revenue and deal activity by month over a configurable lookback period.
-        
+        Aggregate revenue and deal activity by month within the requested UTC lookback period.
+
         Parameters:
-            months_back (int): Approximate number of months to include in the results.
-        
+            months_back (int): Number of 30-day periods to include in the lookback.
+
         Returns:
-            dict: A dictionary containing monthly revenue amounts and deal counts and values, keyed by period in `YYYY-MM` format.
+            dict: A dictionary containing monthly revenue entries with periods and
+                amounts, and monthly deals entries with periods, counts, and values.
         """
-        start_date = datetime.now() - timedelta(days=30 * months_back)
+        start_date = datetime.now(timezone.utc) - timedelta(days=30 * months_back)
 
         revenue_by_month = (
             self.db.query(

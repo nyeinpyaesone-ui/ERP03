@@ -145,16 +145,16 @@ class InventoryService:
     ) -> Optional[Product]:
         """
         Update an existing product with validated field changes.
-        
+
         Parameters:
             product_id (int): ID of the product to update.
             updates (dict): Product fields and values to apply.
             updated_by (Optional[int]): ID of the user making the update.
             commit (bool): Whether to commit the transaction immediately.
-        
+
         Returns:
             Optional[Product]: The updated product, or None if the product does not exist.
-        
+
         Raises:
             ValueError: If the SKU is already in use or a price or stock quantity is negative.
         """
@@ -221,25 +221,30 @@ class InventoryService:
     ) -> InventoryMovement:
         """
         Create a stock movement and update the associated product inventory.
-        
+
         Uses SELECT FOR UPDATE NOWAIT to prevent race conditions in high-concurrency scenarios.
-        
+
         Parameters:
             product_id (int): ID of the product affected by the movement.
-            movement_type (str): Movement type: ``"in"``, ``"out"``, ``"adjustment"``, or ``"transfer"``.
+            movement_type (str): Movement type: "in", "out", "adjustment", or "transfer".
             quantity (int): Movement quantity.
+            unit_cost (Optional[Decimal]): Cost per unit for the movement.
+            reference (Optional[str]): External reference for the movement.
+            notes (Optional[str]): Additional movement notes.
+            created_by (Optional[int]): ID of the user who created the movement.
             commit (bool): Whether to commit the transaction immediately.
-        
+
         Returns:
             InventoryMovement: The created stock movement.
-        
+
         Raises:
             ValueError: If movement type is invalid, quantity is negative, product not found,
                        or insufficient stock for 'out' movements.
             HTTPException: If product is locked by another transaction (409 Conflict).
         """
         from fastapi import HTTPException
-        
+
+
         valid_types = ["in", "out", "adjustment", "transfer"]
         if movement_type not in valid_types:
             raise ValueError(f"Invalid movement type. Must be one of: {valid_types}")

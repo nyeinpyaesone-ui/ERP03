@@ -3,7 +3,7 @@ Unit tests for the authentication module (app/auth.py).
 """
 import pytest
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 
 from app.auth import (
@@ -68,8 +68,88 @@ class TestCreateAccessToken:
             data = {"sub": "1"}
             expires_delta = timedelta(hours=2)
             token = create_access_token(data, expires_delta=expires_delta)
-            
+
             mock_jwt_encode.assert_called_once()
+
+    @patch('app.auth.jwt.encode')
+    def test_create_access_token_exp_is_timezone_aware(self, mock_jwt_encode, test_settings):
+        """Test that the computed 'exp' claim uses a timezone-aware UTC datetime
+        (regression test for the datetime.utcnow() -> datetime.now(timezone.utc) migration)."""
+        with patch('app.auth.settings', test_settings):
+            before = datetime.now(timezone.utc)
+            create_access_token({"sub": "1"})
+            after = datetime.now(timezone.utc)
+
+            call_args = mock_jwt_encode.call_args[0][0]
+            exp = call_args["exp"]
+
+            assert isinstance(exp, datetime)
+            assert exp.tzinfo is not None
+            assert exp.tzinfo == timezone.utc
+            # exp should be ~ now + default expiry window, bounded by before/after
+            expected_min = before + timedelta(minutes=test_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            expected_max = after + timedelta(minutes=test_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            assert expected_min <= exp <= expected_max
+
+    @patch('app.auth.jwt.encode')
+    def test_create_access_token_custom_expiry_uses_utc_now(self, mock_jwt_encode, test_settings):
+        """Test that a custom expires_delta is added to a timezone-aware UTC 'now'."""
+        with patch('app.auth.settings', test_settings):
+            before = datetime.now(timezone.utc)
+            create_access_token({"sub": "1"}, expires_delta=timedelta(minutes=5))
+            after = datetime.now(timezone.utc)
+
+            exp = mock_jwt_encode.call_args[0][0]["exp"]
+
+            assert exp.tzinfo == timezone.utc
+            assert before + timedelta(minutes=5) <= exp <= after + timedelta(minutes=5)
+
+    @patch('app.auth.jwt.encode')
+    def test_create_access_token_preserves_input_claims(self, mock_jwt_encode, test_settings):
+        """Test that create_access_token does not mutate the caller's input dict
+        and includes all supplied claims plus 'exp'."""
+        with patch('app.auth.settings', test_settings):
+            data = {"sub": "1", "role": "admin"}
+            create_access_token(data)
+
+            # Original dict must remain untouched (to_encode is a copy)
+            assert "exp" not in data
+
+            call_args = mock_jwt_encode.call_args[0][0]
+            assert call_args["sub"] == "1"
+            assert call_args["role"] == "admin"
+            assert "exp" in call_args
+
+    @patch('app.auth.jwt.encode')
+    def test_create_access_token_empty_data(self, mock_jwt_encode, test_settings):
+        """Test that an empty claims dict still produces a token with only 'exp'."""
+        with patch('app.auth.settings', test_settings):
+            create_access_token({})
+
+            call_args = mock_jwt_encode.call_args[0][0]
+            assert set(call_args.keys()) == {"exp"}
+
+    @patch('app.auth.jwt.encode')
+    def test_create_access_token_zero_expires_delta_falls_back_to_default(
+        self, mock_jwt_encode, test_settings
+    ):
+        """
+        Boundary case: `timedelta(0)` is falsy in Python, so `expires_delta or
+        timedelta(minutes=...)` falls back to the configured default expiry
+        window instead of expiring immediately. This test documents/pins that
+        (perhaps surprising) existing behavior for the timezone-aware `now`
+        computation used in this PR.
+        """
+        with patch('app.auth.settings', test_settings):
+            before = datetime.now(timezone.utc)
+            create_access_token({"sub": "1"}, expires_delta=timedelta(0))
+            after = datetime.now(timezone.utc)
+
+            exp = mock_jwt_encode.call_args[0][0]["exp"]
+
+            expected_min = before + timedelta(minutes=test_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            expected_max = after + timedelta(minutes=test_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            assert expected_min <= exp <= expected_max
 
 
 class TestDecodeToken:
