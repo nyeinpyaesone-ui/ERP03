@@ -20,12 +20,22 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.8.0"
     DEBUG: bool = False
 
+    # Infrastructure (compatibility)
+    PROJECT_NAME: str = "ERP SOLUTION System"
+    ENVIRONMENT: str = "production"
+    LOG_LEVEL: str = "INFO"
+
+    POSTGRES_USER: str = ""
+    POSTGRES_PASSWORD: str = ""
+    POSTGRES_DB: str = "erp03_prod"
+
     DATABASE_URL: str = ""
     REDIS_URL: str = "redis://localhost:6379/0"
 
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     INTEGRATION_SERVICE_ISSUER: str = "erp03"
     INTEGRATION_SERVICE_AUDIENCE: str = "erp-ai-integration"
 
@@ -50,7 +60,15 @@ class Settings(BaseSettings):
     WS_HEARTBEAT_INTERVAL: int = 30
     TEST_MODE: bool = False
 
+    API_V1_PREFIX: str = "/api/v1"
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
+
+    @property
+    def get_database_url(self) -> str:
+        if self.DATABASE_URL:
+            return self.DATABASE_URL
+        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@db:5432/{self.POSTGRES_DB}"
 
     def model_post_init(self, __context):
         if self.TEST_MODE:

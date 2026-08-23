@@ -1,4 +1,3 @@
-```
 # Python
 __pycache__/
 *.py[cod]
@@ -21,29 +20,38 @@ wheels/
 .installed.cfg
 *.egg
 
-# Environment
-.venv/
+# Virtual environments
 venv/
 env/
 ENV/
+.venv/
+.env/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
 
 # Logs
 *.log
 
+# Environment
+.env
+.env.local
+*.env.*
+
 # Coverage
 .coverage
-coverage/
 htmlcov/
 .coverage.*
 
 # Testing
 .pytest_cache/
 .mypy_cache/
-```
+
+# Distribution / packaging
+.pybuild/
+.tox/
+.coverage
+.nox/
