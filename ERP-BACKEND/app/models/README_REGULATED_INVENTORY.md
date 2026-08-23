@@ -129,19 +129,19 @@ def upgrade():
         # ... additional columns
         sa.PrimaryKeyConstraint('ItemId')
     )
-    
+
     op.create_table('ERP_InventoryDimension',
         sa.Column('InventDimId', sa.String(36), nullable=False),
         # ... additional columns
         sa.PrimaryKeyConstraint('InventDimId')
     )
-    
+
     op.create_table('ERP_InventoryTransaction',
         sa.Column('TransactionId', sa.Integer, autoincrement=True, nullable=False),
         # ... additional columns
         sa.PrimaryKeyConstraint('TransactionId')
     )
-    
+
     op.create_table('EBMR_BatchRecord',
         sa.Column('id', sa.Integer, autoincrement=True, nullable=False),
         # ... additional columns
