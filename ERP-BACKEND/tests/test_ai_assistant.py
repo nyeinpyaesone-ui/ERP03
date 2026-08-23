@@ -202,6 +202,25 @@ class TestChatEndpoint:
         assert response.status_code == 200
         assert response.json()["sources"] == []
 
+    def test_chat_context_field_is_accepted_but_not_included_in_prompt(self):
+        """Regression: ChatMessage.context is accepted by the request schema
+        but the /chat handler never reads `data.context` when building the
+        prompt, so supplying it should not raise and must not appear in the
+        text sent to Ollama."""
+        app = self._make_app(current_user=MagicMock(id=1))
+
+        with patch("app.ai.assistant.boundary.query", return_value=None), \
+             patch("app.ai.assistant.query_ollama", new=AsyncMock(return_value="ok")) as mock_ollama:
+            client = TestClient(app)
+            response = client.post(
+                "/chat",
+                json={"message": "hello", "context": "SENTINEL_CONTEXT_VALUE"},
+            )
+
+        assert response.status_code == 200
+        prompt_arg = mock_ollama.call_args[0][0]
+        assert "SENTINEL_CONTEXT_VALUE" not in prompt_arg
+
     def test_chat_propagates_500_when_ollama_backend_is_unreachable(self):
         """Negative case: the chat endpoint has no error handling around
         query_ollama, so a downstream failure should surface as a server

@@ -137,6 +137,23 @@ class TestERPBoundaryQuery:
         with pytest.raises(ValueError):
             b.query(name="dashboard", actor=DummyActor(), db=MagicMock())
 
+    def test_query_name_with_multiple_dots_splits_only_on_first_dot(self):
+        """Boundary case: `name.split(".", 1)` only splits on the first dot,
+        so a name like 'finance.dashboard.summary' resolves to domain
+        'finance' and action 'dashboard.summary', which then flows into the
+        audit log action as 'query.dashboard.summary'."""
+        b = ERPBoundary()
+        b.register_query("finance.dashboard.summary", MagicMock(return_value={"ok": True}))
+        actor = DummyActor(id=1, actor_kind="user")
+
+        with patch("app.api_boundary.boundary.audit_log.record") as mock_record:
+            result = b.query(name="finance.dashboard.summary", actor=actor, db=MagicMock())
+
+        assert result == {"ok": True}
+        _, kwargs = mock_record.call_args
+        assert kwargs["domain"] == "finance"
+        assert kwargs["action"] == "query.dashboard.summary"
+
 
 class TestERPBoundaryCommand:
     """Tests for ERPBoundary.command."""
@@ -213,6 +230,20 @@ class TestERPBoundaryCommand:
 
         with pytest.raises(ValueError):
             b.command(name="terminate", actor=DummyActor(), db=MagicMock())
+
+    def test_command_name_with_multiple_dots_splits_only_on_first_dot(self):
+        b = ERPBoundary()
+        fn = MagicMock(return_value="ok")
+        b.register_command("hr.employee.terminate", fn)
+        actor = DummyActor(id=2, actor_kind="user")
+
+        with patch("app.api_boundary.boundary.audit_log.record") as mock_record:
+            result = b.command(name="hr.employee.terminate", actor=actor, db=MagicMock())
+
+        assert result == "ok"
+        _, kwargs = mock_record.call_args
+        assert kwargs["domain"] == "hr"
+        assert kwargs["action"] == "command.employee.terminate"
 
 
 class TestGlobalBoundarySingleton:
