@@ -3,7 +3,7 @@ Unit tests for the authentication module (app/auth.py).
 """
 import pytest
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 
 from app.auth import (
@@ -68,8 +68,83 @@ class TestCreateAccessToken:
             data = {"sub": "1"}
             expires_delta = timedelta(hours=2)
             token = create_access_token(data, expires_delta=expires_delta)
-            
+
             mock_jwt_encode.assert_called_once()
+
+    @patch('app.auth.jwt.encode')
+    def test_create_access_token_exp_is_timezone_aware_utc(self, mock_jwt_encode, test_settings):
+        """Regression test: exp must be a timezone-aware UTC datetime.
+
+        Guards against a regression back to the deprecated ``datetime.utcnow()``,
+        which returns a naive datetime.
+        """
+        with patch('app.auth.settings', test_settings):
+            create_access_token({"sub": "1"})
+
+            call_args = mock_jwt_encode.call_args[0][0]
+            exp = call_args["exp"]
+
+            assert isinstance(exp, datetime)
+            assert exp.tzinfo is not None
+            assert exp.utcoffset() == timedelta(0)
+
+    @patch('app.auth.jwt.encode')
+    def test_create_access_token_exp_matches_default_expiry_minutes(self, mock_jwt_encode, test_settings):
+        """The exp claim should be ~ACCESS_TOKEN_EXPIRE_MINUTES from now (UTC)."""
+        with patch('app.auth.settings', test_settings):
+            before = datetime.now(timezone.utc)
+            create_access_token({"sub": "1"})
+            after = datetime.now(timezone.utc)
+
+            exp = mock_jwt_encode.call_args[0][0]["exp"]
+
+            expected_min = before + timedelta(minutes=test_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            expected_max = after + timedelta(minutes=test_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            tolerance = timedelta(seconds=2)
+            assert expected_min - tolerance <= exp <= expected_max + tolerance
+
+    @patch('app.auth.jwt.encode')
+    def test_create_access_token_exp_matches_custom_expires_delta(self, mock_jwt_encode, test_settings):
+        """A custom expires_delta should be honored using UTC-aware arithmetic."""
+        with patch('app.auth.settings', test_settings):
+            before = datetime.now(timezone.utc)
+            create_access_token({"sub": "1"}, expires_delta=timedelta(hours=2))
+            after = datetime.now(timezone.utc)
+
+            exp = mock_jwt_encode.call_args[0][0]["exp"]
+
+            assert before + timedelta(hours=2) - timedelta(seconds=2) <= exp
+            assert exp <= after + timedelta(hours=2) + timedelta(seconds=2)
+
+    @patch('app.auth.jwt.encode')
+    def test_create_access_token_preserves_additional_claims(self, mock_jwt_encode, test_settings):
+        """Extra claims passed in data must survive alongside the exp claim."""
+        with patch('app.auth.settings', test_settings):
+            create_access_token({"sub": "1", "role": "admin"})
+
+            call_args = mock_jwt_encode.call_args[0][0]
+            assert call_args["sub"] == "1"
+            assert call_args["role"] == "admin"
+            assert "exp" in call_args
+
+    @patch('app.auth.jwt.encode')
+    def test_create_access_token_does_not_mutate_input_data(self, mock_jwt_encode, test_settings):
+        """create_access_token must copy its input rather than mutating it in place."""
+        with patch('app.auth.settings', test_settings):
+            data = {"sub": "1"}
+            create_access_token(data)
+
+            assert "exp" not in data
+
+    @patch('app.auth.jwt.encode')
+    def test_create_access_token_uses_configured_secret_and_algorithm(self, mock_jwt_encode, test_settings):
+        """The token must be signed with the configured secret key and algorithm."""
+        with patch('app.auth.settings', test_settings):
+            create_access_token({"sub": "1"})
+
+            _, kwargs = mock_jwt_encode.call_args
+            assert mock_jwt_encode.call_args[0][1] == test_settings.SECRET_KEY
+            assert kwargs["algorithm"] == test_settings.ALGORITHM
 
 
 class TestDecodeToken:
