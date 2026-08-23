@@ -195,7 +195,7 @@ class TestIndexAllEntities:
     def test_index_all_contacts(self, mock_db):
         """Test indexing all contacts."""
         service = SearchService(db=mock_db)
-        
+
         # Mock contacts
         contact1 = MagicMock(spec=Contact)
         contact1.id = 1
@@ -208,22 +208,25 @@ class TestIndexAllEntities:
         contact1.status = "active"
         contact1.company_id = 1
         contact1.assigned_to = 2
-        
-        mock_db.query.return_value.all.return_value = [contact1]
-        
-        with patch.object(service, 'index_entity') as mock_index:
-            service.index_all_contacts()
-            
-            mock_index.assert_called_once()
-            args = mock_index.call_args[0]
-            assert args[0] == "contact"
-            assert args[1] == 1
-            assert "John Doe" in args[2]
+
+        # Mock keyset pagination query chain
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [contact1]
+
+        with patch.object(service, '_bulk_index', return_value=[]) as mock_bulk_index:
+            failures = service.index_all_contacts()
+
+            assert failures == []
+            mock_bulk_index.assert_called_once()
+            batch_data = mock_bulk_index.call_args[0][0]
+            assert len(batch_data) == 1
+            assert batch_data[0]["entity_type"] == "contact"
+            assert batch_data[0]["entity_id"] == 1
+            assert "John Doe" in batch_data[0]["title"]
 
     def test_index_all_companies(self, mock_db):
         """Test indexing all companies."""
         service = SearchService(db=mock_db)
-        
+
         company = MagicMock(spec=Company)
         company.id = 1
         company.name = "Test Corp"
@@ -232,19 +235,22 @@ class TestIndexAllEntities:
         company.address = "123 Main St"
         company.phone = "+1234567890"
         company.size = "50-200"
-        
-        mock_db.query.return_value.all.return_value = [company]
-        
-        with patch.object(service, 'index_entity') as mock_index:
-            service.index_all_companies()
-            
-            mock_index.assert_called_once()
-            assert "Test Corp" in mock_index.call_args[0][2]
+
+        # Mock keyset pagination query chain
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [company]
+
+        with patch.object(service, '_bulk_index', return_value=[]) as mock_bulk_index:
+            failures = service.index_all_companies()
+
+            assert failures == []
+            mock_bulk_index.assert_called_once()
+            batch_data = mock_bulk_index.call_args[0][0]
+            assert batch_data[0]["title"] == "Test Corp"
 
     def test_index_all_products(self, mock_db):
         """Test indexing all products."""
         service = SearchService(db=mock_db)
-        
+
         product = MagicMock(spec=Product)
         product.id = 1
         product.name = "Widget"
@@ -255,25 +261,23 @@ class TestIndexAllEntities:
         product.unit_price = 29.99
         product.quantity_in_stock = 100
         product.status = "active"
-        
-        mock_db.query.return_value.all.return_value = [product]
-        
-        with patch.object(service, 'index_entity') as mock_index:
-            service.index_all_products()
-            
-            mock_index.assert_called_once()
-            args = mock_index.call_args[0]
-            assert args[2] == "Widget"
-            # The metadata is passed as the 4th positional argument (metadata parameter)
-            # Check that price value is in the call
-            call_kwargs = mock_index.call_args
-            # index_entity signature: (entity_type, entity_id, title, content, metadata, tags)
-            assert call_kwargs[0][3]  # content should exist
+
+        # Mock keyset pagination query chain
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [product]
+
+        with patch.object(service, '_bulk_index', return_value=[]) as mock_bulk_index:
+            failures = service.index_all_products()
+
+            assert failures == []
+            mock_bulk_index.assert_called_once()
+            batch_data = mock_bulk_index.call_args[0][0]
+            assert batch_data[0]["title"] == "Widget"
+            assert batch_data[0]["content"]  # content should exist
 
     def test_index_all_employees(self, mock_db):
         """Test indexing all employees."""
         service = SearchService(db=mock_db)
-        
+
         employee = MagicMock(spec=Employee)
         employee.id = 1
         employee.employee_code = "EMP001"
@@ -283,19 +287,22 @@ class TestIndexAllEntities:
         employee.department_id = 1
         employee.status = "active"
         employee.employment_type = "full-time"
-        
-        mock_db.query.return_value.all.return_value = [employee]
-        
-        with patch.object(service, 'index_entity') as mock_index:
-            service.index_all_employees()
-            
-            mock_index.assert_called_once()
-            assert "EMP001" in mock_index.call_args[0][2]
+
+        # Mock keyset pagination query chain
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [employee]
+
+        with patch.object(service, '_bulk_index', return_value=[]) as mock_bulk_index:
+            failures = service.index_all_employees()
+
+            assert failures == []
+            mock_bulk_index.assert_called_once()
+            batch_data = mock_bulk_index.call_args[0][0]
+            assert batch_data[0]["title"] == "EMP001"
 
     def test_index_all_documents(self, mock_db):
         """Test indexing all documents."""
         service = SearchService(db=mock_db)
-        
+
         document = MagicMock(spec=Document)
         document.id = 1
         document.title = "Report Q1"
@@ -304,14 +311,17 @@ class TestIndexAllEntities:
         document.mime_type = "application/pdf"
         document.entity_type = "company"
         document.file_size = 102400
-        
-        mock_db.query.return_value.all.return_value = [document]
-        
-        with patch.object(service, 'index_entity') as mock_index:
-            service.index_all_documents()
-            
-            mock_index.assert_called_once()
-            assert "Report Q1" in mock_index.call_args[0][2]
+
+        # Mock keyset pagination query chain
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [document]
+
+        with patch.object(service, '_bulk_index', return_value=[]) as mock_bulk_index:
+            failures = service.index_all_documents()
+
+            assert failures == []
+            mock_bulk_index.assert_called_once()
+            batch_data = mock_bulk_index.call_args[0][0]
+            assert batch_data[0]["title"] == "Report Q1"
 
 
 class TestReindexAll:

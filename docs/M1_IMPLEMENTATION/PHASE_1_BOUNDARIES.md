@@ -253,8 +253,9 @@ use_cases:
 2. Inventory Reservation (Inventory Module)
    - Reserve stock for each line
    - Create reservation record
-   - ATOMIC transaction with SO creation
-   - FAIL: Return error, rollback SO
+   - SAGA: Compensation defined as unreserve-on-failure
+   - Idempotency via reservation_id from SO
+   - FAIL: Compensate by unreserving stock, mark SO as failed
    └─────────────┬─────────────┘
                  │
                  ↓
@@ -309,10 +310,10 @@ Boundary Violations:
 ```
              | Finance | Inventory | Sales | Procurement | HR
 -------------|---------|-----------|-------|-------------|-----
-Finance      |    -    |     W     |   W   |      W      |  W
-Inventory    |    R    |     -     |   W   |      W      |  -
+Finance      |    -    |     R     |   W   |      W      |  W
+Inventory    |    R    |     -     |   R   |      R      |  -
 Sales        |    R    |     R     |   -   |      R      |  -
-Procurement  |    R    |     W     |   R   |      -      |  -
+Procurement  |    R    |     R     |   R   |      -      |  -
 HR           |    R    |     -     |   R   |      R      |  -
 
 W = Write permission (can modify)

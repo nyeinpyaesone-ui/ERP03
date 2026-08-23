@@ -69,36 +69,34 @@ class DependencyGraph:
     def get_circular_dependencies(self) -> List[List[str]]:
         """Get all circular dependency cycles."""
         cycles = []
-        visited = set()
-        rec_stack = []
-        
-        def find_cycles(node: str, path: List[str]) -> None:
-            visited.add(node)
+        seen_cycles = set()
+
+        def find_cycles(node: str, path: List[str], path_set: Set[str]) -> None:
             path.append(node)
-            
+            path_set.add(node)
+
             for neighbor in self.get_module_dependencies(node):
-                if neighbor not in visited:
-                    find_cycles(neighbor, path.copy())
-                elif neighbor in path:
+                if neighbor in path_set:
                     # Found a cycle
                     cycle_start = path.index(neighbor)
                     cycle = path[cycle_start:] + [neighbor]
-                    if cycle not in cycles:
+                    # Canonicalize cycle for deduplication
+                    min_idx = cycle[:-1].index(min(cycle[:-1]))
+                    canonical = tuple(cycle[min_idx:-1] + cycle[:min_idx] + [cycle[-1]])
+                    if canonical not in seen_cycles:
+                        seen_cycles.add(canonical)
                         cycles.append(cycle)
-        
+                else:
+                    find_cycles(neighbor, path.copy(), path_set.copy())
+
         for module in self.module_dependencies:
-            if module not in visited:
-                find_cycles(module, [])
-        
+            find_cycles(module, [], set())
+
         return cycles
     
-    def get_critical_dependencies(self, module_name: str) -> Set[str]:
-        """Get critical (non-fallback) dependencies."""
-        critical = set()
-        for dep_module in self.get_module_dependencies(module_name):
-            if dep_module:  # Non-optional
-                critical.add(dep_module)
-        return critical
+    def get_module_dependencies_set(self, module_name: str) -> Set[str]:
+        """Get all module dependencies (criticality not modeled at module level)."""
+        return self.get_module_dependencies(module_name)
     
     def get_dependency_chain(self, module_name: str, max_depth: int = 5) -> Dict:
         """Get full dependency chain with depth limit."""

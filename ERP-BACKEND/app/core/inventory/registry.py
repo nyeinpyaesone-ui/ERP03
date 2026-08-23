@@ -175,6 +175,6 @@ class ModuleRegistry:
             "idempotency_required_count": len(self.get_routes_requiring_idempotency()),
             "saga_routes_count": len(self.get_routes_with_saga()),
             "routes": [
-                r.to_dict() for r in sorted(self.routes, key=lambda x: (x.module_name, x.path))
+                r.to_dict() for r in sorted(self.routes, key=lambda x: (x.module_name, x.path, x.method.value))
             ],
         }

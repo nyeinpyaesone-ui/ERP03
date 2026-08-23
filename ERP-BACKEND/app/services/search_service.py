@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -60,19 +61,24 @@ class SearchService:
             self.db.rollback()
             raise
 
-    def _bulk_index(self, batch_data: List[Dict[str, Any]]):
+    def _bulk_index(self, batch_data: List[Dict[str, Any]]) -> List[Tuple[str, int]]:
         """Bulk insert/update multiple entities efficiently using batch operations.
-        
+
         Args:
             batch_data: List of dictionaries containing entity data to index.
                        Each dict should have: entity_type, entity_id, title, content,
                        meta_data, tags, searchable_text
+
+        Returns:
+            List of (entity_type, entity_id) tuples that failed to index
         """
         from sqlalchemy.exc import IntegrityError
-        
+
         if not batch_data:
-            return
-        
+            return []
+
+        failed_entities = []
+
         # Prepare bulk upsert using PostgreSQL's execute_values for efficiency
         try:
             values_list = []
@@ -88,9 +94,10 @@ class SearchService:
                     "created_at": datetime.utcnow(),
                     "updated_at": datetime.utcnow()
                 })
-            
+
             # Use bulk insert with upsert on conflict
-            stmt = postgresql_insert(SearchIndex).values(values_list).on_conflict_do_update(
+            stmt = postgresql_insert(SearchIndex).values(values_list)
+            stmt = stmt.on_conflict_do_update(
                 index_elements=['entity_type', 'entity_id'],
                 set_={
                     'title': stmt.excluded.title,
@@ -120,6 +127,9 @@ class SearchService:
                     )
                 except Exception as inner_e:
                     logger.error(f"Failed to index entity {item['entity_type']}:{item['entity_id']}: {inner_e}")
+                    failed_entities.append((item["entity_type"], item["entity_id"]))
+
+        return failed_entities
 
     def remove_from_index(self, entity_type: str, entity_id: int):
         """Remove an entity from the search index."""
@@ -129,14 +139,19 @@ class SearchService:
         ).delete()
         self.db.commit()
 
-    def index_all_contacts(self, batch_size: int = 500):
-        """Index all contacts using batch processing to reduce memory footprint."""
-        offset = 0
+    def index_all_contacts(self, batch_size: int = 500) -> List[Tuple[str, int]]:
+        """Index all contacts using keyset pagination to reduce memory footprint.
+
+        Returns:
+            List of (entity_type, entity_id) tuples that failed to index
+        """
+        last_id = 0
+        all_failures = []
         while True:
-            contacts = self.db.query(Contact).limit(batch_size).offset(offset).all()
+            contacts = self.db.query(Contact).filter(Contact.id > last_id).order_by(Contact.id).limit(batch_size).all()
             if not contacts:
                 break
-            
+
             batch_data = []
             for c in contacts:
                 batch_data.append({
@@ -154,18 +169,25 @@ class SearchService:
                     "tags": [c.status, "contact"],
                     "searchable_text": f"{c.first_name} {c.last_name} {c.email or ''} {c.phone or ''} {c.title or ''} {c.notes or ''}"
                 })
-            
-            self._bulk_index(batch_data)
-            offset += batch_size
 
-    def index_all_companies(self, batch_size: int = 500):
-        """Index all companies using batch processing."""
-        offset = 0
+            all_failures.extend(self._bulk_index(batch_data))
+            last_id = contacts[-1].id
+
+        return all_failures
+
+    def index_all_companies(self, batch_size: int = 500) -> List[Tuple[str, int]]:
+        """Index all companies using keyset pagination.
+
+        Returns:
+            List of (entity_type, entity_id) tuples that failed to index
+        """
+        last_id = 0
+        all_failures = []
         while True:
-            companies = self.db.query(Company).limit(batch_size).offset(offset).all()
+            companies = self.db.query(Company).filter(Company.id > last_id).order_by(Company.id).limit(batch_size).all()
             if not companies:
                 break
-            
+
             batch_data = []
             for c in companies:
                 batch_data.append({
@@ -181,18 +203,25 @@ class SearchService:
                     "tags": [c.industry, "company"] if c.industry else ["company"],
                     "searchable_text": f"{c.name} {c.industry or ''} {c.website or ''} {c.address or ''} {c.phone or ''}"
                 })
-            
-            self._bulk_index(batch_data)
-            offset += batch_size
 
-    def index_all_products(self, batch_size: int = 500):
-        """Index all products using batch processing."""
-        offset = 0
+            all_failures.extend(self._bulk_index(batch_data))
+            last_id = companies[-1].id
+
+        return all_failures
+
+    def index_all_products(self, batch_size: int = 500) -> List[Tuple[str, int]]:
+        """Index all products using keyset pagination.
+
+        Returns:
+            List of (entity_type, entity_id) tuples that failed to index
+        """
+        last_id = 0
+        all_failures = []
         while True:
-            products = self.db.query(Product).limit(batch_size).offset(offset).all()
+            products = self.db.query(Product).filter(Product.id > last_id).order_by(Product.id).limit(batch_size).all()
             if not products:
                 break
-            
+
             batch_data = []
             for p in products:
                 batch_data.append({
@@ -210,18 +239,25 @@ class SearchService:
                     "tags": [p.category, p.status, "product"] if p.category else [p.status, "product"],
                     "searchable_text": f"{p.name} {p.sku} {p.description or ''} {p.category or ''} {p.supplier or ''}"
                 })
-            
-            self._bulk_index(batch_data)
-            offset += batch_size
 
-    def index_all_employees(self, batch_size: int = 500):
-        """Index all employees using batch processing."""
-        offset = 0
+            all_failures.extend(self._bulk_index(batch_data))
+            last_id = products[-1].id
+
+        return all_failures
+
+    def index_all_employees(self, batch_size: int = 500) -> List[Tuple[str, int]]:
+        """Index all employees using keyset pagination.
+
+        Returns:
+            List of (entity_type, entity_id) tuples that failed to index
+        """
+        last_id = 0
+        all_failures = []
         while True:
-            employees = self.db.query(Employee).limit(batch_size).offset(offset).all()
+            employees = self.db.query(Employee).filter(Employee.id > last_id).order_by(Employee.id).limit(batch_size).all()
             if not employees:
                 break
-            
+
             batch_data = []
             for e in employees:
                 batch_data.append({
@@ -238,18 +274,25 @@ class SearchService:
                     "tags": [e.status, e.employment_type, "employee"],
                     "searchable_text": f"{e.employee_code} {e.job_title or ''} {e.address or ''} {e.emergency_contact or ''}"
                 })
-            
-            self._bulk_index(batch_data)
-            offset += batch_size
 
-    def index_all_documents(self, batch_size: int = 500):
-        """Index all documents using batch processing."""
-        offset = 0
+            all_failures.extend(self._bulk_index(batch_data))
+            last_id = employees[-1].id
+
+        return all_failures
+
+    def index_all_documents(self, batch_size: int = 500) -> List[Tuple[str, int]]:
+        """Index all documents using keyset pagination.
+
+        Returns:
+            List of (entity_type, entity_id) tuples that failed to index
+        """
+        last_id = 0
+        all_failures = []
         while True:
-            documents = self.db.query(Document).limit(batch_size).offset(offset).all()
+            documents = self.db.query(Document).filter(Document.id > last_id).order_by(Document.id).limit(batch_size).all()
             if not documents:
                 break
-            
+
             batch_data = []
             for d in documents:
                 batch_data.append({
@@ -266,30 +309,45 @@ class SearchService:
                     "tags": [d.mime_type, d.entity_type, "document"] if d.mime_type else ["document"],
                     "searchable_text": f"{d.title} {d.filename} {d.extracted_text or ''} {d.mime_type or ''}"
                 })
-            
-            self._bulk_index(batch_data)
-            offset += batch_size
+
+            all_failures.extend(self._bulk_index(batch_data))
+            last_id = documents[-1].id
+
+        return all_failures
 
     def reindex_all(self):
-        """Reindex all entities."""
+        """Reindex all entities.
+
+        Returns:
+            Dict with indexed counts and any failures
+
+        Raises:
+            RuntimeError if any entities failed to index
+        """
         # Clear existing index
         self.db.query(SearchIndex).delete()
         self.db.commit()
 
-        # Index all entities
-        self.index_all_contacts()
-        self.index_all_companies()
-        self.index_all_products()
-        self.index_all_employees()
-        self.index_all_documents()
+        # Index all entities and track failures
+        all_failures = []
+        all_failures.extend(self.index_all_contacts())
+        all_failures.extend(self.index_all_companies())
+        all_failures.extend(self.index_all_products())
+        all_failures.extend(self.index_all_employees())
+        all_failures.extend(self.index_all_documents())
 
-        return {
+        result = {
             "contacts": self.db.query(SearchIndex).filter(SearchIndex.entity_type == "contact").count(),
             "companies": self.db.query(SearchIndex).filter(SearchIndex.entity_type == "company").count(),
             "products": self.db.query(SearchIndex).filter(SearchIndex.entity_type == "product").count(),
             "employees": self.db.query(SearchIndex).filter(SearchIndex.entity_type == "employee").count(),
             "documents": self.db.query(SearchIndex).filter(SearchIndex.entity_type == "document").count(),
         }
+
+        if all_failures:
+            raise RuntimeError(f"Failed to index {len(all_failures)} entities: {all_failures[:10]}")
+
+        return result
 
     # ==================== SEARCH ====================
 
