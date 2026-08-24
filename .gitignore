@@ -6,26 +6,34 @@ __pycache__/
 *.pyd
 
 # Dependencies
-venv/
 .venv/
-.env
-.env.local
-.env.*
+venv/
+env/
+ENV/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
 
 # Logs
 *.log
 
-# Coverage
-.coverage
-coverage/
-htmlcov/
+# Environment files
+.env
+.env.local
+*.env*
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
 
 # OS
 .DS_Store

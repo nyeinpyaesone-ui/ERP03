@@ -669,6 +669,42 @@ def get_deal_follow_ups(deal_id: int, db: Session = Depends(get_db), current_use
     
     return db.query(FollowUp).filter(FollowUp.deal_id == deal_id).all()
 
+@router.get("/contacts/{contact_id}/follow-ups", response_model=List[FollowUpResponse])
+def get_contact_follow_ups(contact_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Retrieve all follow-ups associated with a specific contact.
+    
+    Parameters:
+        contact_id (int): Identifier of the contact.
+    
+    Returns:
+        list[FollowUp]: All follow-ups linked to the contact.
+    """
+    # Verify contact exists
+    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    return db.query(FollowUp).filter(FollowUp.contact_id == contact_id).all()
+
+@router.get("/companies/{company_id}/follow-ups", response_model=List[FollowUpResponse])
+def get_company_follow_ups(company_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Retrieve all follow-ups associated with a specific company.
+    
+    Parameters:
+        company_id (int): Identifier of the company.
+    
+    Returns:
+        list[FollowUp]: All follow-ups linked to the company.
+    """
+    # Verify company exists
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    return db.query(FollowUp).filter(FollowUp.company_id == company_id).all()
+
 # Dashboard stats
 @router.get("/dashboard")
 def crm_dashboard(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
