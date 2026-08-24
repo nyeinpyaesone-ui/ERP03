@@ -1,0 +1,9 @@
+# Terraform files to ignore
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Sensitive variable files
+*.auto.tfvars
+secrets.tfvars
