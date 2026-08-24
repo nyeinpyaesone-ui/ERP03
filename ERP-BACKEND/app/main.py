@@ -143,6 +143,19 @@ app.middleware("http")(error_handler_middleware)
 
 @app.middleware("http")
 async def observability_middleware(request, call_next):
+    """
+    Track request metrics and attach a request identifier to the response.
+    
+    Parameters:
+    	request (Request): The incoming HTTP request.
+    	call_next (Callable): The handler for processing the request.
+    
+    Returns:
+    	response (Response): The response produced by the request handler.
+    
+    Raises:
+    	Exception: Re-raises exceptions raised while processing the request.
+    """
     start = perf_counter()
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     status_code = 500
