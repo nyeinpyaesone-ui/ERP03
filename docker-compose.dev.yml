@@ -1,0 +1,34 @@
+# Development environment overrides
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-devpassword}
+
+  redis:
+    ports:
+      - "6379:6379"
+    environment:
+      REDIS_PASSWORD: ""
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+
+  erp-backend:
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "true"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ERP-BACKEND:/app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  frontend:
+    ports:
+      - "3000:80"
+
+  ollama:
+    ports:
+      - "11434:11434"

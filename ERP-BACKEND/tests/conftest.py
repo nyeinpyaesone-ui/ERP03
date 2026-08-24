@@ -5,13 +5,16 @@ import os
 import sys
 import pytest
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Add app to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 # Set test mode environment variable BEFORE importing app modules
 os.environ['TEST_MODE'] = 'True'
+# Ensure SECRET_KEY is set for test mode to bypass validation errors
+if not os.getenv("SECRET_KEY"):
+    os.environ["SECRET_KEY"] = "test-secret-key-for-validation-only-12345678901234567890"
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -172,9 +175,14 @@ def mock_jwt_encode():
 
 @pytest.fixture
 def mock_jwt_decode():
-    """Mock JWT decode function."""
+    """
+    Provide a mocked JWT decoder with a test subject and future expiration time.
+    
+    Yields:
+        MagicMock: The patched JWT decoder.
+    """
     with patch('app.auth.jwt.decode') as mock:
-        mock.return_value = {"sub": "1", "exp": datetime.utcnow() + timedelta(minutes=60)}
+        mock.return_value = {"sub": "1", "exp": datetime.now(timezone.utc) + timedelta(minutes=60)}
         yield mock
 
 
