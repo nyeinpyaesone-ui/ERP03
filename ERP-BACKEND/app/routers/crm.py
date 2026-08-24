@@ -2,9 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional, List
+from pydantic import BaseModel, ConfigDict
+from datetime import datetime, date
 
 from app.database import get_db
-from app.models import Contact, Company, Deal
+from app.models import Contact, Company, Deal, FollowUp
 from app.auth import get_current_user, require_admin
 from app.services.activity_log import log_activity
 from app.schemas.crm import (
@@ -14,6 +16,44 @@ from app.schemas.crm import (
 )
 
 router = APIRouter()
+
+# FollowUp Schemas (inline - new feature from performance-optimization branch)
+class FollowUpCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    entity_type: str  # deal, contact, company
+    entity_id: int
+    scheduled_for: datetime
+    priority: str = "medium"  # low, medium, high, urgent
+
+class FollowUpUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    scheduled_for: Optional[datetime] = None
+    priority: Optional[str] = None
+    completed: Optional[bool] = None
+
+class FollowUpResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    description: Optional[str] = None
+    entity_type: str
+    entity_id: int
+    deal_id: Optional[int] = None
+    contact_id: Optional[int] = None
+    company_id: Optional[int] = None
+    scheduled_for: datetime
+    completed: bool
+    completed_at: Optional[datetime] = None
+    completed_by: Optional[int] = None
+    reminder_sent: bool
+    priority: str
+    created_by: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
 
 # Companies
 @router.post("/companies", response_model=CompanyResponse)
@@ -363,6 +403,231 @@ def delete_deal(deal_id: int, db: Session = Depends(get_db), current_user = Depe
     db.delete(deal)
     db.commit()
     return {"message": "Deal deleted"}
+
+# Follow-ups endpoints
+@router.post("/follow-ups", response_model=FollowUpResponse)
+def create_follow_up(data: FollowUpCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Create a follow-up task for a deal, contact, or company.
+    
+    Parameters:
+        data (FollowUpCreate): Follow-up details including title, scheduled time, and priority.
+    
+    Returns:
+        FollowUp: The newly created follow-up record.
+    
+    Raises:
+        HTTPException: If the related entity does not exist.
+    """
+    # Validate entity exists and set appropriate foreign key
+    deal_id = None
+    contact_id = None
+    company_id = None
+    
+    if data.entity_type == "deal":
+        entity = db.query(Deal).filter(Deal.id == data.entity_id).first()
+        if not entity:
+            raise HTTPException(status_code=404, detail="Deal not found")
+        deal_id = data.entity_id
+    elif data.entity_type == "contact":
+        entity = db.query(Contact).filter(Contact.id == data.entity_id).first()
+        if not entity:
+            raise HTTPException(status_code=404, detail="Contact not found")
+        contact_id = data.entity_id
+    elif data.entity_type == "company":
+        entity = db.query(Company).filter(Company.id == data.entity_id).first()
+        if not entity:
+            raise HTTPException(status_code=404, detail="Company not found")
+        company_id = data.entity_id
+    else:
+        raise HTTPException(status_code=400, detail="Invalid entity type. Must be 'deal', 'contact', or 'company'")
+    
+    follow_up = FollowUp(
+        title=data.title,
+        description=data.description,
+        entity_type=data.entity_type,
+        entity_id=data.entity_id,
+        deal_id=deal_id,
+        contact_id=contact_id,
+        company_id=company_id,
+        scheduled_for=data.scheduled_for,
+        priority=data.priority,
+        created_by=current_user.id
+    )
+    db.add(follow_up)
+    db.commit()
+    db.refresh(follow_up)
+    log_activity(db, user_id=current_user.id, action="follow_up_created", entity_type="follow_up", entity_id=follow_up.id)
+    return follow_up
+
+@router.get("/follow-ups", response_model=List[FollowUpResponse])
+def list_follow_ups(
+    skip: int = 0,
+    limit: int = 100,
+    entity_type: Optional[str] = None,
+    entity_id: Optional[int] = None,
+    completed: Optional[bool] = None,
+    priority: Optional[str] = None,
+    upcoming: Optional[bool] = None,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    List follow-ups with optional filtering.
+    
+    Parameters:
+        entity_type (Optional[str]): Filter by entity type (deal, contact, company).
+        entity_id (Optional[int]): Filter by specific entity ID.
+        completed (Optional[bool]): Filter by completion status.
+        priority (Optional[str]): Filter by priority level.
+        upcoming (Optional[bool]): If True, only show incomplete follow-ups scheduled for the future.
+    
+    Returns:
+        list[FollowUp]: Follow-ups matching the filters.
+    """
+    query = db.query(FollowUp)
+    
+    if entity_type:
+        query = query.filter(FollowUp.entity_type == entity_type)
+    if entity_id is not None:
+        query = query.filter(FollowUp.entity_id == entity_id)
+    if completed is not None:
+        query = query.filter(FollowUp.completed == completed)
+    if priority:
+        query = query.filter(FollowUp.priority == priority)
+    if upcoming:
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        query = query.filter(FollowUp.completed == False, FollowUp.scheduled_for >= now)
+    
+    return query.offset(skip).limit(limit).all()
+
+@router.get("/follow-ups/{follow_up_id}", response_model=FollowUpResponse)
+def get_follow_up(follow_up_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Retrieve a specific follow-up by its identifier.
+    
+    Parameters:
+        follow_up_id (int): The identifier of the follow-up to retrieve.
+    
+    Returns:
+        FollowUp: The requested follow-up record.
+    
+    Raises:
+        HTTPException: If no follow-up matches the identifier.
+    """
+    follow_up = db.query(FollowUp).filter(FollowUp.id == follow_up_id).first()
+    if not follow_up:
+        raise HTTPException(status_code=404, detail="Follow-up not found")
+    return follow_up
+
+@router.put("/follow-ups/{follow_up_id}", response_model=FollowUpResponse)
+def update_follow_up(follow_up_id: int, data: FollowUpUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Update a follow-up's details or mark it as completed.
+    
+    Parameters:
+        follow_up_id (int): Identifier of the follow-up to update.
+        data (FollowUpUpdate): Fields to change on the follow-up.
+    
+    Returns:
+        FollowUp: The updated follow-up.
+    
+    Raises:
+        HTTPException: If the follow-up does not exist.
+    """
+    follow_up = db.query(FollowUp).filter(FollowUp.id == follow_up_id).first()
+    if not follow_up:
+        raise HTTPException(status_code=404, detail="Follow-up not found")
+    
+    update_data = data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        if key == "completed" and value:
+            follow_up.completed = True
+            from datetime import datetime, timezone
+            follow_up.completed_at = datetime.now(timezone.utc)
+            follow_up.completed_by = current_user.id
+        else:
+            setattr(follow_up, key, value)
+    
+    from datetime import timezone
+    follow_up.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(follow_up)
+    log_activity(db, user_id=current_user.id, action="follow_up_updated", entity_type="follow_up", entity_id=follow_up.id)
+    return follow_up
+
+@router.delete("/follow-ups/{follow_up_id}")
+def delete_follow_up(follow_up_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Delete a follow-up by its identifier.
+    
+    Parameters:
+        follow_up_id (int): Identifier of the follow-up to delete.
+    
+    Returns:
+        dict: Confirmation message indicating that the follow-up was deleted.
+    """
+    follow_up = db.query(FollowUp).filter(FollowUp.id == follow_up_id).first()
+    if not follow_up:
+        raise HTTPException(status_code=404, detail="Follow-up not found")
+    db.delete(follow_up)
+    db.commit()
+    return {"message": "Follow-up deleted"}
+
+@router.get("/deals/{deal_id}/follow-ups", response_model=List[FollowUpResponse])
+def get_deal_follow_ups(deal_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Retrieve all follow-ups associated with a specific deal.
+    
+    Parameters:
+        deal_id (int): Identifier of the deal.
+    
+    Returns:
+        list[FollowUp]: All follow-ups linked to the deal.
+    """
+    # Verify deal exists
+    deal = db.query(Deal).filter(Deal.id == deal_id).first()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    
+    return db.query(FollowUp).filter(FollowUp.deal_id == deal_id).all()
+
+@router.get("/contacts/{contact_id}/follow-ups", response_model=List[FollowUpResponse])
+def get_contact_follow_ups(contact_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Retrieve all follow-ups associated with a specific contact.
+    
+    Parameters:
+        contact_id (int): Identifier of the contact.
+    
+    Returns:
+        list[FollowUp]: All follow-ups linked to the contact.
+    """
+    # Verify contact exists
+    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    return db.query(FollowUp).filter(FollowUp.contact_id == contact_id).all()
+
+@router.get("/companies/{company_id}/follow-ups", response_model=List[FollowUpResponse])
+def get_company_follow_ups(company_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Retrieve all follow-ups associated with a specific company.
+    
+    Parameters:
+        company_id (int): Identifier of the company.
+    
+    Returns:
+        list[FollowUp]: All follow-ups linked to the company.
+    """
+    # Verify company exists
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    return db.query(FollowUp).filter(FollowUp.company_id == company_id).all()
 
 # Dashboard stats
 @router.get("/dashboard")

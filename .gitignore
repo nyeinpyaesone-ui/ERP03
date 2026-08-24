@@ -2,8 +2,13 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
+*.pyo
+*.pyd
 *.so
 .Python
+
+# Build artifacts
 build/
 develop-eggs/
 dist/
@@ -36,13 +41,14 @@ ENV/
 # Logs
 *.log
 
-# Environment
+# Environment files
 .env
 .env.local
-*.env.*
+*.env*
 
 # Coverage
 .coverage
+coverage/
 htmlcov/
 .coverage.*
 
@@ -53,5 +59,8 @@ htmlcov/
 # Distribution / packaging
 .pybuild/
 .tox/
-.coverage
 .nox/
+
+# OS
+.DS_Store
+Thumbs.db
