@@ -1,9 +1,10 @@
 import os
 import re
 from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_, and_, text
+from sqlalchemy import func, or_, and_, text, cast
+from sqlalchemy.types import String
 from sqlalchemy.dialects.postgresql import array, insert as postgresql_insert
 import httpx
 
@@ -21,7 +22,20 @@ class SearchService:
     # ==================== INDEXING ====================
 
     def index_entity(self, entity_type: str, entity_id: int, title: str, content: str, metadata: Dict[str, Any] = None, tags: List[str] = None):
-        """Index or update an entity in the search index using atomic upsert."""
+        """
+        Add or update an entity's searchable record.
+        
+        Parameters:
+            entity_type (str): Entity classification used to identify the record.
+            entity_id (int): Unique identifier of the entity.
+            title (str): Entity title.
+            content (str): Main searchable content.
+            metadata (Dict[str, Any], optional): Additional scalar values to include in searchable text and stored metadata.
+            tags (List[str], optional): Tags associated with the entity.
+        
+        Raises:
+            IntegrityError: If the index operation violates a database integrity constraint.
+        """
         from sqlalchemy.exc import IntegrityError
         
         # Build searchable text
@@ -41,8 +55,8 @@ class SearchService:
                 searchable_text=searchable,
                 meta_data=metadata or {},
                 tags=tags or [],
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
             ).on_conflict_do_update(
                 index_elements=['entity_type', 'entity_id'],
                 set_={
@@ -51,7 +65,7 @@ class SearchService:
                     'searchable_text': searchable,
                     'meta_data': metadata or {},
                     'tags': tags or [],
-                    'updated_at': datetime.utcnow()
+                    'updated_at': datetime.now(timezone.utc)
                 }
             )
             self.db.execute(stmt)
@@ -61,18 +75,21 @@ class SearchService:
             raise
 
     def _bulk_index(self, batch_data: List[Dict[str, Any]]):
-        """Bulk insert/update multiple entities efficiently using batch operations.
-        
-        Args:
-            batch_data: List of dictionaries containing entity data to index.
-                       Each dict should have: entity_type, entity_id, title, content,
-                       meta_data, tags, searchable_text
+        """
+        Bulk inserts or updates search index records.
+
+        Parameters:
+            batch_data (List[Dict[str, Any]]): Records to index, including entity type,
+                entity ID, title, and content. Optional fields include searchable text,
+                metadata, and tags. If the bulk operation fails due to an integrity
+                error, records are indexed individually.
         """
         from sqlalchemy.exc import IntegrityError
-        
+        import logging
+
         if not batch_data:
             return
-        
+
         # Prepare bulk upsert using PostgreSQL's execute_values for efficiency
         try:
             values_list = []
@@ -85,10 +102,10 @@ class SearchService:
                     "searchable_text": item.get("searchable_text", f"{item['title']} {item['content']}"),
                     "meta_data": item.get("meta_data", {}),
                     "tags": item.get("tags", []),
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
+                    "created_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc)
                 })
-            
+
             # Use bulk insert with upsert on conflict
             stmt = postgresql_insert(SearchIndex).values(values_list).on_conflict_do_update(
                 index_elements=['entity_type', 'entity_id'],
@@ -98,7 +115,7 @@ class SearchService:
                     'searchable_text': stmt.excluded.searchable_text,
                     'meta_data': stmt.excluded.meta_data,
                     'tags': stmt.excluded.tags,
-                    'updated_at': datetime.utcnow()
+                    'updated_at': datetime.now(timezone.utc)
                 }
             )
             self.db.execute(stmt)
@@ -130,7 +147,12 @@ class SearchService:
         self.db.commit()
 
     def index_all_contacts(self, batch_size: int = 500):
-        """Index all contacts using batch processing to reduce memory footprint."""
+        """
+        Index all contacts in batches for full-text search.
+
+        Parameters:
+        	batch_size (int): The maximum number of contacts processed per batch.
+        """
         offset = 0
         while True:
             contacts = self.db.query(Contact).limit(batch_size).offset(offset).all()
@@ -159,7 +181,12 @@ class SearchService:
             offset += batch_size
 
     def index_all_companies(self, batch_size: int = 500):
-        """Index all companies using batch processing."""
+        """
+        Index all companies in batches.
+
+        Parameters:
+        	batch_size (int): Maximum number of companies to process per batch.
+        """
         offset = 0
         while True:
             companies = self.db.query(Company).limit(batch_size).offset(offset).all()
@@ -186,7 +213,12 @@ class SearchService:
             offset += batch_size
 
     def index_all_products(self, batch_size: int = 500):
-        """Index all products using batch processing."""
+        """
+        Index all products for search.
+
+        Parameters:
+        	batch_size (int): Maximum number of products processed per batch.
+        """
         offset = 0
         while True:
             products = self.db.query(Product).limit(batch_size).offset(offset).all()
@@ -215,7 +247,11 @@ class SearchService:
             offset += batch_size
 
     def index_all_employees(self, batch_size: int = 500):
-        """Index all employees using batch processing."""
+        """Index all employees in batches.
+
+        Parameters:
+        	batch_size (int): Maximum number of employees processed per batch.
+        """
         offset = 0
         while True:
             employees = self.db.query(Employee).limit(batch_size).offset(offset).all()
@@ -243,7 +279,12 @@ class SearchService:
             offset += batch_size
 
     def index_all_documents(self, batch_size: int = 500):
-        """Index all documents using batch processing."""
+        """
+        Index all documents in the search index using batches.
+
+        Parameters:
+        	batch_size (int): Maximum number of documents to process per batch.
+        """
         offset = 0
         while True:
             documents = self.db.query(Document).limit(batch_size).offset(offset).all()
@@ -271,7 +312,12 @@ class SearchService:
             offset += batch_size
 
     def reindex_all(self):
-        """Reindex all entities."""
+        """
+        Rebuild the search index for all supported entity types.
+        
+        Returns:
+        	dict: The number of indexed contacts, companies, products, employees, and documents.
+        """
         # Clear existing index
         self.db.query(SearchIndex).delete()
         self.db.commit()
@@ -301,8 +347,20 @@ class SearchService:
         limit: int = 20,
         offset: int = 0
     ) -> Tuple[List[Dict[str, Any]], int]:
-        """Full-text search with PostgreSQL."""
-        start_time = datetime.utcnow()
+        """
+        Search indexed entities using PostgreSQL full-text search and optional filters.
+
+        Parameters:
+            query (str): Text to search for.
+            entity_types (List[str], optional): Entity types to include.
+            filters (Dict[str, Any], optional): Tag or metadata filters to apply.
+            limit (int): Maximum number of results to return.
+            offset (int): Number of matching results to skip.
+
+        Returns:
+            Tuple[List[Dict[str, Any]], int, int]: Formatted search results, total matching count, and execution time in milliseconds.
+        """
+        start_time = datetime.now(timezone.utc)
 
         # Build base query
         base_query = self.db.query(SearchIndex)
@@ -337,9 +395,18 @@ class SearchService:
                             SearchIndex.meta_data[meta_key].as_boolean() == value
                         )
                     else:
-                        base_query = base_query.filter(
-                            SearchIndex.meta_data[meta_key].astext == str(value)
-                        )
+                        # For JSON column, use json_each or direct comparison depending on DB
+                        # Using PostgreSQL JSONB syntax with ->> operator via astext
+                        try:
+                            base_query = base_query.filter(
+                                SearchIndex.meta_data[meta_key].astext.cast(String) == str(value)
+                            )
+                        except AttributeError:
+                            # Fallback for databases that don't support astext (e.g., SQLite in tests)
+                            # Use a workaround by casting the whole JSON and comparing
+                            base_query = base_query.filter(
+                                cast(SearchIndex.meta_data[meta_key], String) == f'"{str(value)}"'
+                            )
 
         # Get total count
         total = base_query.count()
@@ -363,7 +430,7 @@ class SearchService:
                 "updated_at": r.updated_at.isoformat() if r.updated_at else None
             })
 
-        execution_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+        execution_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
         return formatted, total, execution_time
 
@@ -464,7 +531,7 @@ class SearchService:
 
         if existing:
             existing.frequency += 1
-            existing.last_used = datetime.utcnow()
+            existing.last_used = datetime.now(timezone.utc)
         else:
             suggestion = SearchSuggestion(
                 query_text=query.lower().strip(),
@@ -492,10 +559,18 @@ class SearchService:
         self.db.commit()
 
     def get_search_analytics(self, days: int = 30) -> Dict[str, Any]:
-        """Get search analytics."""
+        """
+        Summarize search activity and usage patterns for a recent period.
+        
+        Parameters:
+        	days (int): Number of preceding days to include in the analytics.
+        
+        Returns:
+        	Dict[str, Any]: Analytics containing query totals, zero-result statistics, average execution time, top queries, daily volume, and popular filters.
+        """
         from datetime import datetime, timedelta
 
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         # Total queries
         total_queries = self.db.query(SearchQuery).filter(
