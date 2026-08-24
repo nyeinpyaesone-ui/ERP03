@@ -46,13 +46,32 @@ def test_settings():
     return settings
 
 
+@pytest.fixture(scope="session", autouse=True)
+def setup_jsonb_mock():
+    """
+    Temporarily replaces the model JSONB type with a SQLite-compatible JSON type for tests.
+    """
+    import sqlalchemy.types as types
+    from unittest.mock import patch
+    
+    class MockJSONB(types.TypeDecorator):
+        impl = types.JSON
+        cache_ok = True
+    
+    # Patch JSONB in the models module
+    import app.models
+    with patch.object(app.models, 'JSONB', MockJSONB):
+        yield
+
+
 @pytest.fixture
 def engine():
     """Create an in-memory SQLite database for testing."""
     return create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
-        poolclass=StaticPool
+        poolclass=StaticPool,
+        echo=False
     )
 
 
