@@ -71,11 +71,11 @@ class DependencyGraph:
         cycles = []
         visited = set()
         rec_stack = []
-        
+
         def find_cycles(node: str, path: List[str]) -> None:
             visited.add(node)
             path.append(node)
-            
+
             for neighbor in self.get_module_dependencies(node):
                 if neighbor not in visited:
                     find_cycles(neighbor, path.copy())
@@ -85,13 +85,13 @@ class DependencyGraph:
                     cycle = path[cycle_start:] + [neighbor]
                     if cycle not in cycles:
                         cycles.append(cycle)
-        
+
         for module in self.module_dependencies:
             if module not in visited:
                 find_cycles(module, [])
-        
+
         return cycles
-    
+
     def get_critical_dependencies(self, module_name: str) -> Set[str]:
         """Get critical (non-fallback) dependencies."""
         critical = set()

@@ -309,10 +309,10 @@ Boundary Violations:
 ```
              | Finance | Inventory | Sales | Procurement | HR
 -------------|---------|-----------|-------|-------------|-----
-Finance      |    -    |     W     |   W   |      W      |  W
-Inventory    |    R    |     -     |   W   |      W      |  -
+Finance      |    -    |     R     |   W   |      W      |  W
+Inventory    |    R    |     -     |   R   |      R      |  -
 Sales        |    R    |     R     |   -   |      R      |  -
-Procurement  |    R    |     W     |   R   |      -      |  -
+Procurement  |    R    |     R     |   R   |      -      |  -
 HR           |    R    |     -     |   R   |      R      |  -
 
 W = Write permission (can modify)

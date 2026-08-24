@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -76,7 +77,7 @@ class SearchService:
     def _bulk_index(self, batch_data: List[Dict[str, Any]]):
         """
         Bulk inserts or updates search index records.
-        
+
         Parameters:
             batch_data (List[Dict[str, Any]]): Records to index, including entity type,
                 entity ID, title, and content. Optional fields include searchable text,
@@ -84,10 +85,10 @@ class SearchService:
                 error, records are indexed individually.
         """
         from sqlalchemy.exc import IntegrityError
-        
+
         if not batch_data:
             return
-        
+
         # Prepare bulk upsert using PostgreSQL's execute_values for efficiency
         try:
             values_list = []
@@ -103,7 +104,7 @@ class SearchService:
                     "created_at": datetime.utcnow(),
                     "updated_at": datetime.utcnow()
                 })
-            
+
             # Use bulk insert with upsert on conflict
             stmt = postgresql_insert(SearchIndex).values(values_list).on_conflict_do_update(
                 index_elements=['entity_type', 'entity_id'],
@@ -147,7 +148,7 @@ class SearchService:
     def index_all_contacts(self, batch_size: int = 500):
         """
         Index all contacts in batches for full-text search.
-        
+
         Parameters:
         	batch_size (int): The maximum number of contacts processed per batch.
         """
@@ -155,8 +156,8 @@ class SearchService:
         while True:
             contacts = self.db.query(Contact).limit(batch_size).offset(offset).all()
             if not contacts:
-                break
-            
+                return []
+
             batch_data = []
             for c in contacts:
                 batch_data.append({
@@ -174,14 +175,14 @@ class SearchService:
                     "tags": [c.status, "contact"],
                     "searchable_text": f"{c.first_name} {c.last_name} {c.email or ''} {c.phone or ''} {c.title or ''} {c.notes or ''}"
                 })
-            
+
             self._bulk_index(batch_data)
             offset += batch_size
 
     def index_all_companies(self, batch_size: int = 500):
         """
         Index all companies in batches.
-        
+
         Parameters:
         	batch_size (int): Maximum number of companies to process per batch.
         """
@@ -189,8 +190,8 @@ class SearchService:
         while True:
             companies = self.db.query(Company).limit(batch_size).offset(offset).all()
             if not companies:
-                break
-            
+                return []
+
             batch_data = []
             for c in companies:
                 batch_data.append({
@@ -206,14 +207,14 @@ class SearchService:
                     "tags": [c.industry, "company"] if c.industry else ["company"],
                     "searchable_text": f"{c.name} {c.industry or ''} {c.website or ''} {c.address or ''} {c.phone or ''}"
                 })
-            
+
             self._bulk_index(batch_data)
             offset += batch_size
 
     def index_all_products(self, batch_size: int = 500):
         """
         Index all products for search.
-        
+
         Parameters:
         	batch_size (int): Maximum number of products processed per batch.
         """
@@ -221,8 +222,8 @@ class SearchService:
         while True:
             products = self.db.query(Product).limit(batch_size).offset(offset).all()
             if not products:
-                break
-            
+                return []
+
             batch_data = []
             for p in products:
                 batch_data.append({
@@ -240,13 +241,13 @@ class SearchService:
                     "tags": [p.category, p.status, "product"] if p.category else [p.status, "product"],
                     "searchable_text": f"{p.name} {p.sku} {p.description or ''} {p.category or ''} {p.supplier or ''}"
                 })
-            
+
             self._bulk_index(batch_data)
             offset += batch_size
 
     def index_all_employees(self, batch_size: int = 500):
         """Index all employees in batches.
-        
+
         Parameters:
         	batch_size (int): Maximum number of employees processed per batch.
         """
@@ -254,8 +255,8 @@ class SearchService:
         while True:
             employees = self.db.query(Employee).limit(batch_size).offset(offset).all()
             if not employees:
-                break
-            
+                return []
+
             batch_data = []
             for e in employees:
                 batch_data.append({
@@ -272,14 +273,14 @@ class SearchService:
                     "tags": [e.status, e.employment_type, "employee"],
                     "searchable_text": f"{e.employee_code} {e.job_title or ''} {e.address or ''} {e.emergency_contact or ''}"
                 })
-            
+
             self._bulk_index(batch_data)
             offset += batch_size
 
     def index_all_documents(self, batch_size: int = 500):
         """
         Index all documents in the search index using batches.
-        
+
         Parameters:
         	batch_size (int): Maximum number of documents to process per batch.
         """
@@ -287,8 +288,8 @@ class SearchService:
         while True:
             documents = self.db.query(Document).limit(batch_size).offset(offset).all()
             if not documents:
-                break
-            
+                return []
+
             batch_data = []
             for d in documents:
                 batch_data.append({
@@ -305,14 +306,14 @@ class SearchService:
                     "tags": [d.mime_type, d.entity_type, "document"] if d.mime_type else ["document"],
                     "searchable_text": f"{d.title} {d.filename} {d.extracted_text or ''} {d.mime_type or ''}"
                 })
-            
+
             self._bulk_index(batch_data)
             offset += batch_size
 
     def reindex_all(self):
         """
         Rebuild the search index for all supported entity types.
-        
+
         Returns:
         	dict: The number of indexed contacts, companies, products, employees, and documents.
         """
@@ -320,20 +321,26 @@ class SearchService:
         self.db.query(SearchIndex).delete()
         self.db.commit()
 
-        # Index all entities
-        self.index_all_contacts()
-        self.index_all_companies()
-        self.index_all_products()
-        self.index_all_employees()
-        self.index_all_documents()
+        # Index all entities and track failures
+        all_failures = []
+        all_failures.extend(self.index_all_contacts())
+        all_failures.extend(self.index_all_companies())
+        all_failures.extend(self.index_all_products())
+        all_failures.extend(self.index_all_employees())
+        all_failures.extend(self.index_all_documents())
 
-        return {
+        result = {
             "contacts": self.db.query(SearchIndex).filter(SearchIndex.entity_type == "contact").count(),
             "companies": self.db.query(SearchIndex).filter(SearchIndex.entity_type == "company").count(),
             "products": self.db.query(SearchIndex).filter(SearchIndex.entity_type == "product").count(),
             "employees": self.db.query(SearchIndex).filter(SearchIndex.entity_type == "employee").count(),
             "documents": self.db.query(SearchIndex).filter(SearchIndex.entity_type == "document").count(),
         }
+
+        if all_failures:
+            raise RuntimeError(f"Failed to index {len(all_failures)} entities: {all_failures[:10]}")
+
+        return result
 
     # ==================== SEARCH ====================
 

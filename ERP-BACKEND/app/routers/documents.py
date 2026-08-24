@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import Optional, List
 import os
-import shutil
 import uuid
 
 from app.database import get_db
@@ -31,12 +30,12 @@ async def upload_document(
 
     # Read file content for validation
     file_content = await file.read()
-    
+
     # Validate file using security utilities
     is_valid, error_msg, safe_filename = validate_file_upload(file_content, file.filename)
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_msg)
-    
+
     # Generate unique safe filename
     unique_name = f"{uuid.uuid4()}_{safe_filename}"
     file_path = os.path.join(UPLOAD_DIR, unique_name)
@@ -48,7 +47,7 @@ async def upload_document(
     # Get MIME type from validation (we know it's valid at this point)
     import mimetypes
     mime_type, _ = mimetypes.guess_type(file.filename)
-    
+
     doc = Document(
         title=title or file.filename,
         filename=safe_filename,  # Store sanitized filename
