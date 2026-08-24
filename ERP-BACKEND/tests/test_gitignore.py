@@ -84,6 +84,69 @@ class TestGitignoreEnvironmentAndIde:
         assert expected in gitignore_patterns
 
 
+class TestGitignoreNativeAndExecutableArtifacts:
+    """Patterns added in this revision for compiled/native and executable
+    artifacts across ecosystems (not just Python)."""
+
+    @pytest.mark.parametrize(
+        "expected", ["*.pyc", "*.o", "*.obj", "*.dll", "*.exe", "*.class", "*.out"]
+    )
+    def test_contains_native_and_executable_patterns(self, gitignore_patterns, expected):
+        assert expected in gitignore_patterns
+
+
+class TestGitignoreSystemFiles:
+    """OS-specific junk files that should never be committed."""
+
+    @pytest.mark.parametrize("expected", [".DS_Store", "Thumbs.db"])
+    def test_contains_os_specific_file_patterns(self, gitignore_patterns, expected):
+        assert expected in gitignore_patterns
+
+
+class TestGitignoreEditorAndTempFiles:
+    """Editor swap/backup files and generic temp files."""
+
+    @pytest.mark.parametrize("expected", ["*.tmp", "*.swp", "*.swo"])
+    def test_contains_temp_and_swap_file_patterns(self, gitignore_patterns, expected):
+        assert expected in gitignore_patterns
+
+
+class TestGitignoreBuildAndCoverageDirectories:
+    """Additional build/coverage directories introduced in this revision."""
+
+    @pytest.mark.parametrize(
+        "expected", ["target/", ".gradle/", "coverage/", "htmlcov/", ".coverage"]
+    )
+    def test_contains_build_and_coverage_directory_patterns(self, gitignore_patterns, expected):
+        assert expected in gitignore_patterns
+
+
+class TestGitignoreArchivePatterns:
+    """This revision adds an entirely new 'Archives' section covering a wide
+    range of compressed/archive file extensions. Every pattern listed there
+    should be present verbatim."""
+
+    ARCHIVE_PATTERNS = [
+        "*.zip", "*.gz", "*.tar", "*.tgz", "*.bz2", "*.xz", "*.7z", "*.rar",
+        "*.zst", "*.lz4", "*.lzh", "*.cab", "*.arj", "*.rpm", "*.deb", "*.Z",
+        "*.lz", "*.lzo", "*.tar.gz", "*.tar.bz2", "*.tar.xz", "*.tar.zst",
+    ]
+
+    @pytest.mark.parametrize("expected", ARCHIVE_PATTERNS)
+    def test_contains_archive_pattern(self, gitignore_patterns, expected):
+        assert expected in gitignore_patterns
+
+    def test_archive_patterns_have_no_duplicates(self, gitignore_patterns):
+        """Regression: guards against accidentally duplicating an archive
+        pattern (e.g. copy-paste errors) when this long list was authored."""
+        archive_lines = [p for p in gitignore_patterns if p in self.ARCHIVE_PATTERNS]
+        assert len(archive_lines) == len(set(archive_lines))
+
+    def test_all_archive_patterns_present_count_matches(self, gitignore_patterns):
+        present = [p for p in self.ARCHIVE_PATTERNS if p in gitignore_patterns]
+        assert len(present) == len(self.ARCHIVE_PATTERNS)
+
+
 class TestGitignoreSecretsRegression:
     """Security-focused regression checks.
 

@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.services.search_service import SearchService
-from app.models import Contact, Company, Product, Employee, Document
+from app.models import Contact, Company, Product, Employee, Document, SearchIndex
 
 # Mock the missing models for testing
 class MockSearchIndex:
@@ -48,155 +48,203 @@ class TestSearchServiceInit:
 
 
 class TestIndexEntity:
-    """Tests for index_entity method."""
+    """Tests for index_entity method (atomic upsert via PostgreSQL ON CONFLICT).
 
-    def test_index_entity_new(self, mock_db):
-        """Test indexing a new entity."""
-        from sqlalchemy.exc import IntegrityError
-        
-        service = SearchService(db=mock_db)
-        # Simulate IntegrityError to trigger fallback path for testing
-        mock_db.execute.side_effect = IntegrityError("constraint", {}, None)
-        # Setup mock for fallback query path (new entity, so first() returns None)
-        mock_db.query.return_value.filter.return_value.first.return_value = None
-        
-        service.index_entity(
-            entity_type="contact",
-            entity_id=1,
-            title="John Doe",
-            content="Test contact content",
-            metadata={"email": "john@example.com"},
-            tags=["contact", "lead"]
-        )
-        
-        # Verify add was called (in fallback path)
-        mock_db.add.assert_called_once()
-        mock_db.commit.assert_called()
-        
-        # Verify the indexed entity has correct attributes
-        indexed_entity = mock_db.add.call_args[0][0]
-        assert indexed_entity.entity_type == "contact"
-        assert indexed_entity.entity_id == 1
-        assert indexed_entity.title == "John Doe"
-        assert "Test contact content" in indexed_entity.content
-        assert "John Doe" in indexed_entity.searchable_text
-        assert indexed_entity.meta_data == {"email": "john@example.com"}
-        assert indexed_entity.tags == ["contact", "lead"]
+    `index_entity` no longer has a query-and-update fallback: on IntegrityError
+    it now rolls back and re-raises the exception.
+    """
 
-    def test_index_entity_update_existing(self, mock_db):
-        """Test updating an existing indexed entity via fallback path."""
-        from sqlalchemy.exc import IntegrityError
-        
-        service = SearchService(db=mock_db)
-        
-        # Simulate IntegrityError to trigger fallback query-and-update path
-        mock_db.execute.side_effect = IntegrityError('test', 'params', 'orig')
+    def test_index_entity_success_executes_upsert_and_commits(self, mock_db):
+        """Test that a successful call builds an upsert statement, executes it, and commits."""
+        with patch('app.services.search_service.postgresql_insert') as mock_pg_insert:
+            mock_stmt = MagicMock()
+            mock_pg_insert.return_value.values.return_value.on_conflict_do_update.return_value = mock_stmt
 
-        # Mock existing index entry with required attributes
-        existing_index = MagicMock()
-        existing_index.title = "Old Title"
-        existing_index.content = "Old Content"
-        existing_index.searchable_text = "old text"
-        existing_index.meta_data = {}
-        existing_index.tags = []
-        existing_index.updated_at = None
-        mock_db.query.return_value.filter.return_value.first.return_value = existing_index
+            service = SearchService(db=mock_db)
+            service.index_entity(
+                entity_type="contact",
+                entity_id=1,
+                title="John Doe",
+                content="Test contact content",
+                metadata={"email": "john@example.com"},
+                tags=["contact", "lead"]
+            )
 
-        service.index_entity(
-            entity_type="contact",
-            entity_id=1,
-            title="Jane Doe",
-            content="Updated content"
-        )
+            mock_pg_insert.assert_called_once_with(SearchIndex)
+            values_kwargs = mock_pg_insert.return_value.values.call_args.kwargs
+            assert values_kwargs["entity_type"] == "contact"
+            assert values_kwargs["entity_id"] == 1
+            assert values_kwargs["title"] == "John Doe"
+            assert values_kwargs["content"] == "Test contact content"
+            assert "John Doe" in values_kwargs["searchable_text"]
+            assert values_kwargs["meta_data"] == {"email": "john@example.com"}
+            assert values_kwargs["tags"] == ["contact", "lead"]
 
-        # Verify update was performed (not add)
-        mock_db.add.assert_not_called()
-        mock_db.commit.assert_called()
+            mock_db.execute.assert_called_once_with(mock_stmt)
+            mock_db.commit.assert_called_once()
+            mock_db.rollback.assert_not_called()
 
-        # Verify attributes were updated in fallback path
-        assert existing_index.title == "Jane Doe"
-        assert existing_index.content == "Updated content"
-        assert "Jane Doe" in existing_index.searchable_text
-        assert existing_index.updated_at is not None
+    def test_index_entity_conflict_update_uses_new_values(self, mock_db):
+        """Test that the ON CONFLICT DO UPDATE 'set_' clause reflects the new values."""
+        with patch('app.services.search_service.postgresql_insert') as mock_pg_insert:
+            mock_stmt = MagicMock()
+            mock_pg_insert.return_value.values.return_value.on_conflict_do_update.return_value = mock_stmt
+
+            service = SearchService(db=mock_db)
+            service.index_entity(
+                entity_type="contact",
+                entity_id=1,
+                title="Jane Doe",
+                content="Updated content"
+            )
+
+            on_conflict_kwargs = mock_pg_insert.return_value.values.return_value.on_conflict_do_update.call_args.kwargs
+            assert on_conflict_kwargs["index_elements"] == ["entity_type", "entity_id"]
+            assert on_conflict_kwargs["set_"]["title"] == "Jane Doe"
+            assert on_conflict_kwargs["set_"]["content"] == "Updated content"
 
     def test_index_entity_with_metadata_values(self, mock_db):
         """Test indexing entity with various metadata value types."""
-        from sqlalchemy.exc import IntegrityError
-        
-        service = SearchService(db=mock_db)
-        # Setup mock for fallback path - new entity so first() returns None
-        mock_db.query.return_value.filter.return_value.first.return_value = None
-        # Mock execute to raise IntegrityError to trigger fallback path
-        mock_db.execute.side_effect = IntegrityError("test", {}, {})
+        with patch('app.services.search_service.postgresql_insert') as mock_pg_insert:
+            mock_stmt = MagicMock()
+            mock_pg_insert.return_value.values.return_value.on_conflict_do_update.return_value = mock_stmt
 
-        service.index_entity(
-            entity_type="product",
-            entity_id=1,
-            title="Product A",
-            content="Product description",
-            metadata={
-                "price": 99.99,  # float
-                "quantity": 10,  # int
-                "sku": "ABC123",  # str
-                "active": True  # bool (should be excluded as per isinstance check)
-            }
-        )
+            service = SearchService(db=mock_db)
+            service.index_entity(
+                entity_type="product",
+                entity_id=1,
+                title="Product A",
+                content="Product description",
+                metadata={
+                    "price": 99.99,  # float
+                    "quantity": 10,  # int
+                    "sku": "ABC123",  # str
+                    "active": True  # bool (should be included as per isinstance check)
+                }
+            )
 
-        # Verify add was called in fallback path
-        mock_db.add.assert_called_once()
-        indexed_entity = mock_db.add.call_args[0][0]
-        searchable = indexed_entity.searchable_text
+            searchable = mock_pg_insert.return_value.values.call_args.kwargs["searchable_text"]
 
-        assert "99.99" in searchable
-        assert "10" in searchable
-        assert "ABC123" in searchable
-        # Note: In Python, bool is a subclass of int, so True passes isinstance(value, (str, int, float))
-        # This test documents the actual behavior of the code
-        assert "True" in searchable  # Boolean IS added because bool is subclass of int
+            assert "99.99" in searchable
+            assert "10" in searchable
+            assert "ABC123" in searchable
+            # Note: In Python, bool is a subclass of int, so True passes isinstance(value, (str, int, float))
+            # This test documents the actual behavior of the code
+            assert "True" in searchable  # Boolean IS added because bool is subclass of int
 
     def test_index_entity_empty_metadata_and_tags(self, mock_db):
-        """Test indexing entity with empty metadata and tags."""
+        """Test indexing entity without metadata/tags defaults to empty dict/list."""
+        with patch('app.services.search_service.postgresql_insert') as mock_pg_insert:
+            mock_stmt = MagicMock()
+            mock_pg_insert.return_value.values.return_value.on_conflict_do_update.return_value = mock_stmt
+
+            service = SearchService(db=mock_db)
+            service.index_entity(
+                entity_type="company",
+                entity_id=1,
+                title="Test Company",
+                content="Content"
+            )
+
+            values_kwargs = mock_pg_insert.return_value.values.call_args.kwargs
+            assert values_kwargs["meta_data"] == {}
+            assert values_kwargs["tags"] == []
+
+    def test_index_entity_integrity_error_rolls_back_and_reraises(self, mock_db):
+        """Test that an IntegrityError during upsert is rolled back and re-raised
+        (no query-and-update fallback exists anymore)."""
         from sqlalchemy.exc import IntegrityError
-        
+
         service = SearchService(db=mock_db)
-        # Setup mock for fallback path - new entity so first() returns None
-        mock_db.query.return_value.filter.return_value.first.return_value = None
-        # Mock execute to raise IntegrityError to trigger fallback path
-        mock_db.execute.side_effect = IntegrityError("test", {}, {})
+        mock_db.execute.side_effect = IntegrityError("stmt", {}, Exception("orig"))
 
-        service.index_entity(
-            entity_type="company",
-            entity_id=1,
-            title="Test Company",
-            content="Content"
-        )
+        with pytest.raises(IntegrityError):
+            service.index_entity(
+                entity_type="contact",
+                entity_id=1,
+                title="John Doe",
+                content="Test content"
+            )
 
-        # Verify add was called in fallback path
-        mock_db.add.assert_called_once()
-        indexed_entity = mock_db.add.call_args[0][0]
-        assert indexed_entity.meta_data == {}
-        assert indexed_entity.tags == []
+        mock_db.rollback.assert_called_once()
+        mock_db.commit.assert_not_called()
 
     def test_remove_from_index_success(self, mock_db):
         """Test removing an entity from the index."""
         service = SearchService(db=mock_db)
         mock_delete_query = MagicMock()
         mock_db.query.return_value.filter.return_value = mock_delete_query
-        
+
         service.remove_from_index(entity_type="contact", entity_id=1)
-        
+
         mock_delete_query.delete.assert_called_once()
         mock_db.commit.assert_called_once()
 
 
-class TestIndexAllEntities:
-    """Tests for bulk indexing methods."""
+class TestBulkIndex:
+    """Tests for the `_bulk_index` method (bulk upsert used by index_all_* methods)."""
 
-    def test_index_all_contacts(self, mock_db):
-        """Test indexing all contacts."""
+    def test_bulk_index_empty_batch_is_noop(self, mock_db):
+        """Test that an empty batch performs no database operations."""
         service = SearchService(db=mock_db)
-        
-        # Mock contacts
+
+        service._bulk_index([])
+
+        mock_db.execute.assert_not_called()
+        mock_db.commit.assert_not_called()
+        mock_db.rollback.assert_not_called()
+
+    def test_bulk_index_nonempty_batch_raises_unbound_local_error(self, mock_db):
+        """Regression test documenting a real bug: `_bulk_index` builds its
+        `on_conflict_do_update(set_=...)` clause using `stmt.excluded.*`
+        while still constructing the very statement being assigned to `stmt`.
+        Because `stmt` is a local variable that has not been assigned yet at
+        that point, Python raises `UnboundLocalError` for any non-empty batch.
+        This exception is *not* an `IntegrityError`, so the "fallback to
+        individual indexing" branch is never reached, and no rollback/commit
+        happens either.
+        """
+        service = SearchService(db=mock_db)
+        batch_data = [{
+            "entity_type": "contact",
+            "entity_id": 1,
+            "title": "John Doe",
+            "content": "Some content",
+        }]
+
+        with pytest.raises(UnboundLocalError):
+            service._bulk_index(batch_data)
+
+        mock_db.execute.assert_not_called()
+        mock_db.commit.assert_not_called()
+        mock_db.rollback.assert_not_called()
+
+    def test_bulk_index_with_multiple_items_still_raises(self, mock_db):
+        """Test that the same bug reproduces regardless of batch size."""
+        service = SearchService(db=mock_db)
+        batch_data = [
+            {"entity_type": "contact", "entity_id": 1, "title": "A", "content": "a"},
+            {"entity_type": "contact", "entity_id": 2, "title": "B", "content": "b"},
+        ]
+
+        with pytest.raises(UnboundLocalError):
+            service._bulk_index(batch_data)
+
+
+class TestIndexAllEntities:
+    """Tests for bulk indexing methods (index_all_contacts/companies/products/employees/documents).
+
+    These methods now page through rows with `.limit(batch_size).offset(offset)`,
+    build a list of dicts (batch_data), and delegate to `_bulk_index` instead of
+    calling `index_entity` once per row. `_bulk_index` is patched out below so
+    that its internal bug (see TestBulkIndex) does not interfere with verifying
+    the batch_data mapping and pagination logic in isolation.
+    """
+
+    def test_index_all_contacts_maps_fields_and_calls_bulk_index(self, mock_db):
+        """Test that contacts are correctly mapped into batch_data dicts."""
+        service = SearchService(db=mock_db)
+
         contact1 = MagicMock(spec=Contact)
         contact1.id = 1
         contact1.first_name = "John"
@@ -208,22 +256,30 @@ class TestIndexAllEntities:
         contact1.status = "active"
         contact1.company_id = 1
         contact1.assigned_to = 2
-        
-        mock_db.query.return_value.all.return_value = [contact1]
-        
-        with patch.object(service, 'index_entity') as mock_index:
-            service.index_all_contacts()
-            
-            mock_index.assert_called_once()
-            args = mock_index.call_args[0]
-            assert args[0] == "contact"
-            assert args[1] == 1
-            assert "John Doe" in args[2]
 
-    def test_index_all_companies(self, mock_db):
-        """Test indexing all companies."""
+        mock_all = mock_db.query.return_value.limit.return_value.offset.return_value.all
+        mock_all.side_effect = [[contact1], []]
+
+        with patch.object(service, '_bulk_index') as mock_bulk:
+            service.index_all_contacts()
+
+            mock_bulk.assert_called_once()
+            batch_data = mock_bulk.call_args[0][0]
+            assert len(batch_data) == 1
+            item = batch_data[0]
+            assert item["entity_type"] == "contact"
+            assert item["entity_id"] == 1
+            assert item["title"] == "John Doe"
+            assert "john@example.com" in item["content"]
+            assert item["meta_data"]["email"] == "john@example.com"
+            assert item["meta_data"]["company_id"] == 1
+            assert item["tags"] == ["active", "contact"]
+            assert "John Doe" in item["searchable_text"]
+
+    def test_index_all_companies_maps_fields(self, mock_db):
+        """Test that companies are correctly mapped into batch_data dicts."""
         service = SearchService(db=mock_db)
-        
+
         company = MagicMock(spec=Company)
         company.id = 1
         company.name = "Test Corp"
@@ -232,19 +288,45 @@ class TestIndexAllEntities:
         company.address = "123 Main St"
         company.phone = "+1234567890"
         company.size = "50-200"
-        
-        mock_db.query.return_value.all.return_value = [company]
-        
-        with patch.object(service, 'index_entity') as mock_index:
-            service.index_all_companies()
-            
-            mock_index.assert_called_once()
-            assert "Test Corp" in mock_index.call_args[0][2]
 
-    def test_index_all_products(self, mock_db):
-        """Test indexing all products."""
+        mock_all = mock_db.query.return_value.limit.return_value.offset.return_value.all
+        mock_all.side_effect = [[company], []]
+
+        with patch.object(service, '_bulk_index') as mock_bulk:
+            service.index_all_companies()
+
+            batch_data = mock_bulk.call_args[0][0]
+            assert len(batch_data) == 1
+            assert batch_data[0]["entity_type"] == "company"
+            assert batch_data[0]["title"] == "Test Corp"
+            assert batch_data[0]["tags"] == ["Technology", "company"]
+
+    def test_index_all_companies_no_industry_tag_fallback(self, mock_db):
+        """Test that companies without an industry only get the 'company' tag."""
         service = SearchService(db=mock_db)
-        
+
+        company = MagicMock(spec=Company)
+        company.id = 2
+        company.name = "No Industry Co"
+        company.industry = None
+        company.website = None
+        company.address = None
+        company.phone = None
+        company.size = None
+
+        mock_all = mock_db.query.return_value.limit.return_value.offset.return_value.all
+        mock_all.side_effect = [[company], []]
+
+        with patch.object(service, '_bulk_index') as mock_bulk:
+            service.index_all_companies()
+
+            batch_data = mock_bulk.call_args[0][0]
+            assert batch_data[0]["tags"] == ["company"]
+
+    def test_index_all_products_maps_fields(self, mock_db):
+        """Test that products are correctly mapped into batch_data dicts."""
+        service = SearchService(db=mock_db)
+
         product = MagicMock(spec=Product)
         product.id = 1
         product.name = "Widget"
@@ -255,25 +337,24 @@ class TestIndexAllEntities:
         product.unit_price = 29.99
         product.quantity_in_stock = 100
         product.status = "active"
-        
-        mock_db.query.return_value.all.return_value = [product]
-        
-        with patch.object(service, 'index_entity') as mock_index:
-            service.index_all_products()
-            
-            mock_index.assert_called_once()
-            args = mock_index.call_args[0]
-            assert args[2] == "Widget"
-            # The metadata is passed as the 4th positional argument (metadata parameter)
-            # Check that price value is in the call
-            call_kwargs = mock_index.call_args
-            # index_entity signature: (entity_type, entity_id, title, content, metadata, tags)
-            assert call_kwargs[0][3]  # content should exist
 
-    def test_index_all_employees(self, mock_db):
-        """Test indexing all employees."""
+        mock_all = mock_db.query.return_value.limit.return_value.offset.return_value.all
+        mock_all.side_effect = [[product], []]
+
+        with patch.object(service, '_bulk_index') as mock_bulk:
+            service.index_all_products()
+
+            batch_data = mock_bulk.call_args[0][0]
+            item = batch_data[0]
+            assert item["title"] == "Widget"
+            assert item["meta_data"]["sku"] == "WGT-001"
+            assert item["meta_data"]["price"] == 29.99
+            assert item["tags"] == ["Electronics", "active", "product"]
+
+    def test_index_all_employees_maps_fields(self, mock_db):
+        """Test that employees are correctly mapped into batch_data dicts."""
         service = SearchService(db=mock_db)
-        
+
         employee = MagicMock(spec=Employee)
         employee.id = 1
         employee.employee_code = "EMP001"
@@ -283,19 +364,23 @@ class TestIndexAllEntities:
         employee.department_id = 1
         employee.status = "active"
         employee.employment_type = "full-time"
-        
-        mock_db.query.return_value.all.return_value = [employee]
-        
-        with patch.object(service, 'index_entity') as mock_index:
-            service.index_all_employees()
-            
-            mock_index.assert_called_once()
-            assert "EMP001" in mock_index.call_args[0][2]
 
-    def test_index_all_documents(self, mock_db):
-        """Test indexing all documents."""
+        mock_all = mock_db.query.return_value.limit.return_value.offset.return_value.all
+        mock_all.side_effect = [[employee], []]
+
+        with patch.object(service, '_bulk_index') as mock_bulk:
+            service.index_all_employees()
+
+            batch_data = mock_bulk.call_args[0][0]
+            item = batch_data[0]
+            assert item["title"] == "EMP001"
+            assert "Developer" in item["content"]
+            assert item["tags"] == ["active", "full-time", "employee"]
+
+    def test_index_all_documents_maps_fields(self, mock_db):
+        """Test that documents are correctly mapped into batch_data dicts."""
         service = SearchService(db=mock_db)
-        
+
         document = MagicMock(spec=Document)
         document.id = 1
         document.title = "Report Q1"
@@ -304,14 +389,83 @@ class TestIndexAllEntities:
         document.mime_type = "application/pdf"
         document.entity_type = "company"
         document.file_size = 102400
-        
-        mock_db.query.return_value.all.return_value = [document]
-        
-        with patch.object(service, 'index_entity') as mock_index:
+
+        mock_all = mock_db.query.return_value.limit.return_value.offset.return_value.all
+        mock_all.side_effect = [[document], []]
+
+        with patch.object(service, '_bulk_index') as mock_bulk:
             service.index_all_documents()
-            
-            mock_index.assert_called_once()
-            assert "Report Q1" in mock_index.call_args[0][2]
+
+            batch_data = mock_bulk.call_args[0][0]
+            item = batch_data[0]
+            assert item["title"] == "Report Q1"
+            assert item["tags"] == ["application/pdf", "company", "document"]
+
+    def test_index_all_documents_no_mime_type_tag_fallback(self, mock_db):
+        """Test that documents without a mime type only get the 'document' tag."""
+        service = SearchService(db=mock_db)
+
+        document = MagicMock(spec=Document)
+        document.id = 2
+        document.title = "Untyped"
+        document.filename = "untyped.bin"
+        document.extracted_text = None
+        document.mime_type = None
+        document.entity_type = None
+        document.file_size = None
+
+        mock_all = mock_db.query.return_value.limit.return_value.offset.return_value.all
+        mock_all.side_effect = [[document], []]
+
+        with patch.object(service, '_bulk_index') as mock_bulk:
+            service.index_all_documents()
+
+            batch_data = mock_bulk.call_args[0][0]
+            assert batch_data[0]["tags"] == ["document"]
+
+    def test_index_all_contacts_no_rows_skips_bulk_index(self, mock_db):
+        """Test that when there are no rows, `_bulk_index` is never called."""
+        service = SearchService(db=mock_db)
+
+        mock_all = mock_db.query.return_value.limit.return_value.offset.return_value.all
+        mock_all.return_value = []
+
+        with patch.object(service, '_bulk_index') as mock_bulk:
+            service.index_all_contacts()
+
+            mock_bulk.assert_not_called()
+
+    def test_index_all_contacts_paginates_across_batches(self, mock_db):
+        """Test that pagination processes multiple batches using limit/offset."""
+        service = SearchService(db=mock_db)
+
+        def make_contact(cid):
+            c = MagicMock(spec=Contact)
+            c.id = cid
+            c.first_name = "First"
+            c.last_name = "Last"
+            c.email = None
+            c.phone = None
+            c.title = None
+            c.notes = None
+            c.status = "active"
+            c.company_id = None
+            c.assigned_to = None
+            return c
+
+        mock_all = mock_db.query.return_value.limit.return_value.offset.return_value.all
+        mock_all.side_effect = [[make_contact(1)], [make_contact(2)], []]
+
+        with patch.object(service, '_bulk_index') as mock_bulk:
+            service.index_all_contacts(batch_size=1)
+
+            assert mock_bulk.call_count == 2
+            called_offsets = [
+                c.args[0]
+                for c in mock_db.query.return_value.limit.return_value.offset.call_args_list
+            ]
+            assert called_offsets == [0, 1, 2]
+            mock_db.query.return_value.limit.assert_called_with(1)
 
 
 class TestReindexAll:
