@@ -36,11 +36,11 @@ from app.models import Invoice, InvoiceItem, Payment
 # ---------------------------------------------------------------------------
 
 class TestInvoiceLine:
-    def test_line_total_multiplies_quantity_and_unit_price(self):
+    def test_line_total_multiplies_quantity_by_unit_price(self):
         line = InvoiceLine(description="Widget", quantity=3, unit_price=10.5)
         assert line.line_total == 31.5
 
-    def test_line_total_with_zero_quantity(self):
+    def test_line_total_with_zero_quantity_is_zero(self):
         line = InvoiceLine(description="Widget", quantity=0, unit_price=10.5)
         assert line.line_total == 0
 
@@ -59,7 +59,7 @@ class TestCalculateInvoiceTotals:
         assert totals.tax_amount == 2.5
         assert totals.total == 27.5
 
-    def test_zero_tax_rate(self):
+    def test_zero_tax_rate_leaves_total_equal_to_subtotal(self):
         lines = [InvoiceLine(description="A", quantity=1, unit_price=100)]
 
         totals = calculate_invoice_totals(lines, tax_rate=0)
@@ -87,7 +87,7 @@ class TestIsOverdue:
         today = date(2026, 1, 15)
         assert is_overdue(date(2026, 1, 1), "sent", today=today) is True
 
-    def test_not_overdue_when_paid_even_if_due_date_in_past(self):
+    def test_not_overdue_when_status_is_paid_even_if_past_due(self):
         today = date(2026, 1, 15)
         assert is_overdue(date(2026, 1, 1), "paid", today=today) is False
 
@@ -95,13 +95,13 @@ class TestIsOverdue:
         today = date(2026, 1, 15)
         assert is_overdue(date(2026, 2, 1), "sent", today=today) is False
 
-    def test_not_overdue_when_due_date_is_today(self):
+    def test_not_overdue_when_due_date_equals_today(self):
         today = date(2026, 1, 15)
         assert is_overdue(today, "sent", today=today) is False
 
 
 class TestValidatePayment:
-    def test_valid_payment_does_not_raise(self):
+    def test_valid_partial_payment_does_not_raise(self):
         validate_payment(50, 100, 0)
 
     def test_zero_amount_raises_value_error(self):
@@ -112,7 +112,7 @@ class TestValidatePayment:
         with pytest.raises(ValueError, match="must be positive"):
             validate_payment(-10, 100, 0)
 
-    def test_payment_exceeding_total_raises_value_error(self):
+    def test_payment_exceeding_remaining_balance_raises_value_error(self):
         with pytest.raises(ValueError, match="exceed invoice total"):
             validate_payment(60, 100, 50)
 
@@ -120,12 +120,21 @@ class TestValidatePayment:
         validate_payment(50, 100, 50)
 
     def test_handles_decimal_invoice_values_from_db(self):
-        # Simulates values returned from a Numeric DB column
+        # Simulates Numeric/Decimal values returned from the DB layer.
         validate_payment(25.0, Decimal("100.00"), Decimal("75.00"))
 
-    def test_decimal_payment_exceeding_total_raises(self):
+    def test_decimal_payment_exceeding_total_raises_value_error(self):
         with pytest.raises(ValueError, match="exceed invoice total"):
             validate_payment(30.0, Decimal("100.00"), Decimal("75.00"))
+
+    def test_payment_within_floating_point_epsilon_is_allowed(self):
+        """Boundary case: the 1e-6 tolerance should absorb tiny floating point
+        overshoot caused by binary float arithmetic, without raising."""
+        validate_payment(0.1 + 0.2, 0.3, 0)  # 0.1 + 0.2 == 0.30000000000000004 in binary float
+
+    def test_payment_just_beyond_epsilon_tolerance_raises_value_error(self):
+        with pytest.raises(ValueError, match="exceed invoice total"):
+            validate_payment(100.001, 100, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +142,7 @@ class TestValidatePayment:
 # ---------------------------------------------------------------------------
 
 class TestFinanceRepository:
-    def test_invoice_number_exists_true(self, db_session):
+    def test_invoice_number_exists_true_for_existing_invoice(self, db_session):
         db_session.add(Invoice(
             invoice_number="INV-1", issue_date=date.today(), due_date=date.today(),
             subtotal=0, tax_rate=0, tax_amount=0, total=0, amount_paid=0, status="draft",
@@ -143,11 +152,11 @@ class TestFinanceRepository:
         repo = FinanceRepository(db_session)
         assert repo.invoice_number_exists("INV-1") is True
 
-    def test_invoice_number_exists_false(self, db_session):
+    def test_invoice_number_exists_false_for_missing_invoice(self, db_session):
         repo = FinanceRepository(db_session)
         assert repo.invoice_number_exists("DOES-NOT-EXIST") is False
 
-    def test_next_invoice_number_formatting(self, db_session):
+    def test_next_invoice_number_formatting_increments(self, db_session):
         repo = FinanceRepository(db_session)
         assert repo.next_invoice_number() == "INV-000001"
 
@@ -159,7 +168,7 @@ class TestFinanceRepository:
 
         assert repo.next_invoice_number() == "INV-000002"
 
-    def test_save_invoice_persists_invoice_and_items(self, db_session):
+    def test_save_invoice_persists_invoice_and_linked_items(self, db_session):
         repo = FinanceRepository(db_session)
         invoice = Invoice(
             invoice_number="INV-2", issue_date=date.today(), due_date=date.today(),
@@ -175,7 +184,7 @@ class TestFinanceRepository:
 
     def test_get_invoice_returns_none_when_missing(self, db_session):
         repo = FinanceRepository(db_session)
-        assert repo.get_invoice(999) is None
+        assert repo.get_invoice(999999) is None
 
     def test_get_invoice_returns_saved_invoice(self, db_session):
         repo = FinanceRepository(db_session)
@@ -220,7 +229,7 @@ class TestFinanceRepository:
         assert len(result) == 1
         assert result[0].invoice_number == "A"
 
-    def test_list_invoices_no_filters_returns_all(self, db_session):
+    def test_list_invoices_without_filters_returns_all(self, db_session):
         db_session.add_all([
             Invoice(invoice_number="A", issue_date=date.today(), due_date=date.today(),
                     subtotal=0, tax_rate=0, tax_amount=0, total=0, amount_paid=0, status="draft"),
@@ -247,7 +256,7 @@ class TestFinanceRepository:
 
         assert saved.id is not None
 
-    def test_dashboard_metrics_counts_overdue_invoices(self, db_session):
+    def test_dashboard_metrics_counts_overdue_and_revenue(self, db_session):
         past_due = date.today() - timedelta(days=5)
         db_session.add_all([
             Invoice(invoice_number="OVERDUE", issue_date=past_due, due_date=past_due,
@@ -265,14 +274,16 @@ class TestFinanceRepository:
         assert float(metrics["total_revenue"]) == 100.0
         assert float(metrics["outstanding"]) == 100.0
 
-    def test_dashboard_metrics_with_no_invoices(self, db_session):
+    def test_dashboard_metrics_with_no_invoices_returns_zeros(self, db_session):
         repo = FinanceRepository(db_session)
         metrics = repo.dashboard_metrics(today=date.today())
 
-        assert metrics["total_invoices"] == 0
-        assert metrics["total_revenue"] == 0
-        assert metrics["outstanding"] == 0
-        assert metrics["overdue"] == 0
+        assert metrics == {
+            "total_invoices": 0,
+            "total_revenue": 0,
+            "outstanding": 0,
+            "overdue": 0,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -380,6 +391,20 @@ class TestRecordPayment:
                 db_session, invoice_id=invoice.id, amount=200, payment_method="cash", payment_date=date.today(),
             )
 
+    def test_two_partial_payments_accumulate_to_paid(self, db_session):
+        invoice = self._create_invoice(db_session, total=100)
+
+        application.record_payment(
+            db_session, invoice_id=invoice.id, amount=60, payment_method="cash", payment_date=date.today(),
+        )
+        application.record_payment(
+            db_session, invoice_id=invoice.id, amount=40, payment_method="cash", payment_date=date.today(),
+        )
+
+        db_session.refresh(invoice)
+        assert float(invoice.amount_paid) == 100.0
+        assert invoice.status == "paid"
+
 
 class TestGetAndListInvoices:
     def test_get_invoice_returns_none_when_missing(self, db_session):
@@ -448,7 +473,7 @@ def finance_app(isolated_registry):
 
 
 class TestFinanceInterfaceRegistration:
-    def test_build_router_registers_finance_module(self, isolated_registry):
+    def test_build_router_registers_finance_module_descriptor(self, isolated_registry):
         finance_interface.build_router()
 
         desc = isolated_registry.get("finance")
@@ -495,6 +520,12 @@ class TestFinanceInterfaceEndpoints:
         assert response.status_code == 400
         assert response.json()["detail"] == "dup"
 
+    def test_create_invoice_endpoint_rejects_missing_required_fields(self, finance_app):
+        client = TestClient(finance_app)
+        response = client.post("/api/v1/finance/invoices", json={"invoice_number": "INV-1"})
+
+        assert response.status_code == 422
+
     def test_record_payment_endpoint_success(self, finance_app):
         fake_payment = MagicMock(id=5, amount=50.0)
         payload = {
@@ -528,14 +559,15 @@ class TestFinanceInterfaceEndpoints:
         assert response.status_code == 404
 
     def test_get_invoice_endpoint_found_returns_invoice(self, finance_app):
-        with patch.object(finance_interface.application, "get_invoice", return_value={"id": 5, "invoice_number": "INV-5"}):
+        with patch.object(finance_interface.application, "get_invoice",
+                           return_value={"id": 5, "invoice_number": "INV-5"}):
             client = TestClient(finance_app)
             response = client.get("/api/v1/finance/invoices/5")
 
         assert response.status_code == 200
         assert response.json() == {"id": 5, "invoice_number": "INV-5"}
 
-    def test_list_invoices_endpoint_passes_filters(self, finance_app):
+    def test_list_invoices_endpoint_passes_filters_through(self, finance_app):
         with patch.object(finance_interface.application, "list_invoices", return_value=[]) as mock_list:
             client = TestClient(finance_app)
             response = client.get("/api/v1/finance/invoices?status=paid&contact_id=3")
@@ -545,6 +577,15 @@ class TestFinanceInterfaceEndpoints:
         _, kwargs = mock_list.call_args
         assert kwargs["status"] == "paid"
         assert kwargs["contact_id"] == 3
+
+    def test_list_invoices_endpoint_without_filters(self, finance_app):
+        with patch.object(finance_interface.application, "list_invoices", return_value=[]) as mock_list:
+            client = TestClient(finance_app)
+            client.get("/api/v1/finance/invoices")
+
+        _, kwargs = mock_list.call_args
+        assert kwargs["status"] is None
+        assert kwargs["contact_id"] is None
 
     def test_dashboard_endpoint_returns_metrics(self, finance_app):
         with patch.object(finance_interface.application, "dashboard", return_value={"total_invoices": 4}):
