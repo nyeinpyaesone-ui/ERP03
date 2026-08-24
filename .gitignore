@@ -41,6 +41,8 @@ nosetests.xml
 .hypothesis/
 .tox/
 .cache
+.pybuild/
+.nox/
 
 # Python virtual environments
 venv/

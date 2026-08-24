@@ -1,11 +1,13 @@
-"""CRM models: Company, Contact, Deal."""
-from sqlalchemy import Column, Integer, String, Text, Numeric, ForeignKey, DateTime, Date
+"""
+CRM Models - Contact, Company, Deal management
+"""
+from sqlalchemy import Column, Integer, String, Text, Numeric, ForeignKey, Date, DateTime
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 from app.database import Base
+from app.models.base import TimestampMixin
 
 
-class Company(Base):
+class Company(Base, TimestampMixin):
     __tablename__ = "companies"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -16,8 +18,6 @@ class Company(Base):
     address = Column(Text, nullable=True)
     phone = Column(String(50), nullable=True)
     logo_url = Column(String(500), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
     contacts = relationship("Contact", back_populates="company")
@@ -25,7 +25,7 @@ class Company(Base):
     invoices = relationship("Invoice", back_populates="company")
 
 
-class Contact(Base):
+class Contact(Base, TimestampMixin):
     __tablename__ = "contacts"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -41,17 +41,14 @@ class Contact(Base):
     assigned_to = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     lifetime_value = Column(Numeric(15, 2), nullable=False, server_default="0")
     last_activity = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
     company = relationship("Company", back_populates="contacts")
-    assigned_user = relationship("User", back_populates="contacts", foreign_keys=[assigned_to])
     deals = relationship("Deal", back_populates="contact")
     invoices = relationship("Invoice", back_populates="contact")
 
 
-class Deal(Base):
+class Deal(Base, TimestampMixin):
     __tablename__ = "deals"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -65,10 +62,7 @@ class Deal(Base):
     actual_close_date = Column(Date, nullable=True)
     assigned_to = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     description = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
     contact = relationship("Contact", back_populates="deals")
     company = relationship("Company", back_populates="deals")
-    assigned_user = relationship("User", back_populates="deals", foreign_keys=[assigned_to])
