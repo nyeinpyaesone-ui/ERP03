@@ -61,10 +61,10 @@ class CRMAdapter:
     def company_to_customer(company: Any) -> ContractCustomerSchema:
         """
         Convert an internal company model to a customer contract schema.
-        
+
         Parameters:
             company (Any): Company data containing identity, contact, address, and audit fields.
-        
+
         Returns:
             ContractCustomerSchema: Customer data mapped from the company.
         """
@@ -91,12 +91,12 @@ class CRMAdapter:
     def contact_to_contract(contact: Any) -> ContractContactSchema:
         """
         Convert an internal contact into the standardized contact contract schema.
-        
+
         Parameters:
-        	contact (Any): Internal contact object containing personal, company, and contact details.
-        
+            contact (Any): Internal contact object containing personal, company, and contact details.
+
         Returns:
-        	ContractContactSchema: Contact data mapped to the integration contract schema.
+            ContractContactSchema: Contact data mapped to the integration contract schema.
         """
         return ContractContactSchema(
             id=contact.id,
@@ -116,10 +116,10 @@ class CRMAdapter:
     def deal_to_opportunity(deal: Any) -> ContractOpportunitySchema:
         """
         Convert an internal deal into an integration opportunity.
-        
+
         Parameters:
             deal (Any): Internal deal containing opportunity details and ownership information.
-        
+
         Returns:
             ContractOpportunitySchema: Opportunity populated from the deal, using USD as the currency and an empty tag list.
         """
@@ -148,10 +148,10 @@ class InventoryAdapter:
     def product_to_contract(product: Any) -> ContractProductSchema:
         """
         Convert an internal product model into an integration product schema.
-        
+
         Parameters:
             product (Any): Internal product model containing product identity, pricing, inventory, and status data.
-        
+
         Returns:
             ContractProductSchema: Product data mapped to the integration contract, with defaults for missing optional attributes.
         """

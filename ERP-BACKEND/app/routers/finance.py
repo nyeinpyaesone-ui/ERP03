@@ -82,7 +82,7 @@ class PaymentResponse(BaseModel):
 def generate_invoice_number(db: Session) -> str:
     """
     Generate the next invoice number for the current year.
-    
+
     Returns:
     	str: An invoice number in the format `INV-YYYY-NNNNN`.
     """
@@ -93,11 +93,11 @@ def generate_invoice_number(db: Session) -> str:
 def _rollback_and_raise(db: Session, exc: Exception):
     """
     Roll back the current database transaction and convert the exception into an HTTP error.
-    
+
     Parameters:
     	db (Session): The database session whose transaction should be rolled back.
     	exc (Exception): The exception to re-raise or convert.
-    
+
     Raises:
     	HTTPException: Re-raises the original exception or returns an HTTP 400 error for other exceptions.
     """
@@ -110,13 +110,13 @@ def _rollback_and_raise(db: Session, exc: Exception):
 def create_invoice(data: InvoiceCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Create an invoice with calculated totals and its associated line items.
-    
+
     Parameters:
         data (InvoiceCreate): Invoice details, including the items used to calculate totals.
-    
+
     Returns:
         Invoice: The persisted invoice.
-    
+
     Raises:
         HTTPException: If the invoice number already exists.
     """
@@ -178,11 +178,11 @@ def create_invoice(data: InvoiceCreate, db: Session = Depends(get_db), current_u
 def list_invoices(status: Optional[str] = None, contact_id: Optional[int] = None, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Retrieve invoices, optionally filtered by status and contact.
-    
+
     Parameters:
     	status (str | None): Invoice status used to filter results.
     	contact_id (int | None): Contact ID used to filter results.
-    
+
     Returns:
     	list[Invoice]: Invoices ordered from newest to oldest.
     """
@@ -197,13 +197,13 @@ def list_invoices(status: Optional[str] = None, contact_id: Optional[int] = None
 def get_invoice(invoice_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Retrieve an invoice by its identifier.
-    
+
     Parameters:
     	invoice_id (int): The identifier of the invoice to retrieve.
-    
+
     Returns:
     	Invoice: The matching invoice.
-    
+
     Raises:
     	HTTPException: If no invoice matches the specified identifier.
     """
@@ -216,11 +216,11 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db), current_user = D
 def update_invoice_status(invoice_id: int, status: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Update an invoice's status and record the change.
-    
+
     Parameters:
         invoice_id (int): Identifier of the invoice to update.
         status (str): New status for the invoice.
-    
+
     Returns:
         Invoice: The updated invoice.
     """
@@ -249,10 +249,10 @@ def update_invoice_status(invoice_id: int, status: str, db: Session = Depends(ge
 def create_payment(data: PaymentCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Record a payment for an existing invoice and update its payment status.
-    
+
     Parameters:
     	data (PaymentCreate): Payment details, including the associated invoice and amount.
-    
+
     Returns:
     	Payment: The created payment.
     """

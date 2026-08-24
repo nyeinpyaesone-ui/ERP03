@@ -20,7 +20,7 @@ class AnalyticsQueryService:
 
     def __init__(self, db: Session):
         """Initialize the service with a database session.
-        
+
         Parameters:
         	db (Session): SQLAlchemy session used to execute analytics queries.
         """
@@ -29,7 +29,7 @@ class AnalyticsQueryService:
     def get_dashboard(self) -> dict:
         """
         Build a dashboard of aggregated revenue, CRM, workforce, inventory, project, task, and recent activity metrics.
-        
+
         Returns:
         	dict: Nested dashboard metrics, including revenue collection rate and up to ten recent activity records.
         """

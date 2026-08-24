@@ -44,7 +44,7 @@ def test_db_session():
         dimensions = Column(String(100))
         created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
         updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-        
+
         movements = relationship("TestInventoryMovement", back_populates="product", cascade="all, delete-orphan")
     
     class TestInventoryMovement(Base):
@@ -59,7 +59,7 @@ def test_db_session():
         notes = Column(Text)
         created_by = Column(Integer)
         created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-        
+
         product = relationship("TestProduct", back_populates="movements")
     
     Base.metadata.create_all(bind=engine)
@@ -203,6 +203,7 @@ class TestProductModel:
 
         assert product.updated_at is not None
         assert product.updated_at >= original_updated_at
+
 
 
 class TestInventoryMovementModel:
