@@ -4,7 +4,7 @@ Tests product CRUD, stock movements, and business rules.
 Uses SQLite with simplified models to avoid PostgreSQL-specific JSONB issues.
 """
 import pytest
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, Column, Integer, String, Text, Numeric, ForeignKey, DateTime
@@ -42,9 +42,9 @@ def test_db_session():
         barcode = Column(String(100))
         weight = Column(Numeric(10, 2))
         dimensions = Column(String(100))
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-        
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
         movements = relationship("TestInventoryMovement", back_populates="product", cascade="all, delete-orphan")
     
     class TestInventoryMovement(Base):
@@ -58,8 +58,8 @@ def test_db_session():
         reference = Column(String(255))
         notes = Column(Text)
         created_by = Column(Integer)
-        created_at = Column(DateTime, default=datetime.utcnow)
-        
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
         product = relationship("TestProduct", back_populates="movements")
     
     Base.metadata.create_all(bind=engine)
@@ -153,6 +153,57 @@ class TestProductModel:
         assert product.supplier == "Acme Corp"
         assert product.barcode == "1234567890123"
         assert product.weight == Decimal("1.5")
+
+    def test_product_timestamps_default_to_timezone_aware_utc(self, test_db_session):
+        """Regression test for the datetime.utcnow() -> datetime.now(timezone.utc)
+        migration: creating a product without explicit timestamps must not raise
+        NameError and must populate created_at/updated_at close to "now"."""
+        session, TestProduct, _ = test_db_session
+
+        before = datetime.now(timezone.utc)
+        product = TestProduct(
+            sku="TS-001",
+            name="Timestamp Product",
+            unit_price=Decimal("10.00"),
+        )
+        session.add(product)
+        session.commit()
+        session.refresh(product)
+        after = datetime.now(timezone.utc)
+
+        assert product.created_at is not None
+        assert product.updated_at is not None
+
+        created_at = product.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+
+        assert before - timedelta(seconds=5) <= created_at <= after + timedelta(seconds=5)
+
+    def test_product_updated_at_refreshes_on_update(self, test_db_session):
+        """The onupdate default must fire (and not raise NameError) on modification."""
+        session, TestProduct, _ = test_db_session
+
+        product = TestProduct(
+            sku="TS-002",
+            name="Update Timestamp Product",
+            unit_price=Decimal("10.00"),
+        )
+        session.add(product)
+        session.commit()
+        session.refresh(product)
+        original_updated_at = product.updated_at
+
+        import time
+        time.sleep(0.01)
+
+        product.name = "Renamed Product"
+        session.commit()
+        session.refresh(product)
+
+        assert product.updated_at is not None
+        assert product.updated_at >= original_updated_at
+
 
 
 class TestInventoryMovementModel:

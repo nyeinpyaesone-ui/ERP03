@@ -128,6 +128,18 @@ def require_service(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     db: Session = Depends(get_db),
 ) -> ServiceContext:
+    """
+    Authenticate a service principal and return its active actor context.
+    
+    Parameters:
+        credentials: Bearer authorization credentials containing the service token.
+    
+    Returns:
+        ServiceContext: The authenticated service actor ID and token subject.
+    
+    Raises:
+        HTTPException: If authentication fails, the token claims are invalid, or the service actor is inactive or unknown.
+    """
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=401, detail="Missing service authentication")
     try:
@@ -157,16 +169,42 @@ def require_service(
 
 
 def _payload_hash(command: CommandRequest) -> str:
+    """
+    Create a deterministic SHA-256 hash for a command payload.
+    
+    Parameters:
+    	command (CommandRequest): The command payload to hash.
+    
+    Returns:
+    	str: The hexadecimal SHA-256 digest of the canonicalized payload.
+    """
     canonical = json.dumps(command.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _get_command_or_none(db: Session, key: str) -> IntegrationCommand | None:
+    """Retrieve the integration command associated with an idempotency key.
+    
+    Parameters:
+    	key (str): Idempotency key used to identify the command.
+    
+    Returns:
+    	IntegrationCommand | None: The matching integration command, or `None` when no command exists for the key.
+    """
     return db.query(IntegrationCommand).filter(IntegrationCommand.idempotency_key == key).first()
 
 
 @router.get("/erp/purchase-orders/{po_id}")
 def get_purchase_order(po_id: int, ctx: ServiceContext = Depends(require_service), db: Session = Depends(get_db)):
+    """
+    Retrieve a purchase order when the authenticated actor is authorized to view it.
+    
+    Parameters:
+    	po_id (int): Identifier of the purchase order.
+    
+    Returns:
+    	dict: The purchase order identifier, number, status, amount, and currency code.
+    """
     po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
     if po is None:
         raise HTTPException(status_code=404, detail="Purchase order not found")
@@ -238,7 +276,16 @@ def list_opportunities(
     db: Session = Depends(get_db),
     ctx: ServiceContext = Depends(require_service),
 ):
-    """List opportunities in integration contract format."""
+    """
+    List opportunities in the integration contract format.
+
+    Parameters:
+        customer_id (Optional[int]): Filter opportunities by customer.
+        stage (Optional[str]): Filter opportunities by stage.
+
+    Returns:
+        list: The matching opportunities.
+    """
     query = db.query(Deal)
     if customer_id:
         query = query.filter(Deal.company_id == customer_id)
@@ -261,7 +308,18 @@ def list_products(
     db: Session = Depends(get_db),
     ctx: ServiceContext = Depends(require_service),
 ):
-    """List products in integration contract format."""
+    """
+    List products in the integration contract format, with optional category and name filters.
+
+    Parameters:
+        skip (int): Number of products to skip.
+        limit (int): Maximum number of products to return.
+        category_id (Optional[int]): Category identifier used to filter products.
+        search (Optional[str]): Case-insensitive text used to filter product names.
+
+    Returns:
+        list[ProductResponse]: The matching products in contract format.
+    """
     query = db.query(Product)
     if category_id:
         query = query.filter(Product.category_id == category_id)
@@ -290,7 +348,15 @@ def get_product_by_sku(
     db: Session = Depends(get_db),
     ctx: ServiceContext = Depends(require_service),
 ):
-    """Get a product by SKU in integration contract format."""
+    """
+    Retrieve a product by its stock-keeping unit in the integration contract format.
+
+    Parameters:
+    	sku (str): The product's stock-keeping unit.
+
+    Returns:
+    	ProductResponse: The matching product.
+    """
     product = db.query(Product).filter(Product.sku == sku).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -305,6 +371,17 @@ def submit_command(
     ctx: ServiceContext = Depends(require_service),
     db: Session = Depends(get_db),
 ):
+    """
+    Process a purchase-order approval or rejection command with idempotent handling.
+    
+    Parameters:
+    	command (CommandRequest): Command containing the requested action, purchase order identifier, requester identity, and optional comment.
+    	idempotency_key (str): Key used to prevent duplicate command processing.
+    	correlation_id (str | None): Optional identifier for correlating the command with related operations.
+    
+    Returns:
+    	dict: An accepted command response containing the command identifier, correlation identifier, purchase order identifier, resulting status, and next approval level when applicable.
+    """
     if command.requested_by != ctx.subject:
         raise HTTPException(status_code=403, detail="requested_by does not match authenticated service identity")
 

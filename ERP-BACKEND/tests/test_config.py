@@ -19,14 +19,57 @@ class TestSettings:
         }, clear=True):
             with patch('app.config._read_secret', return_value=None):
                 from app.config import Settings
-                
+
                 # Create a new settings instance with no env file loading
                 settings = Settings(_env_file=None)
-                
+
                 assert settings.APP_NAME == "ERP SOLUTION System"
                 assert settings.ALGORITHM == "HS256"
                 # Note: ACCESS_TOKEN_EXPIRE_MINUTES is now 15 minutes for security (changed from 24 hours)
                 assert settings.ACCESS_TOKEN_EXPIRE_MINUTES == 15
+                assert settings.OLLAMA_URL == "http://localhost:11434"
+                assert settings.OLLAMA_MODEL == "llama3.1"
+
+    def test_ollama_url_can_be_overridden_via_env(self):
+        """Test that OLLAMA_URL can be overridden via environment variable."""
+        with patch('app.config._read_secret', return_value=None):
+            with patch.dict(os.environ, {
+                'DATABASE_URL': 'postgresql://test:test@localhost/test',
+                'SECRET_KEY': 'test_secret_key_for_testing_purposes_only_123456',
+                'OLLAMA_URL': 'http://ollama:11434',
+            }, clear=False):
+                from app.config import Settings
+
+                settings = Settings()
+
+                assert settings.OLLAMA_URL == "http://ollama:11434"
+
+    def test_settings_ollama_url_default_value(self):
+        """Test that OLLAMA_URL defaults to the local Ollama endpoint."""
+        with patch('app.config._read_secret', return_value=None):
+            with patch.dict(os.environ, {
+                'DATABASE_URL': 'postgresql://test:test@localhost/test',
+                'SECRET_KEY': 'test_secret_key_for_testing_purposes_only_123456'
+            }, clear=False):
+                from app.config import Settings
+
+                settings = Settings(_env_file=None)
+
+                assert settings.OLLAMA_URL == "http://localhost:11434"
+
+    def test_settings_ollama_url_overridable_via_env(self):
+        """Test that OLLAMA_URL can be overridden via environment variables."""
+        with patch('app.config._read_secret', return_value=None):
+            with patch.dict(os.environ, {
+                'DATABASE_URL': 'postgresql://test:test@localhost/test',
+                'SECRET_KEY': 'test_secret_key_for_testing_purposes_only_123456',
+                'OLLAMA_URL': 'http://ollama:11434',
+            }, clear=False):
+                from app.config import Settings
+
+                settings = Settings(_env_file=None)
+
+                assert settings.OLLAMA_URL == "http://ollama:11434"
 
     def test_settings_database_url_required(self):
         """Test that DATABASE_URL is required."""

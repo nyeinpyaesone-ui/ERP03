@@ -39,7 +39,11 @@ def test_engine():
 
 @pytest.fixture
 def db_session(test_engine):
-    """Create fresh database session for each test."""
+    """Provide an isolated database session for a test.
+    
+    Yields:
+        Session: A database session backed by a transaction that is rolled back after the test.
+    """
     connection = test_engine.connect()
     transaction = connection.begin()
     Session = sessionmaker(autocommit=False, autoflush=False, bind=connection)
@@ -75,7 +79,15 @@ def client(db_session):
 
 @pytest.fixture
 def test_user(db_session):
-    """Create test user."""
+    """
+    Create and persist an active administrative user for testing.
+    
+    Parameters:
+    	db_session: Database session used to store the test user.
+    
+    Returns:
+    	User: The persisted test user.
+    """
     user = User(
         email="test@example.com",
         hashed_password="$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3VsPGub8kAm",  # "password"
@@ -92,10 +104,13 @@ def test_user(db_session):
 @pytest.fixture
 def auth_headers(client, test_user):
     """
-    Configure authentication to use the test user and provide authorization headers.
+    Configure the application to authenticate requests as the supplied test user.
+    
+    Parameters:
+        test_user: User returned by the overridden authentication dependency.
     
     Returns:
-        dict: Headers containing a bearer token for authenticated test requests.
+        dict: Authorization headers containing a bearer token.
     """
     # Mock authentication by overriding the dependency
     def override_get_current_user():

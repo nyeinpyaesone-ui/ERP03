@@ -80,12 +80,27 @@ class PaymentResponse(BaseModel):
     created_at: datetime
 
 def generate_invoice_number(db: Session) -> str:
-    """Generate the next year-prefixed invoice number based on the current invoice count."""
+    """
+    Generate the next invoice number for the current year.
+
+    Returns:
+    	str: An invoice number in the format `INV-YYYY-NNNNN`.
+    """
     count = db.query(Invoice).count() + 1
     return f"INV-{datetime.now().year}-{count:05d}"
 
 
 def _rollback_and_raise(db: Session, exc: Exception):
+    """
+    Roll back the current database transaction and convert the exception into an HTTP error.
+
+    Parameters:
+    	db (Session): The database session whose transaction should be rolled back.
+    	exc (Exception): The exception to re-raise or convert.
+
+    Raises:
+    	HTTPException: Re-raises the original exception or returns an HTTP 400 error for other exceptions.
+    """
     db.rollback()
     if isinstance(exc, HTTPException):
         raise exc
@@ -93,6 +108,18 @@ def _rollback_and_raise(db: Session, exc: Exception):
 
 @router.post("/invoices", response_model=InvoiceResponse)
 def create_invoice(data: InvoiceCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Create an invoice with calculated totals and its associated line items.
+
+    Parameters:
+        data (InvoiceCreate): Invoice details, including the items used to calculate totals.
+
+    Returns:
+        Invoice: The persisted invoice.
+
+    Raises:
+        HTTPException: If the invoice number already exists.
+    """
     existing = db.query(Invoice).filter(Invoice.invoice_number == data.invoice_number).first()
     if existing:
         raise HTTPException(status_code=400, detail="Invoice number already exists")
@@ -149,6 +176,16 @@ def create_invoice(data: InvoiceCreate, db: Session = Depends(get_db), current_u
 
 @router.get("/invoices", response_model=List[InvoiceResponse])
 def list_invoices(status: Optional[str] = None, contact_id: Optional[int] = None, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Retrieve invoices, optionally filtered by status and contact.
+
+    Parameters:
+    	status (str | None): Invoice status used to filter results.
+    	contact_id (int | None): Contact ID used to filter results.
+
+    Returns:
+    	list[Invoice]: Invoices ordered from newest to oldest.
+    """
     query = db.query(Invoice)
     if status:
         query = query.filter(Invoice.status == status)
@@ -158,6 +195,18 @@ def list_invoices(status: Optional[str] = None, contact_id: Optional[int] = None
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceResponse)
 def get_invoice(invoice_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Retrieve an invoice by its identifier.
+
+    Parameters:
+    	invoice_id (int): The identifier of the invoice to retrieve.
+
+    Returns:
+    	Invoice: The matching invoice.
+
+    Raises:
+    	HTTPException: If no invoice matches the specified identifier.
+    """
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -165,6 +214,16 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db), current_user = D
 
 @router.put("/invoices/{invoice_id}/status", response_model=InvoiceResponse)
 def update_invoice_status(invoice_id: int, status: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Update an invoice's status and record the change.
+
+    Parameters:
+        invoice_id (int): Identifier of the invoice to update.
+        status (str): New status for the invoice.
+
+    Returns:
+        Invoice: The updated invoice.
+    """
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -188,6 +247,15 @@ def update_invoice_status(invoice_id: int, status: str, db: Session = Depends(ge
 
 @router.post("/payments", response_model=PaymentResponse)
 def create_payment(data: PaymentCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Record a payment for an existing invoice and update its payment status.
+
+    Parameters:
+    	data (PaymentCreate): Payment details, including the associated invoice and amount.
+
+    Returns:
+    	Payment: The created payment.
+    """
     invoice = db.query(Invoice).filter(Invoice.id == data.invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -220,6 +288,12 @@ def create_payment(data: PaymentCreate, db: Session = Depends(get_db), current_u
 
 @router.get("/dashboard")
 def finance_dashboard(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Summarize invoice counts, payment totals, outstanding balances, overdue invoices, and monthly revenue.
+    
+    Returns:
+    	dashboard (dict): JSON-compatible dashboard metrics.
+    """
     total_invoices = db.query(Invoice).count()
     total_revenue = db.query(func.sum(Invoice.amount_paid)).scalar() or 0
     outstanding = db.query(func.sum(Invoice.total - Invoice.amount_paid)).filter(Invoice.status != "paid").scalar() or 0

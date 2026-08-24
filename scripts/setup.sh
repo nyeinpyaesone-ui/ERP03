@@ -8,8 +8,11 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# info prints an informational message with a standard prefix.
 info() { printf '[i] %s\n' "$1"; }
+# ok prints a success status message.
 ok()   { printf '[✓] %s\n' "$1"; }
+# fail prints an error message to stderr and exits with a failure status.
 fail() { printf '[✗] %s\n' "$1" >&2; exit 1; }
 
 command -v git >/dev/null || fail "git is required"

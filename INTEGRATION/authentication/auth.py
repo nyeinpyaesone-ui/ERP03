@@ -246,17 +246,17 @@ class APIKeyManager:
         metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """
-        Generate a new API key.
-        
+        Generate and store an API key for a service.
+
         Args:
-            name: Human-readable name for the key
-            service_id: Service identifier
-            scopes: Allowed permission scopes
-            expires_at: Optional expiration time
-            metadata: Additional metadata
-            
+            name: Human-readable name for the key.
+            service_id: Identifier of the associated service.
+            scopes: Permission scopes granted to the key.
+            expires_at: Optional time when the key expires.
+            metadata: Additional information associated with the key.
+
         Returns:
-            Generated API key (store this securely, it won't be shown again)
+            The generated API key. Store it securely because it cannot be retrieved later.
         """
         # Generate random key
         raw_key = secrets.token_urlsafe(32)
@@ -290,13 +290,14 @@ class APIKeyManager:
     
     def validate_key(self, api_key: str) -> Optional[Dict[str, Any]]:
         """
-        Validate an API key and return its metadata.
-        
-        Args:
-            api_key: API key to validate
-            
+        Validate an API key and provide its associated service information.
+
+        Parameters:
+            api_key (str): API key to validate.
+
         Returns:
-            Key metadata if valid, None otherwise
+            Optional[Dict[str, Any]]: Service ID, scopes, and metadata for an active,
+            unexpired key; None if the key is missing, inactive, or expired.
         """
         key_hash, key_data = self._find_key_record(api_key)
         if not key_data:
@@ -344,14 +345,14 @@ class APIKeyManager:
         new_name: Optional[str] = None
     ) -> Optional[str]:
         """
-        Rotate an API key (revoke old, create new).
-        
-        Args:
-            old_api_key: Current API key
-            new_name: Optional new name for the key
-            
+        Replace a valid API key with a new key that preserves its service, scopes, expiration, and metadata.
+
+        Parameters:
+        	old_api_key (str): The API key to revoke and replace.
+        	new_name (Optional[str]): Optional name for the replacement key.
+
         Returns:
-            New API key if rotation successful, None otherwise
+        	Optional[str]: The replacement API key, or `None` if the existing key is invalid or cannot be located.
         """
         # Validate old key
         key_data = self.validate_key(old_api_key)
@@ -375,6 +376,11 @@ class APIKeyManager:
         )
     
     def _find_key_record(self, api_key: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        """Find the stored record matching an API key.
+
+        Returns:
+        	tuple: The stored hash and key metadata when the key matches; otherwise, `(None, None)`.
+        """
         for stored_hash, key_data in self._keys.items():
             salt = key_data.get("salt")
             iterations = key_data.get("iterations", 210000)
@@ -392,13 +398,13 @@ class APIKeyManager:
 
     def list_keys(self, service_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        List all API keys, optionally filtered by service.
-        
-        Args:
-            service_id: Optional service ID filter
-            
+        List API keys with optional filtering by service ID.
+
+        Parameters:
+            service_id (Optional[str]): Service ID used to filter the results.
+
         Returns:
-            List of key metadata (without hashes)
+            List[Dict[str, Any]]: Metadata for matching API keys, excluding key hashes.
         """
         keys = []
         for key_hash, key_data in self._keys.items():

@@ -25,7 +25,7 @@ spec:
         app.kubernetes.io/part-of: erp_solution
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "3000"
+        prometheus.io/port: "8000"
         prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: erp_solution
@@ -39,7 +39,7 @@ spec:
         imagePullPolicy: Always
         ports:
         - name: http
-          containerPort: 3000
+          containerPort: 8000
           protocol: TCP
         env:
         - name: NODE_ENV
@@ -59,7 +59,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /health/live
-            port: 3000
+            port: 8000
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
@@ -67,7 +67,7 @@ spec:
         readinessProbe:
           httpGet:
             path: /health/ready
-            port: 3000
+            port: 8000
           initialDelaySeconds: 5
           periodSeconds: 5
           timeoutSeconds: 3
@@ -75,7 +75,7 @@ spec:
         startupProbe:
           httpGet:
             path: /health/startup
-            port: 3000
+            port: 8000
           initialDelaySeconds: 10
           periodSeconds: 5
           failureThreshold: 30
@@ -122,8 +122,8 @@ spec:
   type: ClusterIP
   ports:
   - name: http
-    port: 3000
-    targetPort: 3000
+    port: 8000
+    targetPort: 8000
     protocol: TCP
   selector:
     app.kubernetes.io/name: erp_solution-api
