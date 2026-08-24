@@ -38,9 +38,10 @@ register_exception_handlers(app)
 app.middleware("http")(error_handler_middleware)
 
 # CORS Configuration
+cors_origins = settings.CORS_ORIGINS.split(",") if settings.CORS_ORIGINS else ["http://localhost:3000", "http://localhost:8080"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.CORS_ORIGINS.split(",") if settings.CORS_ORIGINS else ["*"]],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
