@@ -1,43 +1,52 @@
-"""
-Models package initialization
-Organizes models by domain for better maintainability
+"""ERP Solution SQLAlchemy models.
+
+This package contains all database models organized by domain:
+- user: User authentication and profile
+- crm: Company, Contact, Deal (Customer Relationship Management)
+- inventory: Product, InventoryMovement, StockAdjustment, Warehouse, WarehouseStock
+- finance: Invoice, InvoiceItem, Payment, Expense, Account, JournalEntry, JournalEntryLine, TaxRate
+- project: Project, Task, TimeEntry, ProjectMilestone, ProjectDocument
+- hr: Department, Employee, LeaveRequest, LeaveBalance, Attendance, PerformanceReview, Payroll
+- workflow: Document, Workflow, WorkflowStep, WorkflowExecution, Webhook, WebhookDelivery, Integration
+- system: ActivityLog, Notification, Report, Forecast, Setting
+- search: SearchIndex, SearchQuery, SearchSuggestion
+- permissions: Role, Permission, RolePermission, UserRole, FieldPermission, DataPolicy
 """
 
 from app.models.base import Base, TimestampMixin, SoftDeleteMixin
 from app.models.user import User
 from app.models.crm import Company, Contact, Deal
-from app.models.hr import Department, Employee, LeaveRequest, LeaveBalance, Attendance, PerformanceReview, Payroll
 from app.models.inventory import Product, InventoryMovement, StockAdjustment, Warehouse, WarehouseStock
 from app.models.finance import Invoice, InvoiceItem, Payment, Expense, Account, JournalEntry, JournalEntryLine, TaxRate
-from app.models.projects import Project, Task, TimeEntry, ProjectMilestone, ProjectDocument
-from app.models.documents import Document
-from app.models.workflows import Workflow, WorkflowStep, WorkflowExecution
-from app.models.integrations import Webhook, WebhookDelivery, Integration
-from app.models.analytics import ActivityLog, Notification, Report, Forecast
-from app.models.settings import Setting
+from app.models.project import Project, Task
+from app.models.hr import Department, Employee, LeaveRequest, LeaveBalance, Attendance, PerformanceReview, Payroll
+from app.models.workflow import (
+    Document,
+    Workflow,
+    WorkflowStep,
+    WorkflowExecution,
+    Webhook,
+    WebhookDelivery,
+    Integration,
+)
+from app.models.permissions import Role, Permission, RolePermission, UserRole, FieldPermission, DataPolicy
+from app.models.system import ActivityLog, Notification, Report, Forecast, Setting
+from app.models.search import SearchIndex, SearchQuery, SearchSuggestion
 
+# Export all models for backward compatibility
 __all__ = [
     # Base
     "Base",
     "TimestampMixin",
     "SoftDeleteMixin",
 
-    # User & Auth
+    # User
     "User",
 
     # CRM
     "Company",
     "Contact",
     "Deal",
-
-    # HR
-    "Department",
-    "Employee",
-    "LeaveRequest",
-    "LeaveBalance",
-    "Attendance",
-    "PerformanceReview",
-    "Payroll",
 
     # Inventory
     "Product",
@@ -56,32 +65,45 @@ __all__ = [
     "JournalEntryLine",
     "TaxRate",
 
-    # Projects
+    # Project
     "Project",
     "Task",
-    "TimeEntry",
-    "ProjectMilestone",
-    "ProjectDocument",
 
-    # Documents
+    # HR
+    "Department",
+    "Employee",
+    "LeaveRequest",
+    "LeaveBalance",
+    "Attendance",
+    "PerformanceReview",
+    "Payroll",
+
+    # Workflow & Integration
     "Document",
-
-    # Workflows
     "Workflow",
     "WorkflowStep",
     "WorkflowExecution",
-
-    # Integrations
     "Webhook",
     "WebhookDelivery",
     "Integration",
 
-    # Analytics
+    # Permissions & RBAC
+    "Role",
+    "Permission",
+    "RolePermission",
+    "UserRole",
+    "FieldPermission",
+    "DataPolicy",
+
+    # System
     "ActivityLog",
     "Notification",
     "Report",
     "Forecast",
-
-    # Settings
     "Setting",
+
+    # Search
+    "SearchIndex",
+    "SearchQuery",
+    "SearchSuggestion",
 ]

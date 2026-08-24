@@ -278,11 +278,11 @@ def list_opportunities(
 ):
     """
     List opportunities in the integration contract format.
-    
+
     Parameters:
         customer_id (Optional[int]): Filter opportunities by customer.
         stage (Optional[str]): Filter opportunities by stage.
-    
+
     Returns:
         list: The matching opportunities.
     """
@@ -310,13 +310,13 @@ def list_products(
 ):
     """
     List products in the integration contract format, with optional category and name filters.
-    
+
     Parameters:
         skip (int): Number of products to skip.
         limit (int): Maximum number of products to return.
         category_id (Optional[int]): Category identifier used to filter products.
         search (Optional[str]): Case-insensitive text used to filter product names.
-    
+
     Returns:
         list[ProductResponse]: The matching products in contract format.
     """
@@ -350,10 +350,10 @@ def get_product_by_sku(
 ):
     """
     Retrieve a product by its stock-keeping unit in the integration contract format.
-    
+
     Parameters:
     	sku (str): The product's stock-keeping unit.
-    
+
     Returns:
     	ProductResponse: The matching product.
     """

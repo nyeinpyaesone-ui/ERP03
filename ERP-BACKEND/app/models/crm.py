@@ -1,8 +1,7 @@
-"""
-CRM Models - Contact, Company, Deal management
-"""
-from sqlalchemy import Column, Integer, String, Text, Numeric, ForeignKey, Date, DateTime
+"""CRM models: Company, Contact, Deal."""
+from sqlalchemy import Column, Integer, String, Text, Numeric, ForeignKey, DateTime, Date
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from app.database import Base
 from app.models.base import TimestampMixin
 
@@ -44,6 +43,7 @@ class Contact(Base, TimestampMixin):
 
     # Relationships
     company = relationship("Company", back_populates="contacts")
+    assigned_user = relationship("User", back_populates="contacts", foreign_keys=[assigned_to])
     deals = relationship("Deal", back_populates="contact")
     invoices = relationship("Invoice", back_populates="contact")
 
@@ -66,3 +66,4 @@ class Deal(Base, TimestampMixin):
     # Relationships
     contact = relationship("Contact", back_populates="deals")
     company = relationship("Company", back_populates="deals")
+    assigned_user = relationship("User", back_populates="deals", foreign_keys=[assigned_to])

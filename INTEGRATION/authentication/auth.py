@@ -247,14 +247,14 @@ class APIKeyManager:
     ) -> str:
         """
         Generate and store an API key for a service.
-        
+
         Args:
             name: Human-readable name for the key.
             service_id: Identifier of the associated service.
             scopes: Permission scopes granted to the key.
             expires_at: Optional time when the key expires.
             metadata: Additional information associated with the key.
-        
+
         Returns:
             The generated API key. Store it securely because it cannot be retrieved later.
         """
@@ -291,10 +291,10 @@ class APIKeyManager:
     def validate_key(self, api_key: str) -> Optional[Dict[str, Any]]:
         """
         Validate an API key and provide its associated service information.
-        
+
         Parameters:
             api_key (str): API key to validate.
-        
+
         Returns:
             Optional[Dict[str, Any]]: Service ID, scopes, and metadata for an active,
             unexpired key; None if the key is missing, inactive, or expired.
@@ -346,11 +346,11 @@ class APIKeyManager:
     ) -> Optional[str]:
         """
         Replace a valid API key with a new key that preserves its service, scopes, expiration, and metadata.
-        
+
         Parameters:
         	old_api_key (str): The API key to revoke and replace.
         	new_name (Optional[str]): Optional name for the replacement key.
-        
+
         Returns:
         	Optional[str]: The replacement API key, or `None` if the existing key is invalid or cannot be located.
         """
@@ -377,7 +377,7 @@ class APIKeyManager:
     
     def _find_key_record(self, api_key: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
         """Find the stored record matching an API key.
-        
+
         Returns:
         	tuple: The stored hash and key metadata when the key matches; otherwise, `(None, None)`.
         """
@@ -399,10 +399,10 @@ class APIKeyManager:
     def list_keys(self, service_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         List API keys with optional filtering by service ID.
-        
+
         Parameters:
             service_id (Optional[str]): Service ID used to filter the results.
-        
+
         Returns:
             List[Dict[str, Any]]: Metadata for matching API keys, excluding key hashes.
         """

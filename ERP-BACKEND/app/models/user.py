@@ -1,8 +1,7 @@
-"""
-User and Authentication Models
-"""
+"""User model."""
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from app.database import Base
 from app.models.base import TimestampMixin
 
@@ -20,6 +19,7 @@ class User(Base, TimestampMixin):
     last_login = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
+    roles = relationship("Role", secondary="user_roles", back_populates="users")
     contacts = relationship("Contact", back_populates="assigned_user", foreign_keys="Contact.assigned_to")
     deals = relationship("Deal", back_populates="assigned_user", foreign_keys="Deal.assigned_to")
     projects_managed = relationship("Project", back_populates="manager", foreign_keys="Project.manager_id")

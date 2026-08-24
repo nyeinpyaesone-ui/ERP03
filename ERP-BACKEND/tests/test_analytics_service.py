@@ -9,7 +9,7 @@ from app.services.analytics_service import AnalyticsQueryService
 class QueryStub:
     def __init__(self, *, one_result=None, scalar_result=None, all_result=None):
         """Initialize the query stub with optional results for each query method.
-        
+
         Parameters:
         	one_result: Value returned by the stub's ``one()`` method.
         	scalar_result: Value returned by the stub's ``scalar()`` method.
