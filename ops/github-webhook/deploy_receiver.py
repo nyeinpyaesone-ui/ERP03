@@ -12,6 +12,7 @@ PORT = int(os.getenv("WEBHOOK_PORT", "9001"))
 SECRET = os.environ["GITHUB_WEBHOOK_SECRET"].encode()
 REPOSITORY = os.getenv("GITHUB_REPOSITORY", "nyeinpyaesone-ui/ERP03")
 BRANCH = os.getenv("GITHUB_BRANCH", "main")
+DEPLOY_WORKFLOW = os.getenv("DEPLOY_WORKFLOW", "Container Build and Publish")
 DEPLOY_SCRIPT = os.getenv("DEPLOY_SCRIPT", "/opt/erp03/ops/github-webhook/deploy-from-github.sh")
 
 
@@ -60,6 +61,7 @@ class Handler(BaseHTTPRequestHandler):
                 run.get("action") == "completed"
                 and run.get("conclusion") == "success"
                 and run.get("head_branch") == BRANCH
+                and run.get("name") == DEPLOY_WORKFLOW
             )
         elif event == "push" and os.getenv("DEPLOY_ON_PUSH", "false").lower() == "true":
             deploy = payload.get("ref") == f"refs/heads/{BRANCH}"

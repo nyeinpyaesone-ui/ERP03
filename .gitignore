@@ -1,34 +1,65 @@
 ```
+# Environment variables
+.env
+
+# Database file
+erp.db
+
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
-*.so
-.coverage
-htmlcov/
-.pytest_cache/
-.mypy_cache/
-
-# Dependencies
+env/
 venv/
 .venv/
-.env
-.env.local
-*.env.*
+.ENV
+.ENV.*
+.venv.bak/
+env.bak/
+
+# Compiled and build artifacts
+*.o
+*.obj
+*.so
+*.a
+*.dll
+*.exe
+*.out
+build/
+dist/
+*.egg-info/
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Logs
 *.log
 
-# Editor/IDE
+# Editor/IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
 *.tmp
 
-# OS
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
-```.ipynb_checkpoints/
+
+# Testing
+.coverage
+htmlcov/
+.coverage.*
+.nyc_output
+istanbul.out
+```

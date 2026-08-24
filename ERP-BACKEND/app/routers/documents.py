@@ -10,6 +10,7 @@ from app.models import Document
 from app.auth import get_current_user
 from app.config import settings
 from app.services.activity_log import log_activity
+from app.services.security_utils import validate_file_upload
 
 router = APIRouter()
 
@@ -28,19 +29,32 @@ async def upload_document(
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
-    file_ext = os.path.splitext(file.filename)[1]
-    unique_name = f"{uuid.uuid4()}{file_ext}"
+    # Read file content for validation
+    file_content = await file.read()
+    
+    # Validate file using security utilities
+    is_valid, error_msg, safe_filename = validate_file_upload(file_content, file.filename)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    # Generate unique safe filename
+    unique_name = f"{uuid.uuid4()}_{safe_filename}"
     file_path = os.path.join(UPLOAD_DIR, unique_name)
 
+    # Write validated file
     with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(file_content)
 
+    # Get MIME type from validation (we know it's valid at this point)
+    import mimetypes
+    mime_type, _ = mimetypes.guess_type(file.filename)
+    
     doc = Document(
         title=title or file.filename,
-        filename=file.filename,
+        filename=safe_filename,  # Store sanitized filename
         file_path=file_path,
-        file_size=os.path.getsize(file_path),
-        mime_type=file.content_type,
+        file_size=len(file_content),
+        mime_type=mime_type,
         entity_type=entity_type,
         entity_id=entity_id,
         uploaded_by=current_user.id

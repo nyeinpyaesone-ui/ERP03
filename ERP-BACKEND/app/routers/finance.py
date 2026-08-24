@@ -21,7 +21,6 @@ class InvoiceItemCreate(BaseModel):
 
 class InvoiceItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
     id: int
     invoice_id: int
     product_id: Optional[int] = None
@@ -43,7 +42,6 @@ class InvoiceCreate(BaseModel):
 
 class InvoiceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
     id: int
     invoice_number: str
     contact_id: Optional[int] = None
@@ -72,7 +70,6 @@ class PaymentCreate(BaseModel):
 
 class PaymentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
     id: int
     invoice_id: int
     amount: float
@@ -83,90 +80,75 @@ class PaymentResponse(BaseModel):
     created_at: datetime
 
 def generate_invoice_number(db: Session) -> str:
-    """Generate the next year-prefixed invoice number based on the current invoice count.
-    
-    Parameters:
-    	db (Session): Database session used to count existing invoices.
-    
-    Returns:
-    	str: Invoice number in the format `INV-YYYY-NNNNN`.
-    """
+    """Generate the next year-prefixed invoice number based on the current invoice count."""
     count = db.query(Invoice).count() + 1
     return f"INV-{datetime.now().year}-{count:05d}"
 
+
+def _rollback_and_raise(db: Session, exc: Exception):
+    db.rollback()
+    if isinstance(exc, HTTPException):
+        raise exc
+    raise HTTPException(status_code=400, detail=str(exc))
+
 @router.post("/invoices", response_model=InvoiceResponse)
 def create_invoice(data: InvoiceCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """
-    Create an invoice with calculated totals and associated line items.
-    
-    Parameters:
-    	data (InvoiceCreate): Invoice details and line items used to create the invoice.
-    
-    Returns:
-    	Invoice: The newly created invoice.
-    
-    Raises:
-    	HTTPException: With status code 400 if the invoice number already exists.
-    """
     existing = db.query(Invoice).filter(Invoice.invoice_number == data.invoice_number).first()
     if existing:
         raise HTTPException(status_code=400, detail="Invoice number already exists")
 
-    subtotal = sum(item.quantity * item.unit_price for item in data.items)
-    tax_amount = subtotal * (data.tax_rate / 100)
-    total = subtotal + tax_amount
+    try:
+        subtotal = sum(item.quantity * item.unit_price for item in data.items)
+        tax_amount = subtotal * (data.tax_rate / 100)
+        total = subtotal + tax_amount
 
-    invoice = Invoice(
-        invoice_number=data.invoice_number,
-        contact_id=data.contact_id,
-        company_id=data.company_id,
-        issue_date=data.issue_date,
-        due_date=data.due_date,
-        subtotal=subtotal,
-        tax_rate=data.tax_rate,
-        tax_amount=tax_amount,
-        total=total,
-        notes=data.notes,
-        terms=data.terms,
-        created_by=current_user.id
-    )
-    db.add(invoice)
-    db.flush()
-
-    for item_data in data.items:
-        item_total = item_data.quantity * item_data.unit_price
-        item = InvoiceItem(
-            invoice_id=invoice.id,
-            product_id=item_data.product_id,
-            description=item_data.description,
-            quantity=item_data.quantity,
-            unit_price=item_data.unit_price,
-            total=item_total
+        invoice = Invoice(
+            invoice_number=data.invoice_number,
+            contact_id=data.contact_id,
+            company_id=data.company_id,
+            issue_date=data.issue_date,
+            due_date=data.due_date,
+            subtotal=subtotal,
+            tax_rate=data.tax_rate,
+            tax_amount=tax_amount,
+            total=total,
+            notes=data.notes,
+            terms=data.terms,
+            created_by=current_user.id
         )
-        db.add(item)
+        db.add(invoice)
+        db.flush()
 
-    db.commit()
-    db.refresh(invoice)
-    log_activity(db, user_id=current_user.id, action="invoice_created", entity_type="invoice", entity_id=invoice.id)
-    return invoice
+        for item_data in data.items:
+            db.add(InvoiceItem(
+                invoice_id=invoice.id,
+                product_id=item_data.product_id,
+                description=item_data.description,
+                quantity=item_data.quantity,
+                unit_price=item_data.unit_price,
+                total=item_data.quantity * item_data.unit_price,
+            ))
+
+        log_activity(
+            db,
+            user_id=current_user.id,
+            action="invoice_created",
+            entity_type="invoice",
+            entity_id=invoice.id,
+            commit=False,
+        )
+        db.commit()
+        db.refresh(invoice)
+        return invoice
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
 
 @router.get("/invoices", response_model=List[InvoiceResponse])
-def list_invoices(
-    status: Optional[str] = None,
-    contact_id: Optional[int] = None,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
-    """
-    List the authenticated user's invoices, optionally filtered by status and contact.
-    
-    Parameters:
-    	status (str, optional): Invoice status used to filter the results.
-    	contact_id (int, optional): Contact ID used to filter the results.
-    
-    Returns:
-    	list: Invoices ordered from newest to oldest by creation time.
-    """
+def list_invoices(status: Optional[str] = None, contact_id: Optional[int] = None, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     query = db.query(Invoice)
     if status:
         query = query.filter(Invoice.status == status)
@@ -176,82 +158,65 @@ def list_invoices(
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceResponse)
 def get_invoice(invoice_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """
-    Retrieve an invoice by its identifier.
-    
-    Parameters:
-        invoice_id (int): The identifier of the invoice to retrieve.
-    
-    Returns:
-        Invoice: The matching invoice.
-    
-    Raises:
-        HTTPException: If no invoice matches the specified identifier.
-    """
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return invoice
 
 @router.put("/invoices/{invoice_id}/status", response_model=InvoiceResponse)
-def update_invoice_status(
-    invoice_id: int,
-    status: str,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
-    """
-    Update the status of an invoice.
-    
-    Parameters:
-    	invoice_id (int): The invoice identifier.
-    	status (str): The new invoice status.
-    
-    Returns:
-    	Invoice: The updated invoice.
-    
-    Raises:
-    	HTTPException: If the invoice does not exist.
-    """
+def update_invoice_status(invoice_id: int, status: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    invoice.status = status
-    db.commit()
-    db.refresh(invoice)
-    return invoice
+    try:
+        invoice.status = status
+        log_activity(
+            db,
+            user_id=current_user.id,
+            action="invoice_status_updated",
+            entity_type="invoice",
+            entity_id=invoice.id,
+            details={"status": status},
+            commit=False,
+        )
+        db.commit()
+        db.refresh(invoice)
+        return invoice
+    except Exception:
+        db.rollback()
+        raise
 
 @router.post("/payments", response_model=PaymentResponse)
 def create_payment(data: PaymentCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """
-    Record a payment for an invoice and update the invoice's payment status.
-    
-    Parameters:
-    	data (PaymentCreate): Payment details, including the associated invoice and amount.
-    
-    Returns:
-    	Payment: The newly recorded payment.
-    
-    Raises:
-    	HTTPException: If the referenced invoice does not exist.
-    """
     invoice = db.query(Invoice).filter(Invoice.id == data.invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
-    payment = Payment(**data.model_dump())
-    db.add(payment)
+    try:
+        payment = Payment(**data.model_dump())
+        db.add(payment)
+        db.flush()
 
-    invoice.amount_paid = (invoice.amount_paid or 0) + data.amount
-    if invoice.amount_paid >= invoice.total:
-        invoice.status = "paid"
-    else:
-        invoice.status = "partial"
+        invoice.amount_paid = (invoice.amount_paid or 0) + data.amount
+        if invoice.amount_paid >= invoice.total:
+            invoice.status = "paid"
+        else:
+            invoice.status = "partial"
 
-    db.commit()
-    db.refresh(payment)
-    log_activity(db, user_id=current_user.id, action="payment_received", entity_type="payment", entity_id=payment.id)
-    return payment
+        log_activity(
+            db,
+            user_id=current_user.id,
+            action="payment_received",
+            entity_type="payment",
+            entity_id=payment.id,
+            commit=False,
+        )
+        db.commit()
+        db.refresh(payment)
+        return payment
+    except Exception:
+        db.rollback()
+        raise
 
 @router.get("/dashboard")
 def finance_dashboard(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
@@ -260,14 +225,18 @@ def finance_dashboard(db: Session = Depends(get_db), current_user = Depends(get_
     outstanding = db.query(func.sum(Invoice.total - Invoice.amount_paid)).filter(Invoice.status != "paid").scalar() or 0
     overdue = db.query(Invoice).filter(Invoice.due_date < date.today(), Invoice.status != "paid").count()
 
+    monthly_data = db.query(
+        func.extract('month', Invoice.issue_date),
+        func.sum(Invoice.total)
+    ).group_by(func.extract('month', Invoice.issue_date)).all()
+    
+    # Convert to list of dicts for JSON serialization
+    monthly_revenue = [{"month": int(row[0]), "revenue": float(row[1])} for row in monthly_data]
+
     return {
         "total_invoices": total_invoices,
         "total_revenue": float(total_revenue),
         "outstanding": float(outstanding),
         "overdue_count": overdue,
-        "monthly_revenue": db.query(
-            func.extract('month', Invoice.issue_date),
-            func.sum(Invoice.total)
-        ).group_by(func.extract('month', Invoice.issue_date)).all()
+        "monthly_revenue": monthly_revenue
     }
-
