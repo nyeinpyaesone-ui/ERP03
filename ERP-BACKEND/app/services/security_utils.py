@@ -25,17 +25,14 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 
 def validate_password_strength(password: str) -> Tuple[bool, str]:
     """
-    Validates password strength based on security requirements.
+    Validate a password against the required length and character composition rules.
     
-    Requirements:
-    - Minimum 8 characters
-    - At least one uppercase letter
-    - At least one lowercase letter
-    - At least one digit
-    - At least one special character
+    Parameters:
+        password (str): Password to validate.
     
     Returns:
-        Tuple[bool, str]: (is_valid, error_message)
+        tuple[bool, str]: A validity flag and an error message. The message is
+            empty when the password satisfies all requirements.
     """
     if len(password) < 8:
         return False, "Password must be at least 8 characters long."
@@ -58,15 +55,14 @@ def validate_password_strength(password: str) -> Tuple[bool, str]:
 
 def validate_file_upload(file_content: bytes, filename: str) -> Tuple[bool, str, Optional[str]]:
     """
-    Validates uploaded files for security.
+    Validate an uploaded file's size, type, and extension, and generate a safe filename for valid files.
     
-    Checks:
-    1. File extension against allowlist
-    2. MIME type magic bytes verification
-    3. File size limits
+    Parameters:
+        file_content (bytes): The uploaded file contents.
+        filename (str): The original filename used to determine its extension and type.
     
     Returns:
-        Tuple[bool, str, Optional[str]]: (is_valid, error_message, safe_filename)
+        Tuple[bool, str, Optional[str]]: A validity flag, an error message, and a randomized filename with the validated extension when valid; otherwise, no filename.
     """
     # Check file size
     if len(file_content) > MAX_FILE_SIZE:

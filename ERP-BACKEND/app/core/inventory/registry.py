@@ -167,7 +167,12 @@ class ModuleRegistry:
         return [r for r in self.routes if r.requires_saga]
     
     def to_dict(self) -> dict:
-        """Convert registry to dictionary for serialization."""
+        """
+        Serialize the registry and its route metrics to a dictionary.
+        
+        Returns:
+            dict: Module descriptions, route counts, and sorted serialized route records.
+        """
         return {
             "modules": self.modules,
             "routes_count": len(self.routes),

@@ -268,12 +268,12 @@ async def deep_health_check(db: Session = Depends(get_db)):
     Perform comprehensive database health diagnostics.
     
     Checks major-table accessibility, database read capability, PostgreSQL recovery state,
-    sequence values, and database size. Individual check failures produce a degraded result
-    when applicable.
+    sequence values, and database size. Reports individual check failures and marks the
+    overall result as degraded when table or read/write checks fail.
     
     Returns:
         Dict[str, Any]: A health payload containing the overall status, diagnostic results,
-        and an UTC timestamp.
+            and a UTC timestamp.
     
     Raises:
         HTTPException: If the overall health-check operation fails.

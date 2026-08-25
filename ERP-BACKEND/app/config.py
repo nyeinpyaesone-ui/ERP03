@@ -53,6 +53,18 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
     def model_post_init(self, __context):
+        """
+        Validate and complete application settings after initialization.
+        
+        In test mode, defaults an empty database URL to an in-memory SQLite database and
+        requires a secret key containing at least 32 characters. Otherwise, loads
+        database and secret key values from their configured secret files when
+        available, then requires both values and enforces the same secret key length.
+        
+        Raises:
+            ValueError: If the database URL is missing or the secret key is missing or
+                contains fewer than 32 characters.
+        """
         if self.TEST_MODE:
             if not self.DATABASE_URL:
                 self.DATABASE_URL = "sqlite:///:memory:"

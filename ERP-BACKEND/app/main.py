@@ -78,6 +78,16 @@ app.add_middleware(AuthRateLimitMiddleware, max_attempts=5, window_seconds=60)
 
 @app.middleware("http")
 async def observability_middleware(request, call_next):
+    """
+    Assigns a request ID, records request metrics, and logs request completion details.
+    
+    Parameters:
+    	request (Request): The incoming HTTP request.
+    	call_next (Callable): The next request handler in the middleware chain.
+    
+    Returns:
+    	Response: The response produced by the downstream request handler.
+    """
     start = perf_counter()
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     status_code = 500

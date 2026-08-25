@@ -25,6 +25,18 @@ class UserCreate(BaseModel):
     @field_validator('password')
     @classmethod
     def validate_password(cls, v: str) -> str:
+        """
+        Validate that a password meets the required strength criteria.
+        
+        Parameters:
+            v (str): Password to validate.
+        
+        Returns:
+            str: The validated password.
+        
+        Raises:
+            ValueError: If the password does not meet the required strength criteria.
+        """
         is_valid, error_msg = validate_password_strength(v)
         if not is_valid:
             raise ValueError(error_msg)
@@ -55,6 +67,18 @@ class UserUpdate(BaseModel):
 
 @router.post("/register", response_model=UserResponse)
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
+    """
+    Register a new user account.
+    
+    Parameters:
+    	user_data (UserCreate): Validated account details for the new user.
+    
+    Returns:
+    	User: The newly created user.
+    
+    Raises:
+    	HTTPException: If registration cannot proceed because the email is already registered.
+    """
     existing = db.query(User).filter(User.email == user_data.email).first()
     if existing:
         # Use generic message to prevent user enumeration
@@ -74,6 +98,19 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    """
+    Authenticate a user and create an access token.
+    
+    Parameters:
+    	form_data (OAuth2PasswordRequestForm): Submitted username and password.
+    	db (Session): Database session used to retrieve and update the user.
+    
+    Returns:
+    	dict: Access token details and the authenticated user's information.
+    
+    Raises:
+    	HTTPException: If the credentials are invalid.
+    """
     user = db.query(User).filter(User.email == form_data.username).first()
     
     # Use constant-time comparison to prevent timing attacks
@@ -114,6 +151,16 @@ def list_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
+    """
+    Retrieve a paginated list of users.
+    
+    Parameters:
+    	skip (int): Number of users to skip before collecting results.
+    	limit (int): Maximum number of users to return.
+    
+    Returns:
+    	list[User]: Users within the requested offset and limit.
+    """
     return db.query(User).offset(skip).limit(limit).all()
 
 @router.put("/users/{user_id}", response_model=UserResponse)
@@ -124,9 +171,17 @@ def update_user(
     current_user: User = Depends(require_admin)
 ):
     """
-    Update user with whitelisted fields only.
-    Prevents mass assignment vulnerability by using Pydantic model
-    that excludes sensitive fields like 'role'.
+    Update a user's permitted profile fields.
+    
+    Parameters:
+        user_id (int): Identifier of the user to update.
+        user_data (UserUpdate): Fields to update.
+    
+    Raises:
+        HTTPException: If the specified user does not exist.
+    
+    Returns:
+        User: The updated user.
     """
     user = db.query(User).filter(User.id == user_id).first()
     if not user:

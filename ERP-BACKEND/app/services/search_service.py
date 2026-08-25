@@ -76,13 +76,13 @@ class SearchService:
 
     def _bulk_index(self, batch_data: List[Dict[str, Any]]):
         """
-        Bulk inserts or updates search index records.
-
+        Index multiple entities in the search index.
+        
         Parameters:
-            batch_data (List[Dict[str, Any]]): Records to index, including entity type,
-                entity ID, title, and content. Optional fields include searchable text,
-                metadata, and tags. If the bulk operation fails due to an integrity
-                error, records are indexed individually.
+            batch_data (List[Dict[str, Any]]): Records containing entity type, entity ID,
+                title, and content. Records may also include searchable text, metadata,
+                and tags. If the batch cannot be indexed due to an integrity error, each
+                record is attempted individually.
         """
         from sqlalchemy.exc import IntegrityError
 
@@ -147,10 +147,13 @@ class SearchService:
 
     def index_all_contacts(self, batch_size: int = 500):
         """
-        Index all contacts in batches for full-text search.
-
+        Index all contacts for full-text search in batches.
+        
         Parameters:
-        	batch_size (int): The maximum number of contacts processed per batch.
+        	batch_size (int): Maximum number of contacts to process in each batch.
+        
+        Returns:
+        	list: An empty list when indexing is complete.
         """
         offset = 0
         while True:
@@ -182,9 +185,12 @@ class SearchService:
     def index_all_companies(self, batch_size: int = 500):
         """
         Index all companies in batches.
-
+        
         Parameters:
-        	batch_size (int): Maximum number of companies to process per batch.
+        	batch_size (int): Maximum number of companies processed per batch.
+        
+        Returns:
+        	list: An empty list when all companies have been indexed.
         """
         offset = 0
         while True:
@@ -213,10 +219,13 @@ class SearchService:
 
     def index_all_products(self, batch_size: int = 500):
         """
-        Index all products for search.
-
+        Index all products for search in batches.
+        
         Parameters:
         	batch_size (int): Maximum number of products processed per batch.
+        
+        Returns:
+        	list: An empty list after all products have been indexed.
         """
         offset = 0
         while True:
@@ -279,8 +288,8 @@ class SearchService:
 
     def index_all_documents(self, batch_size: int = 500):
         """
-        Index all documents in the search index using batches.
-
+        Index all documents in the search index in batches.
+        
         Parameters:
         	batch_size (int): Maximum number of documents to process per batch.
         """
@@ -313,9 +322,12 @@ class SearchService:
     def reindex_all(self):
         """
         Rebuild the search index for all supported entity types.
-
+        
         Returns:
-        	dict: The number of indexed contacts, companies, products, employees, and documents.
+        	dict: Counts of indexed contacts, companies, products, employees, and documents.
+        
+        Raises:
+        	RuntimeError: If one or more entities fail to be indexed.
         """
         # Clear existing index
         self.db.query(SearchIndex).delete()

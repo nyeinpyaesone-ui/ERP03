@@ -67,12 +67,23 @@ class DependencyGraph:
         return False
     
     def get_circular_dependencies(self) -> List[List[str]]:
-        """Get all circular dependency cycles."""
+        """Identify all circular dependency paths among modules.
+        
+        Returns:
+        	List[List[str]]: Unique cycles represented as ordered module names, with the starting module repeated at the end.
+        """
         cycles = []
         visited = set()
         rec_stack = []
 
         def find_cycles(node: str, path: List[str]) -> None:
+            """
+            Traverse a module dependency path and record any cycles found.
+            
+            Parameters:
+                node (str): The module currently being traversed.
+                path (List[str]): The dependency path leading to the current module.
+            """
             visited.add(node)
             path.append(node)
 
@@ -93,7 +104,15 @@ class DependencyGraph:
         return cycles
 
     def get_critical_dependencies(self, module_name: str) -> Set[str]:
-        """Get critical (non-fallback) dependencies."""
+        """
+        Return the truthy direct dependencies of a module.
+        
+        Parameters:
+        	module_name (str): Name of the module whose dependencies are examined.
+        
+        Returns:
+        	Set[str]: Direct dependency names with truthy values.
+        """
         critical = set()
         for dep_module in self.get_module_dependencies(module_name):
             if dep_module:  # Non-optional
@@ -101,7 +120,15 @@ class DependencyGraph:
         return critical
     
     def get_dependency_chain(self, module_name: str, max_depth: int = 5) -> Dict:
-        """Get full dependency chain with depth limit."""
+        """
+        Build a nested representation of a module's dependencies up to the specified depth.
+        
+        Parameters:
+        	max_depth (int): Maximum dependency depth to include. Deeper entries are marked as truncated.
+        
+        Returns:
+        	Dict: A dependency tree containing each module's name, dependencies, and depth.
+        """
         chain = {
             "module": module_name,
             "dependencies": [],
