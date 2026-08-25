@@ -11,10 +11,10 @@ app = FastAPI(
     description="ERP03 Production System"
 )
 
-# CORS Configuration
+# CORS Configuration - Secure with specific origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=["http://localhost:3000", "http://localhost:8080"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -140,8 +140,22 @@ register_exception_handlers(app)
 app.middleware("http")(error_handler_middleware)
 
 
+
 @app.middleware("http")
 async def observability_middleware(request, call_next):
+    """
+    Track request metrics and attach a request identifier to the response.
+    
+    Parameters:
+    	request (Request): The incoming HTTP request.
+    	call_next (Callable): The handler for processing the request.
+    
+    Returns:
+    	response (Response): The response produced by the request handler.
+    
+    Raises:
+    	Exception: Re-raises exceptions raised while processing the request.
+    """
     start = perf_counter()
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     status_code = 500
@@ -177,7 +191,7 @@ async def observability_middleware(request, call_next):
         )
 
 
-cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
+cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()] or ["http://localhost:3000", "http://localhost:8080"]
 
 # SECURITY FIX: Restrict CORS methods and headers to only what's necessary
 app.add_middleware(
