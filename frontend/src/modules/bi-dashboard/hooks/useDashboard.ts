@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { createQueryHooks, createMutationHooks } from '../../../core/hooks';
 import {
   DashboardSummary,
   RevenueAnalytics,
@@ -11,137 +12,321 @@ import {
   ForecastData,
   AIInsight,
   InventoryStats,
+  AnomalyDetectionResult,
 } from '../types/dashboard';
 
-const API_BASE = 'https://api.erp_solution.com/v1';
+// BI Dashboard API endpoints
+const dashboardAPI = {
+  getSummary: (params: DashboardFilter) => 
+    `/dashboard/summary?period=${params.period}&compareWith=${params.compareWith}`,
+  getRevenueAnalytics: (period: string) => 
+    `/dashboard/revenue?period=${period}&groupBy=daily`,
+  getKPIMetrics: (period: string) => 
+    `/dashboard/kpis?period=${period}`,
+  getSalesChart: (period: string = '30d') => 
+    `/dashboard/charts/sales?period=${period}`,
+  getInventoryChart: () => 
+    '/dashboard/charts/inventory',
+  getCustomerChart: (period: string = '30d') => 
+    `/dashboard/charts/customers?period=${period}`,
+  getActivities: (limit: number = 20, type: string = 'all') => 
+    `/dashboard/activities?limit=${limit}&type=${type}`,
+  getTopProducts: (period: string = 'this_month', limit: number = 10) => 
+    `/dashboard/top-products?period=${period}&limit=${limit}`,
+  getTopCustomers: (period: string = 'this_month', limit: number = 10) => 
+    `/dashboard/top-customers?period=${period}&limit=${limit}`,
+  getSalesForecast: (horizon: string = '30d') => 
+    `/ai/forecast?type=sales&horizon=${horizon}`,
+  getAIInsights: (limit: number = 5) => 
+    `/ai/insights?type=all&limit=${limit}`,
+  getInventoryStats: () => 
+    '/inventory/stats',
+  getAnomalyDetection: (module: string = 'all', sensitivity: string = 'medium') => 
+    `/ai/anomaly-detection?module=${module}&sensitivity=${sensitivity}`,
+};
 
-const useApi = <T>(endpoint: string, params?: Record<string, string>) => {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  const fetchData = useCallback(async () => {
-    if (abortRef.current) abortRef.current.abort();
-    abortRef.current = new AbortController();
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const queryParams = params ? new URLSearchParams(params).toString() : '';
-      const url = `${API_BASE}${endpoint}${queryParams ? `?${queryParams}` : ''}`;
-
-      const response = await fetch(url, {
+/**
+ * Dashboard Summary Hook
+ * Fetches high-level KPI summary with period comparison
+ */
+export const useDashboardSummary = (filter: DashboardFilter) => {
+  return useQuery<DashboardSummary>({
+    queryKey: ['dashboardSummary', filter],
+    queryFn: async () => {
+      const endpoint = dashboardAPI.getSummary(filter);
+      const response = await fetch(endpoint, {
         headers: {
-          Authorization: `Bearer ${getToken()}`,
+          Authorization: `Bearer ${await getAuthToken()}`,
           'Content-Type': 'application/json',
         },
-        signal: abortRef.current.signal,
       });
-
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const result = await response.json();
-      setData(result);
-    } catch (err) {
-      if (err instanceof Error && err.name !== 'AbortError') {
-        setError(err.message);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [endpoint, JSON.stringify(params)]);
-
-  useEffect(() => {
-    fetchData();
-    return () => abortRef.current?.abort();
-  }, [fetchData]);
-
-  return { data, loading, error, refetch: fetchData };
-};
-
-const getToken = (): string => {
-  // Replace with your actual token retrieval logic
-  return (globalThis as any).__ERP_TOKEN__ || '';
-};
-
-export const useDashboardSummary = (filter: DashboardFilter) => {
-  return useApi<DashboardSummary>('/dashboard/summary', {
-    period: filter.period,
-    compareWith: filter.compareWith,
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 2,
   });
 };
 
+/**
+ * Revenue Analytics Hook
+ * Fetches revenue data with daily grouping for charts
+ */
 export const useRevenueAnalytics = (period: string) => {
-  return useApi<RevenueAnalytics>('/dashboard/revenue', {
-    period,
-    groupBy: 'daily',
+  return useQuery<RevenueAnalytics>({
+    queryKey: ['revenueAnalytics', period],
+    queryFn: async () => {
+      const endpoint = dashboardAPI.getRevenueAnalytics(period);
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${await getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
+    staleTime: 10 * 60 * 1000, // 10 minutes
   });
 };
 
+/**
+ * KPI Metrics Hook
+ * Fetches key performance indicators for the specified period
+ */
 export const useKPIMetrics = (period: string) => {
-  return useApi<KPIMetrics>('/dashboard/kpis', { period });
+  return useQuery<KPIMetrics>({
+    queryKey: ['kpiMetrics', period],
+    queryFn: async () => {
+      const endpoint = dashboardAPI.getKPIMetrics(period);
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${await getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 };
 
+/**
+ * Sales Chart Data Hook
+ * Fetches time-series sales data for visualization
+ */
 export const useSalesChart = (period: string = '30d') => {
-  return useApi<ChartData>('/dashboard/charts/sales', { period });
+  return useQuery<ChartData>({
+    queryKey: ['salesChart', period],
+    queryFn: async () => {
+      const endpoint = dashboardAPI.getSalesChart(period);
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${await getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
+  });
 };
 
+/**
+ * Inventory Chart Data Hook
+ * Fetches inventory level trends
+ */
 export const useInventoryChart = () => {
-  return useApi<ChartData>('/dashboard/charts/inventory');
+  return useQuery<ChartData>({
+    queryKey: ['inventoryChart'],
+    queryFn: async () => {
+      const endpoint = dashboardAPI.getInventoryChart();
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${await getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
+  });
 };
 
+/**
+ * Customer Analytics Chart Hook
+ * Fetches customer growth and activity data
+ */
 export const useCustomerChart = (period: string = '30d') => {
-  return useApi<ChartData>('/dashboard/charts/customers', { period });
+  return useQuery<ChartData>({
+    queryKey: ['customerChart', period],
+    queryFn: async () => {
+      const endpoint = dashboardAPI.getCustomerChart(period);
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${await getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
+  });
 };
 
+/**
+ * Activity Feed Hook
+ * Fetches recent system activities
+ */
 export const useActivities = (limit: number = 20, type: string = 'all') => {
-  return useApi<ActivityItem[]>('/dashboard/activities', {
-    limit: String(limit),
-    type,
+  return useQuery<ActivityItem[]>({
+    queryKey: ['activities', limit, type],
+    queryFn: async () => {
+      const endpoint = dashboardAPI.getActivities(limit, type);
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${await getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 };
 
+/**
+ * Top Products Hook
+ * Fetches best-selling products for the period
+ */
 export const useTopProducts = (period: string = 'this_month', limit: number = 10) => {
-  return useApi<TopProduct[]>('/dashboard/top-products', {
-    period,
-    limit: String(limit),
+  return useQuery<TopProduct[]>({
+    queryKey: ['topProducts', period, limit],
+    queryFn: async () => {
+      const endpoint = dashboardAPI.getTopProducts(period, limit);
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${await getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
   });
 };
 
+/**
+ * Top Customers Hook
+ * Fetches highest-value customers for the period
+ */
 export const useTopCustomers = (period: string = 'this_month', limit: number = 10) => {
-  return useApi<TopCustomer[]>('/dashboard/top-customers', {
-    period,
-    limit: String(limit),
+  return useQuery<TopCustomer[]>({
+    queryKey: ['topCustomers', period, limit],
+    queryFn: async () => {
+      const endpoint = dashboardAPI.getTopCustomers(period, limit);
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${await getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
   });
 };
 
+/**
+ * Sales Forecast Hook
+ * Fetches AI-powered sales predictions
+ */
 export const useSalesForecast = (horizon: string = '30d') => {
-  return useApi<ForecastData>('/ai/forecast', {
-    type: 'sales',
-    horizon,
+  return useQuery<ForecastData>({
+    queryKey: ['salesForecast', horizon],
+    queryFn: async () => {
+      const endpoint = dashboardAPI.getSalesForecast(horizon);
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${await getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
   });
 };
 
+/**
+ * AI Insights Hook
+ * Fetches actionable business insights from AI
+ */
 export const useAIInsights = (limit: number = 5) => {
-  return useApi<AIInsight[]>('/ai/insights', {
-    type: 'all',
-    limit: String(limit),
+  return useQuery<AIInsight[]>({
+    queryKey: ['aiInsights', limit],
+    queryFn: async () => {
+      const endpoint = dashboardAPI.getAIInsights(limit);
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${await getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
   });
 };
 
+/**
+ * Inventory Statistics Hook
+ * Fetches comprehensive inventory metrics
+ */
 export const useInventoryStats = () => {
-  return useApi<InventoryStats>('/inventory/stats');
+  return useQuery<InventoryStats>({
+    queryKey: ['inventoryStats'],
+    queryFn: async () => {
+      const endpoint = dashboardAPI.getInventoryStats();
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${await getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
+  });
 };
 
-export const useAnomalyDetection = () => {
-  return useApi<Array<{ id: string; module: string; metric: string; severity: string; description: string }>>(
-    '/ai/anomaly-detection',
-    { module: 'all', sensitivity: 'medium' }
-  );
+/**
+ * Anomaly Detection Hook
+ * Fetches AI-detected anomalies across modules
+ */
+export const useAnomalyDetection = (module: string = 'all', sensitivity: string = 'medium') => {
+  return useQuery<AnomalyDetectionResult[]>({
+    queryKey: ['anomalyDetection', module, sensitivity],
+    queryFn: async () => {
+      const endpoint = dashboardAPI.getAnomalyDetection(module, sensitivity);
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${await getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
+  });
 };
 
+/**
+ * Dashboard Auto-Refresh Hook
+ * Manages periodic refresh interval for real-time dashboards
+ */
 export const useDashboardRefresh = (interval: number = 300000) => {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
@@ -156,6 +341,10 @@ export const useDashboardRefresh = (interval: number = 300000) => {
   return lastRefresh;
 };
 
+/**
+ * Period Filter State Hook
+ * Manages dashboard filter state with persistence
+ */
 export const usePeriodFilter = () => {
   const [filter, setFilter] = useState<DashboardFilter>({
     period: 'this_month',
@@ -171,6 +360,17 @@ export const usePeriodFilter = () => {
   }, []);
 
   return { filter, setPeriod, setCompareWith, setFilter };
+};
+
+// Helper function for auth token retrieval
+const getAuthToken = async (): Promise<string> => {
+  try {
+    const token = await AsyncStorage.getItem('@erp_token');
+    return token || '';
+  } catch (error) {
+    console.error('Failed to retrieve auth token:', error);
+    return '';
+  }
 };
 
 ---
