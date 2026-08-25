@@ -1,0 +1,149 @@
+name: ERP03 CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop, "feat/*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-22.04
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('ERP-BACKEND/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
+      - name: Install dependencies
+        run: |
+          cd ERP-BACKEND
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff mypy pytest pytest-cov
+      
+      - name: Lint with Ruff
+        run: |
+          cd ERP-BACKEND
+          ruff check app/
+      
+      - name: Type check with Mypy
+        run: |
+          cd ERP-BACKEND
+          mypy app/ --ignore-missing-imports
+      
+      - name: Test with Pytest
+        run: |
+          cd ERP-BACKEND
+          pytest tests/ -v --cov=app --cov-report=xml --cov-fail-under=80
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./ERP-BACKEND/coverage.xml
+          flags: backend
+
+  build-and-scan:
+    needs: lint-and-test
+    runs-on: ubuntu-22.04
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: nyeinpyaesone/erp03-api
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      
+      - name: Build API image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ERP-BACKEND
+          file: ./ERP-BACKEND/Dockerfile
+          target: production
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Build Worker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.worker
+          target: production
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: nyeinpyaesone/erp03-worker:${{ github.sha }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Run Trivy vulnerability scanner (API)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: nyeinpyaesone/erp03-api:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-api-results.sarif'
+          severity: 'CRITICAL,HIGH'
+      
+      - name: Run Trivy vulnerability scanner (Worker)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: nyeinpyaesone/erp03-worker:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-worker-results.sarif'
+          severity: 'CRITICAL,HIGH'
+      
+      - name: Upload Trivy API results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-api-results.sarif'
+      
+      - name: Upload Trivy Worker results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-worker-results.sarif'
+
+  deploy-staging:
+    needs: [lint-and-test, build-and-scan]
+    runs-on: ubuntu-22.04
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy to Staging
+        run: |
+          echo "Deploying to staging environment..."
+          # Add kubectl or docker-compose deployment commands here
+          # kubectl apply -f k8s/staging/
