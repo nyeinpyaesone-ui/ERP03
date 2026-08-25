@@ -32,3 +32,5 @@ venv/
 .DS_Store
 Thumbs.db
 ```.ipynb_checkpoints/
+.ipynb_checkpoints/
+package-lock.json
