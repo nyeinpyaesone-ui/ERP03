@@ -1,0 +1,182 @@
+name: ERP03 CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop, "feat/*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-22.04
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('ERP-BACKEND/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
+      - name: Install dependencies
+        run: |
+          cd ERP-BACKEND
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff mypy pytest pytest-cov
+      
+      - name: Lint with Ruff
+        run: |
+          cd ERP-BACKEND
+          ruff check app/ tests/
+      
+      - name: Type check with Mypy
+        run: |
+          cd ERP-BACKEND
+          mypy app/ --ignore-missing-imports
+      
+      - name: Test with Pytest
+        run: |
+          cd ERP-BACKEND
+          pytest tests/ -v --cov=app --cov-report=xml --cov-fail-under=80
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./ERP-BACKEND/coverage.xml
+          flags: backend
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  build-and-scan:
+    needs: lint-and-test
+    runs-on: ubuntu-22.04
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Extract metadata (API)
+        id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: nyeinpyaesone-ui/erp03-api
+          tags: |
+            type=sha,prefix=api-
+            type=ref,event=branch,suffix=-api
+            type=semver,pattern={{version}},suffix=-api
+      
+      - name: Extract metadata (Worker)
+        id: meta-worker
+        uses: docker/metadata-action@v5
+        with:
+          images: nyeinpyaesone-ui/erp03-worker
+          tags: |
+            type=sha,prefix=worker-
+            type=ref,event=branch,suffix=-worker
+            type=semver,pattern={{version}},suffix=-worker
+      
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ERP-BACKEND
+          file: ./ERP-BACKEND/Dockerfile
+          target: production
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Build and push Worker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ERP-BACKEND
+          file: ./ERP-BACKEND/Dockerfile.worker
+          target: production
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-worker.outputs.tags }}
+          labels: ${{ steps.meta-worker.outputs.labels }}
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Run Trivy vulnerability scanner (API)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: nyeinpyaesone-ui/erp03-api:${{ github.sha }}-api
+          format: 'sarif'
+          output: 'trivy-api-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '1'
+      
+      - name: Run Trivy vulnerability scanner (Worker)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: nyeinpyaesone-ui/erp03-worker:${{ github.sha }}-worker
+          format: 'sarif'
+          output: 'trivy-worker-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '1'
+      
+      - name: Upload Trivy API results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-api-results.sarif'
+      
+      - name: Upload Trivy Worker results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-worker-results.sarif'
+
+  deploy-staging:
+    needs: [lint-and-test, build-and-scan]
+    runs-on: ubuntu-22.04
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: staging
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy to Staging Server
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          echo "$SSH_PRIVATE_KEY" | ssh-agent -D > /dev/null 2>&1 || true
+          echo "$SSH_PRIVATE_KEY" | ssh-add -
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -H "$STAGING_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          
+          ssh -o StrictHostKeyChecking=no "$STAGING_USER@$STAGING_HOST" << 'EOF'
+            cd /opt/erp03-staging
+            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            docker compose pull
+            docker compose -f docker-compose.yml up -d --remove-orphans
+            docker image prune -f
+          EOF
+          
+          echo "✅ Staging deployment completed"
