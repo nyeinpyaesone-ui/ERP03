@@ -49,7 +49,11 @@ class UserFactory(SQLAlchemyModelFactory):
     
     @classmethod
     def set_model(cls, model_class):
-        """Set the model class dynamically."""
+        """Set the model class used by the factory dynamically.
+        
+        Parameters:
+        	model_class: The model class to associate with the factory.
+        """
         cls.Meta.model = model_class
     
     @classmethod
@@ -58,7 +62,18 @@ class UserFactory(SQLAlchemyModelFactory):
         _using=None,
         **kwargs
     ):
-        """Create user asynchronously."""
+        """
+        Create and persist a user in an asynchronous database session.
+        
+        Parameters:
+            **kwargs: Attributes used to build the user.
+        
+        Returns:
+            The persisted user.
+        
+        Raises:
+            Exception: Re-raises any error encountered while creating or committing the user.
+        """
         from ..database import db_manager
         
         async with db_manager.async_session() as session:
@@ -76,7 +91,12 @@ class UserFactory(SQLAlchemyModelFactory):
     
     @classmethod
     def simple_user(cls):
-        """Create a simple standard user."""
+        """
+        Build a standard active user without administrator privileges.
+        
+        Returns:
+            A user configured as active and non-superuser.
+        """
         return cls(
             is_active=True,
             is_superuser=False,
@@ -104,15 +124,15 @@ def create_test_users(
     include_inactive: bool = True,
 ) -> list:
     """
-    Create a mix of test users.
+    Create a configurable collection of test users.
     
     Args:
-        count: Number of regular users to create
-        include_admin: Whether to include an admin user
-        include_inactive: Whether to include inactive users
-        
+        count: Number of regular users to create.
+        include_admin: Whether to include one admin user.
+        include_inactive: Whether to include three inactive users.
+    
     Returns:
-        List of created users
+        List containing the requested admin, regular, and inactive users.
     """
     users = []
     

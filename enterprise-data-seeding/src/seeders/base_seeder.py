@@ -38,7 +38,15 @@ class SeederResult:
         return self.records_created + self.records_updated + self.records_skipped
     
     def merge(self, other: "SeederResult") -> "SeederResult":
-        """Merge results from another seeder operation."""
+        """
+        Combine this result with another seeding result.
+        
+        Parameters:
+            other (SeederResult): The result to combine with this result.
+        
+        Returns:
+            SeederResult: A combined result with aggregated counts, messages, and duration.
+        """
         return SeederResult(
             success=self.success and other.success,
             records_created=self.records_created + other.records_created,
@@ -70,12 +78,12 @@ class BaseSeeder(ABC):
         batch_size: int = 100,
     ):
         """
-        Initialize seeder.
+        Initialize a seeder with a database session and processing options.
         
-        Args:
-            session: Database session
-            dry_run: If True, preview changes without committing
-            batch_size: Number of records to process per batch
+        Parameters:
+            session (AsyncSession): Database session used for seeding operations.
+            dry_run (bool): Whether to preview changes without applying them.
+            batch_size (int): Number of records processed in each batch.
         """
         self.session = session
         self.dry_run = dry_run
@@ -85,20 +93,20 @@ class BaseSeeder(ABC):
     @abstractmethod
     async def seed(self) -> SeederResult:
         """
-        Execute the seeding operation.
+        Perform the seeding operation.
         
         Returns:
-            SeederResult with operation statistics
+            SeederResult: The operation's status and statistics.
         """
         pass
     
     @abstractmethod
     async def get_seed_data(self) -> list[dict[str, Any]]:
         """
-        Get data to be seeded.
+        Provide the records to seed.
         
         Returns:
-            List of dictionaries containing seed data
+            list[dict[str, Any]]: Seed records represented as dictionaries.
         """
         pass
     
@@ -109,15 +117,15 @@ class BaseSeeder(ABC):
         value: Any,
     ) -> Optional[Any]:
         """
-        Check if a record already exists.
+        Finds a record whose unique field matches the specified value.
         
-        Args:
-            model: SQLAlchemy model class
-            unique_field: Field name to check for uniqueness
-            value: Value to check
-            
+        Parameters:
+            model (Any): SQLAlchemy model class to query.
+            unique_field (str): Name of the field to match.
+            value (Any): Value to compare against the field.
+        
         Returns:
-            Existing record if found, None otherwise
+            Optional[Any]: The matching record, or `None` if no record is found.
         """
         from sqlalchemy import select
         
@@ -132,15 +140,15 @@ class BaseSeeder(ABC):
         unique_field: str,
     ) -> tuple[Any, bool]:
         """
-        Insert or update a record.
+        Insert a record or update the existing record identified by a unique field.
         
-        Args:
-            model: SQLAlchemy model class
-            data: Record data
-            unique_field: Field name for uniqueness check
-            
+        Parameters:
+            model (Any): SQLAlchemy model class.
+            data (dict[str, Any]): Field values for the record.
+            unique_field (str): Name of the field used to identify an existing record.
+        
         Returns:
-            Tuple of (record, is_new) where is_new indicates if record was created
+            tuple[Any, bool]: The record and `true` if it was created, `false` if an existing record was updated.
         """
         existing = await self.check_exists(model, unique_field, data.get(unique_field))
         
@@ -166,14 +174,14 @@ class BaseSeeder(ABC):
         records: list[dict[str, Any]],
     ) -> int:
         """
-        Insert multiple records in batches.
+        Insert records in batches, optionally applying them to the database.
         
-        Args:
-            model: SQLAlchemy model class
-            records: List of record dictionaries
-            
+        Parameters:
+            model (Any): SQLAlchemy model class for the records.
+            records (list[dict[str, Any]]): Record values to process.
+        
         Returns:
-            Number of records inserted
+            int: Number of records processed, including dry-run records.
         """
         from sqlalchemy import insert
         

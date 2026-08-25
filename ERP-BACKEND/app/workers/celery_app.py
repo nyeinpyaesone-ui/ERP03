@@ -47,10 +47,7 @@ celery_app.conf.update(
 
 @task_postrun.connect
 def cleanup_after_task(**kwargs):
-    """
-    Force garbage collection after each task to prevent memory leaks.
-    Critical for AI/ML workloads with large tensors or dataframes.
-    """
+    """Trigger garbage collection after a task completes."""
     gc.collect()
 
 

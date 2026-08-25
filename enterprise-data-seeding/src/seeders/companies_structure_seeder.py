@@ -99,6 +99,13 @@ class CompaniesStructureSeeder(BaseSeeder):
         dry_run: bool = False,
         batch_size: int = 50,
     ):
+        """Initialize the companies-structure seeder.
+        
+        Parameters:
+        	session (AsyncSession): Database session used for seeding.
+        	dry_run (bool): Whether to simulate seeding without persisting changes.
+        	batch_size (int): Maximum number of records processed in one batch.
+        """
         super().__init__(session, dry_run, batch_size)
     
     async def get_seed_data(self) -> list[dict[str, Any]]:
@@ -107,10 +114,11 @@ class CompaniesStructureSeeder(BaseSeeder):
     
     async def seed(self) -> SeederResult:
         """
-        Seed companies, branches, and warehouses.
+        Seed companies, branches, and warehouses from the configured hierarchy.
         
         Returns:
-            SeederResult with operation statistics
+            SeederResult containing creation, skip, warning, error, success, and
+            duration statistics for the seeding operation.
         """
         import time
         start_time = time.time()
@@ -233,7 +241,17 @@ class CompaniesStructureSeeder(BaseSeeder):
         return result
     
     async def check_exists_by复合_key(self, model, fields: list[str], *values):
-        """Check existence by composite key."""
+        """
+        Find a record matching the specified composite key values.
+        
+        Parameters:
+            model: The model class to query.
+            fields (list[str]): Names of the fields that form the composite key.
+            *values: Values corresponding to the fields.
+        
+        Returns:
+            The matching record, or `None` if no record matches.
+        """
         from sqlalchemy import select, and_
         
         conditions = [getattr(model, field) == value for field, value in zip(fields, values)]

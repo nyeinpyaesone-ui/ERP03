@@ -119,6 +119,12 @@ class FinanceCOASeeder(BaseSeeder):
         dry_run: bool = False,
         batch_size: int = 100,
     ):
+        """Initialize the finance chart-of-accounts seeder.
+        
+        Parameters:
+            dry_run (bool): Whether to simulate seeding without persisting changes.
+            batch_size (int): Maximum number of records processed in each batch.
+        """
         super().__init__(session, dry_run, batch_size)
     
     async def get_seed_data(self) -> list[dict[str, Any]]:
@@ -127,10 +133,12 @@ class FinanceCOASeeder(BaseSeeder):
     
     async def seed(self) -> SeederResult:
         """
-        Seed Chart of Accounts, payment terms, and tax codes.
+        Seed the chart of accounts, payment terms, and tax codes.
         
         Returns:
-            SeederResult with operation statistics
+            SeederResult containing creation counts, warnings, errors, completion status,
+            and elapsed time. Seeding is skipped with a warning when finance models are
+            unavailable.
         """
         import time
         start_time = time.time()
@@ -183,7 +191,15 @@ class FinanceCOASeeder(BaseSeeder):
         return result
     
     async def _seed_accounts(self, result: SeederResult) -> int:
-        """Seed chart of accounts."""
+        """
+        Seed chart-of-accounts entries and establish their parent account relationships.
+        
+        Parameters:
+        	result (SeederResult): Result object updated with account-seeding errors and parent-assignment warnings.
+        
+        Returns:
+        	int: Number of newly created accounts.
+        """
         created_count = 0
         account_map = {}  # code -> id mapping for parent references
         
@@ -233,7 +249,15 @@ class FinanceCOASeeder(BaseSeeder):
         return created_count
     
     async def _seed_payment_terms(self, result: SeederResult, model) -> int:
-        """Seed payment terms."""
+        """Seed payment terms and record the number of newly created terms.
+        
+        Parameters:
+            result (SeederResult): Result object for recording seeding errors.
+            model: Payment-term model used for persistence.
+        
+        Returns:
+            int: Number of newly created payment terms.
+        """
         created_count = 0
         
         for term_data in PAYMENT_TERMS:
@@ -258,7 +282,16 @@ class FinanceCOASeeder(BaseSeeder):
         return created_count
     
     async def _seed_tax_codes(self, result: SeederResult, model) -> int:
-        """Seed tax codes."""
+        """
+        Seed finance tax codes and count newly created records.
+        
+        Parameters:
+            result (SeederResult): Result object to receive errors encountered during seeding.
+            model: Tax code model used for persistence.
+        
+        Returns:
+            int: Number of newly created tax codes.
+        """
         created_count = 0
         
         for tax_data in TAX_CODES:
@@ -285,6 +318,10 @@ class FinanceCOASeeder(BaseSeeder):
     
     @property
     def seeding_config(self):
-        """Get seeding config."""
+        """Return the seeding configuration for continuing after individual errors.
+        
+        Returns:
+        	SeedingConfig: Configuration that allows seeding to continue when an error occurs.
+        """
         from ..config import SeedingConfig
         return SeedingConfig(stop_on_error=False)  # Continue on errors for COA

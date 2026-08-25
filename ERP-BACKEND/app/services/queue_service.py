@@ -28,12 +28,25 @@ class QueueService:
     """
     
     def __init__(self, celery_app: Celery):
+        """Initialize the queue service with a Celery application.
+        
+        Parameters:
+        	celery_app (Celery): Celery application used to dispatch and manage jobs.
+        """
         self.celery_app = celery_app
     
     def submit_job(self, request: JobRequest) -> str:
         """
-        Submit a job to the Celery queue.
-        Returns job_id for tracking.
+        Submit a job to the Celery queue for asynchronous processing.
+        
+        Args:
+            request (JobRequest): Task name, payload, and queue priority for the job.
+        
+        Returns:
+            str: The generated job ID used to track the submitted job.
+        
+        Raises:
+            ValueError: If the requested task is not registered with Celery.
         """
         task = self.celery_app.tasks.get(request.task_name)
         if not task:
@@ -52,7 +65,13 @@ class QueueService:
     
     def get_status(self, job_id: str) -> JobStatus:
         """
-        Retrieve job status from Celery backend.
+        Retrieve the current status and outcome information for a queued job.
+        
+        Parameters:
+        	job_id (str): Identifier of the job to inspect.
+        
+        Returns:
+        	JobStatus: The normalized job status, including its result for completed jobs or error information for failed jobs.
         """
         result = self.celery_app.AsyncResult(job_id)
         
@@ -76,7 +95,13 @@ class QueueService:
     
     def cancel_job(self, job_id: str) -> bool:
         """
-        Revoke/cancel a running or queued job.
+        Cancel a queued or running job.
+        
+        Parameters:
+            job_id (str): Identifier of the job to cancel.
+        
+        Returns:
+            bool: `True` after the cancellation request is issued.
         """
         self.celery_app.control.revoke(job_id, terminate=True)
         return True

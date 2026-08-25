@@ -95,6 +95,15 @@ class UsersRolesSeeder(BaseSeeder):
         admin_email: str = "admin@erp03.com",
         admin_password: str | None = None,
     ):
+        """Initialize the users and roles seeder with database and administrator account settings.
+        
+        Parameters:
+        	session (AsyncSession): Database session used for seeding.
+        	dry_run (bool): Whether to avoid persisting changes.
+        	batch_size (int): Maximum number of records processed in a batch.
+        	admin_email (str): Email address for the administrator account.
+        	admin_password (str | None): Password for the administrator account; defaults to a built-in initial password when omitted.
+        """
         super().__init__(session, dry_run, batch_size)
         self.admin_email = admin_email
         self.admin_password = admin_password or "ChangeMe123!"
@@ -106,10 +115,10 @@ class UsersRolesSeeder(BaseSeeder):
     
     async def seed(self) -> SeederResult:
         """
-        Seed users, roles, and permissions.
+        Seed users, roles, and permissions for the ERP backend.
         
         Returns:
-            SeederResult with operation statistics
+            SeederResult: Operation statistics, warnings, errors, and duration.
         """
         import time
         start_time = time.time()
@@ -230,7 +239,7 @@ class UsersRolesSeeder(BaseSeeder):
         return result
     
     def _get_all_permissions(self) -> list[dict[str, str]]:
-        """Generate all standard permissions."""
+        """Generate the standard CRUD, reporting, settings, and wildcard permissions."""
         resources = [
             "users", "roles", "permissions", "companies", "branches",
             "warehouses", "contacts", "customers", "suppliers",

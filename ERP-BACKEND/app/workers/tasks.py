@@ -15,8 +15,13 @@ logger = logging.getLogger(__name__)
 @celery_app.task(bind=True, max_retries=3)
 def predict_demand(self, payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    AI/ML Task: Demand prediction using historical data.
-    Simulates heavy ML inference with memory control.
+    Predict demand for a product over the next 30 days.
+    
+    Parameters:
+        payload (Dict[str, Any]): Input data containing the product identifier.
+    
+    Returns:
+        Dict[str, Any]: Prediction details including the product identifier, predicted demand, confidence score, and forecast period.
     """
     try:
         logger.info(f"Starting demand prediction for product {payload.get('product_id')}")
@@ -46,8 +51,13 @@ def predict_demand(self, payload: Dict[str, Any]) -> Dict[str, Any]:
 @celery_app.task(bind=True, max_retries=3)
 def analyze_sentiment(self, payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    AI/ML Task: Sentiment analysis on customer feedback.
-    Processes text batches with memory limits.
+    Analyze the sentiment of customer feedback text entries.
+    
+    Parameters:
+        payload (Dict[str, Any]): Mapping containing a ``texts`` collection of feedback strings.
+    
+    Returns:
+        Dict[str, Any]: Mapping containing sentiment results for each text and the total number processed.
     """
     try:
         texts = payload.get("texts", [])
@@ -82,8 +92,13 @@ def analyze_sentiment(self, payload: Dict[str, Any]) -> Dict[str, Any]:
 @celery_app.task(bind=True, max_retries=3)
 def process_batch(self, payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Generic Task: Batch processing for large datasets.
-    Implements chunking and memory control.
+    Process a collection of items using the specified operation.
+    
+    Parameters:
+    	payload (Dict[str, Any]): Input containing an `items` collection and optional `operation` name.
+    
+    Returns:
+    	Dict[str, Any]: Summary containing the number of processed items, the operation name, and a success rate.
     """
     try:
         items = payload.get("items", [])
@@ -124,8 +139,16 @@ def process_batch(self, payload: Dict[str, Any]) -> Dict[str, Any]:
 @celery_app.task(bind=True, max_retries=2)
 def generate_report(self, payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Heavy Task: Generate complex reports from aggregated data.
-    May involve large DataFrames or multiple DB queries.
+    Generate a report for the requested type and date range.
+    
+    Parameters:
+        payload (Dict[str, Any]): Report options, including optional ``report_type`` and ``date_range`` values.
+    
+    Returns:
+        Dict[str, Any]: Report metadata containing the report type, date range, generation timestamp, PDF file URL, and record count.
+    
+    Raises:
+        Exception: Retries the task after 120 seconds when report generation fails.
     """
     try:
         report_type = payload.get("report_type", "summary")
@@ -158,8 +181,15 @@ def generate_report(self, payload: Dict[str, Any]) -> Dict[str, Any]:
 @celery_app.task(bind=True)
 def cleanup_resources(self, payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Maintenance Task: Clean up temporary files, old sessions, etc.
-    Runs periodically via Celery Beat scheduler.
+    Remove resources of the specified type that exceed the configured age.
+    
+    Parameters:
+        payload (Dict[str, Any]): Cleanup options, including ``resource_type`` and
+            ``older_than_days``.
+    
+    Returns:
+        Dict[str, Any]: A success response containing the resource type, deleted
+            item count, and status, or a failure response with the error message.
     """
     try:
         resource_type = payload.get("resource_type", "temp_files")

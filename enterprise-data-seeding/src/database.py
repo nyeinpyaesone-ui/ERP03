@@ -31,13 +31,18 @@ class DatabaseManager:
     """
     
     def __init__(self, database_url: str | None = None):
+        """Initialize a database manager with the specified or configured database URL."""
         self.database_url = database_url or config.database.url
         self._async_engine: AsyncEngine | None = None
         self._sync_engine = None
         
     @property
     def async_engine(self) -> AsyncEngine:
-        """Get or create async engine."""
+        """Get or create the cached asynchronous database engine.
+        
+        Returns:
+        	AsyncEngine: The asynchronous database engine.
+        """
         if self._async_engine is None:
             self._async_engine = create_async_engine(
                 self.database_url,
@@ -50,7 +55,11 @@ class DatabaseManager:
     
     @property
     def sync_engine(self):
-        """Get or create sync engine."""
+        """Provide the configured synchronous database engine, creating it on first access.
+        
+        Returns:
+            The synchronous SQLAlchemy engine.
+        """
         if self._sync_engine is None:
             from sqlalchemy import create_engine
             # Convert async URL to sync URL if needed
@@ -67,14 +76,13 @@ class DatabaseManager:
     @asynccontextmanager
     async def async_session(self) -> AsyncGenerator[AsyncSession, None]:
         """
-        Provide an async database session.
+        Provide an asynchronous database session with transactional handling.
         
         Yields:
-            AsyncSession: Database session for async operations
-            
-        Example:
-            async with db_manager.async_session() as session:
-                result = await session.execute(query)
+            AsyncSession: Session for asynchronous database operations.
+        
+        The transaction is committed when the context exits successfully, rolled
+        back when an exception occurs, and the session is always closed.
         """
         async_session_factory = async_sessionmaker(
             self.async_engine,
@@ -126,10 +134,10 @@ class DatabaseManager:
     
     async def check_health(self) -> bool:
         """
-        Check database connectivity.
+        Check whether the database is accessible.
         
         Returns:
-            bool: True if database is accessible
+            bool: `True` if the connectivity check succeeds, `False` otherwise.
         """
         try:
             async with self.async_session() as session:
@@ -154,12 +162,17 @@ db_manager = DatabaseManager()
 
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency for getting async database sessions."""
+    """
+    Provide an asynchronous database session for dependency injection.
+    
+    Yields:
+        AsyncSession: An active asynchronous database session.
+    """
     async with db_manager.async_session() as session:
         yield session
 
 
 def get_sync_session() -> Generator[Session, None, None]:
-    """Dependency for getting sync database sessions."""
+    """Provide a synchronous database session for dependency injection."""
     with db_manager.sync_session() as session:
         yield session

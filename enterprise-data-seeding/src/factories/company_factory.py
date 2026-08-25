@@ -40,11 +40,24 @@ class BranchFactory(SQLAlchemyModelFactory):
     
     @classmethod
     def set_model(cls, model_class):
+        """Set the model class used by the factory.
+        
+        Parameters:
+        	model_class: The model class to assign to the factory.
+        """
         cls.Meta.model = model_class
 
 
 def create_company_hierarchy(count: int = 5) -> list:
-    """Create companies with branches."""
+    """
+    Create a collection of test companies.
+    
+    Parameters:
+        count (int): Number of companies to create.
+    
+    Returns:
+        list: The created companies.
+    """
     companies = []
     
     for _ in range(count):

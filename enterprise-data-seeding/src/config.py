@@ -75,7 +75,12 @@ class Config(BaseModel):
 
 
 def get_config() -> Config:
-    """Get configuration instance with environment overrides."""
+    """
+    Create an application configuration instance using environment-derived settings.
+    
+    Returns:
+    	Config: A new application configuration instance.
+    """
     return Config()
 
 
