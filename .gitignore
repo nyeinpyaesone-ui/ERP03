@@ -5,30 +5,46 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
-*.so
-.coverage
-htmlcov/
-.pytest_cache/
-.mypy_cache/
-
-# Dependencies
+env/
 venv/
 .venv/
+.ENV
+.ENV.local
+
+# Alembic
+alembic/versions/*.py
+
+# Dependencies
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+*.tmp
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Environment variables
 .env
 .env.local
-*.env.*
+.env.*
+!.env.example
 
-# Logs
-*.log
-
-# Editor/IDE
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
 
-# OS
-.DS_Store
-Thumbs.db
-```.ipynb_checkpoints/
+# Build artifacts
+dist/
+build/
+*.egg-info/
+```
