@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { createQueryHooks, createMutationHooks } from '../../../core/hooks';
-import {
+import type {
   DashboardSummary,
   RevenueAnalytics,
   KPIMetrics,
@@ -14,35 +13,39 @@ import {
   InventoryStats,
   AnomalyDetectionResult,
 } from '../types/dashboard';
+import { apiClient } from '../../../core/api';
 
-// BI Dashboard API endpoints
+/**
+ * BI Dashboard API Service
+ * Enterprise-grade analytics and business intelligence endpoints
+ */
 const dashboardAPI = {
-  getSummary: (params: DashboardFilter) => 
-    `/dashboard/summary?period=${params.period}&compareWith=${params.compareWith}`,
-  getRevenueAnalytics: (period: string) => 
-    `/dashboard/revenue?period=${period}&groupBy=daily`,
-  getKPIMetrics: (period: string) => 
-    `/dashboard/kpis?period=${period}`,
-  getSalesChart: (period: string = '30d') => 
-    `/dashboard/charts/sales?period=${period}`,
-  getInventoryChart: () => 
-    '/dashboard/charts/inventory',
-  getCustomerChart: (period: string = '30d') => 
-    `/dashboard/charts/customers?period=${period}`,
-  getActivities: (limit: number = 20, type: string = 'all') => 
-    `/dashboard/activities?limit=${limit}&type=${type}`,
-  getTopProducts: (period: string = 'this_month', limit: number = 10) => 
-    `/dashboard/top-products?period=${period}&limit=${limit}`,
-  getTopCustomers: (period: string = 'this_month', limit: number = 10) => 
-    `/dashboard/top-customers?period=${period}&limit=${limit}`,
-  getSalesForecast: (horizon: string = '30d') => 
-    `/ai/forecast?type=sales&horizon=${horizon}`,
-  getAIInsights: (limit: number = 5) => 
-    `/ai/insights?type=all&limit=${limit}`,
-  getInventoryStats: () => 
-    '/inventory/stats',
-  getAnomalyDetection: (module: string = 'all', sensitivity: string = 'medium') => 
-    `/ai/anomaly-detection?module=${module}&sensitivity=${sensitivity}`,
+  getSummary: (params: DashboardFilter) =>
+    apiClient.get<DashboardSummary>('/dashboard/summary', { params }).then((r) => r.data),
+  getRevenueAnalytics: (period: string) =>
+    apiClient.get<RevenueAnalytics>(`/dashboard/revenue`, { params: { period, groupBy: 'daily' } }).then((r) => r.data),
+  getKPIMetrics: (period: string) =>
+    apiClient.get<KPIMetrics>(`/dashboard/kpis`, { params: { period } }).then((r) => r.data),
+  getSalesChart: (period: string = '30d') =>
+    apiClient.get<ChartData>('/dashboard/charts/sales', { params: { period } }).then((r) => r.data),
+  getInventoryChart: () =>
+    apiClient.get<ChartData>('/dashboard/charts/inventory').then((r) => r.data),
+  getCustomerChart: (period: string = '30d') =>
+    apiClient.get<ChartData>('/dashboard/charts/customers', { params: { period } }).then((r) => r.data),
+  getActivities: (limit: number = 20, type: string = 'all') =>
+    apiClient.get<ActivityItem[]>('/dashboard/activities', { params: { limit, type } }).then((r) => r.data),
+  getTopProducts: (period: string = 'this_month', limit: number = 10) =>
+    apiClient.get<TopProduct[]>('/dashboard/top-products', { params: { period, limit } }).then((r) => r.data),
+  getTopCustomers: (period: string = 'this_month', limit: number = 10) =>
+    apiClient.get<TopCustomer[]>('/dashboard/top-customers', { params: { period, limit } }).then((r) => r.data),
+  getSalesForecast: (horizon: string = '30d') =>
+    apiClient.get<ForecastData>('/ai/forecast', { params: { type: 'sales', horizon } }).then((r) => r.data),
+  getAIInsights: (limit: number = 5) =>
+    apiClient.get<AIInsight[]>('/ai/insights', { params: { type: 'all', limit } }).then((r) => r.data),
+  getInventoryStats: () =>
+    apiClient.get<InventoryStats>('/inventory/stats').then((r) => r.data),
+  getAnomalyDetection: (module: string = 'all', sensitivity: string = 'medium') =>
+    apiClient.get<AnomalyDetectionResult[]>('/ai/anomaly-detection', { params: { module, sensitivity } }).then((r) => r.data),
 };
 
 /**
@@ -51,20 +54,10 @@ const dashboardAPI = {
  */
 export const useDashboardSummary = (filter: DashboardFilter) => {
   return useQuery<DashboardSummary>({
-    queryKey: ['dashboardSummary', filter],
-    queryFn: async () => {
-      const endpoint = dashboardAPI.getSummary(filter);
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${await getAuthToken()}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    },
+    queryKey: ['bi', 'dashboard', 'summary', filter],
+    queryFn: () => dashboardAPI.getSummary(filter),
     staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 2,
+    retry: 3,
   });
 };
 
@@ -74,19 +67,10 @@ export const useDashboardSummary = (filter: DashboardFilter) => {
  */
 export const useRevenueAnalytics = (period: string) => {
   return useQuery<RevenueAnalytics>({
-    queryKey: ['revenueAnalytics', period],
-    queryFn: async () => {
-      const endpoint = dashboardAPI.getRevenueAnalytics(period);
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${await getAuthToken()}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    },
+    queryKey: ['bi', 'revenue', period],
+    queryFn: () => dashboardAPI.getRevenueAnalytics(period),
     staleTime: 10 * 60 * 1000, // 10 minutes
+    retry: 3,
   });
 };
 
@@ -96,19 +80,10 @@ export const useRevenueAnalytics = (period: string) => {
  */
 export const useKPIMetrics = (period: string) => {
   return useQuery<KPIMetrics>({
-    queryKey: ['kpiMetrics', period],
-    queryFn: async () => {
-      const endpoint = dashboardAPI.getKPIMetrics(period);
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${await getAuthToken()}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    },
+    queryKey: ['bi', 'kpi', period],
+    queryFn: () => dashboardAPI.getKPIMetrics(period),
     staleTime: 5 * 60 * 1000,
+    retry: 3,
   });
 };
 
@@ -118,18 +93,10 @@ export const useKPIMetrics = (period: string) => {
  */
 export const useSalesChart = (period: string = '30d') => {
   return useQuery<ChartData>({
-    queryKey: ['salesChart', period],
-    queryFn: async () => {
-      const endpoint = dashboardAPI.getSalesChart(period);
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${await getAuthToken()}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    },
+    queryKey: ['bi', 'charts', 'sales', period],
+    queryFn: () => dashboardAPI.getSalesChart(period),
+    staleTime: 5 * 60 * 1000,
+    retry: 3,
   });
 };
 
@@ -139,18 +106,10 @@ export const useSalesChart = (period: string = '30d') => {
  */
 export const useInventoryChart = () => {
   return useQuery<ChartData>({
-    queryKey: ['inventoryChart'],
-    queryFn: async () => {
-      const endpoint = dashboardAPI.getInventoryChart();
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${await getAuthToken()}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    },
+    queryKey: ['bi', 'charts', 'inventory'],
+    queryFn: () => dashboardAPI.getInventoryChart(),
+    staleTime: 10 * 60 * 1000,
+    retry: 3,
   });
 };
 
@@ -160,18 +119,10 @@ export const useInventoryChart = () => {
  */
 export const useCustomerChart = (period: string = '30d') => {
   return useQuery<ChartData>({
-    queryKey: ['customerChart', period],
-    queryFn: async () => {
-      const endpoint = dashboardAPI.getCustomerChart(period);
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${await getAuthToken()}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    },
+    queryKey: ['bi', 'charts', 'customers', period],
+    queryFn: () => dashboardAPI.getCustomerChart(period),
+    staleTime: 5 * 60 * 1000,
+    retry: 3,
   });
 };
 
@@ -181,19 +132,10 @@ export const useCustomerChart = (period: string = '30d') => {
  */
 export const useActivities = (limit: number = 20, type: string = 'all') => {
   return useQuery<ActivityItem[]>({
-    queryKey: ['activities', limit, type],
-    queryFn: async () => {
-      const endpoint = dashboardAPI.getActivities(limit, type);
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${await getAuthToken()}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    },
+    queryKey: ['bi', 'activities', limit, type],
+    queryFn: () => dashboardAPI.getActivities(limit, type),
     staleTime: 2 * 60 * 1000, // 2 minutes
+    retry: 3,
   });
 };
 
@@ -203,18 +145,10 @@ export const useActivities = (limit: number = 20, type: string = 'all') => {
  */
 export const useTopProducts = (period: string = 'this_month', limit: number = 10) => {
   return useQuery<TopProduct[]>({
-    queryKey: ['topProducts', period, limit],
-    queryFn: async () => {
-      const endpoint = dashboardAPI.getTopProducts(period, limit);
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${await getAuthToken()}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    },
+    queryKey: ['bi', 'top-products', period, limit],
+    queryFn: () => dashboardAPI.getTopProducts(period, limit),
+    staleTime: 5 * 60 * 1000,
+    retry: 3,
   });
 };
 
@@ -224,18 +158,10 @@ export const useTopProducts = (period: string = 'this_month', limit: number = 10
  */
 export const useTopCustomers = (period: string = 'this_month', limit: number = 10) => {
   return useQuery<TopCustomer[]>({
-    queryKey: ['topCustomers', period, limit],
-    queryFn: async () => {
-      const endpoint = dashboardAPI.getTopCustomers(period, limit);
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${await getAuthToken()}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    },
+    queryKey: ['bi', 'top-customers', period, limit],
+    queryFn: () => dashboardAPI.getTopCustomers(period, limit),
+    staleTime: 5 * 60 * 1000,
+    retry: 3,
   });
 };
 
@@ -245,18 +171,10 @@ export const useTopCustomers = (period: string = 'this_month', limit: number = 1
  */
 export const useSalesForecast = (horizon: string = '30d') => {
   return useQuery<ForecastData>({
-    queryKey: ['salesForecast', horizon],
-    queryFn: async () => {
-      const endpoint = dashboardAPI.getSalesForecast(horizon);
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${await getAuthToken()}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    },
+    queryKey: ['bi', 'forecast', 'sales', horizon],
+    queryFn: () => dashboardAPI.getSalesForecast(horizon),
+    staleTime: 15 * 60 * 1000, // 15 minutes
+    retry: 2,
   });
 };
 
@@ -266,18 +184,10 @@ export const useSalesForecast = (horizon: string = '30d') => {
  */
 export const useAIInsights = (limit: number = 5) => {
   return useQuery<AIInsight[]>({
-    queryKey: ['aiInsights', limit],
-    queryFn: async () => {
-      const endpoint = dashboardAPI.getAIInsights(limit);
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${await getAuthToken()}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    },
+    queryKey: ['bi', 'ai', 'insights', limit],
+    queryFn: () => dashboardAPI.getAIInsights(limit),
+    staleTime: 10 * 60 * 1000,
+    retry: 2,
   });
 };
 
@@ -287,18 +197,10 @@ export const useAIInsights = (limit: number = 5) => {
  */
 export const useInventoryStats = () => {
   return useQuery<InventoryStats>({
-    queryKey: ['inventoryStats'],
-    queryFn: async () => {
-      const endpoint = dashboardAPI.getInventoryStats();
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${await getAuthToken()}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    },
+    queryKey: ['bi', 'inventory', 'stats'],
+    queryFn: () => dashboardAPI.getInventoryStats(),
+    staleTime: 5 * 60 * 1000,
+    retry: 3,
   });
 };
 
@@ -308,77 +210,12 @@ export const useInventoryStats = () => {
  */
 export const useAnomalyDetection = (module: string = 'all', sensitivity: string = 'medium') => {
   return useQuery<AnomalyDetectionResult[]>({
-    queryKey: ['anomalyDetection', module, sensitivity],
-    queryFn: async () => {
-      const endpoint = dashboardAPI.getAnomalyDetection(module, sensitivity);
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${await getAuthToken()}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    },
+    queryKey: ['bi', 'anomaly', module, sensitivity],
+    queryFn: () => dashboardAPI.getAnomalyDetection(module, sensitivity),
+    staleTime: 5 * 60 * 1000,
+    retry: 2,
   });
 };
-
-/**
- * Dashboard Auto-Refresh Hook
- * Manages periodic refresh interval for real-time dashboards
- */
-export const useDashboardRefresh = (interval: number = 300000) => {
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setLastRefresh(new Date());
-    }, interval);
-
-    return () => clearInterval(timer);
-  }, [interval]);
-
-  return lastRefresh;
-};
-
-/**
- * Period Filter State Hook
- * Manages dashboard filter state with persistence
- */
-export const usePeriodFilter = () => {
-  const [filter, setFilter] = useState<DashboardFilter>({
-    period: 'this_month',
-    compareWith: 'previous_period',
-  });
-
-  const setPeriod = useCallback((period: string) => {
-    setFilter(prev => ({ ...prev, period }));
-  }, []);
-
-  const setCompareWith = useCallback((compareWith: 'previous_period' | 'previous_year') => {
-    setFilter(prev => ({ ...prev, compareWith }));
-  }, []);
-
-  return { filter, setPeriod, setCompareWith, setFilter };
-};
-
-// Helper function for auth token retrieval
-const getAuthToken = async (): Promise<string> => {
-  try {
-    const token = await AsyncStorage.getItem('@erp_token');
-    return token || '';
-  } catch (error) {
-    console.error('Failed to retrieve auth token:', error);
-    return '';
-  }
-};
-
----
-
-
-# merged-converted (2)-converted.md
-
-# useLanguage (1)-converted.md
 
 import { useTranslation } from 'react-i18next';
 import { useCallback } from 'react';
