@@ -1,25 +1,75 @@
 version: 2
+
 updates:
+  # Keep GitHub Actions and reusable automation dependencies current.
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: "Asia/Yangon"
     open-pull-requests-limit: 10
+    groups:
+      github-actions:
+        patterns:
+          - "*"
 
+  # Track every Dockerfile-based image build context used by the project.
   - package-ecosystem: docker
-    directory: "/"
+    directory: "/ERP-BACKEND"
     schedule:
       interval: weekly
+      day: monday
+      time: "04:15"
+      timezone: "Asia/Yangon"
     open-pull-requests-limit: 10
+    groups:
+      docker-patch-minor:
+        update-types:
+          - patch
+          - minor
 
+  - package-ecosystem: docker
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:30"
+      timezone: "Asia/Yangon"
+    open-pull-requests-limit: 10
+    groups:
+      docker-patch-minor:
+        update-types:
+          - patch
+          - minor
+
+  # Frontend JavaScript/TypeScript dependency management.
   - package-ecosystem: npm
     directory: "/frontend"
     schedule:
       interval: weekly
+      day: monday
+      time: "04:45"
+      timezone: "Asia/Yangon"
     open-pull-requests-limit: 10
+    groups:
+      npm-patch-minor:
+        update-types:
+          - patch
+          - minor
 
+  # Backend Python dependency management.
   - package-ecosystem: pip
-    directory: "/backend"
+    directory: "/ERP-BACKEND"
     schedule:
       interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: "Asia/Yangon"
     open-pull-requests-limit: 10
+    groups:
+      pip-patch-minor:
+        update-types:
+          - patch
+          - minor
