@@ -43,9 +43,16 @@ def compose_text():
 
 
 def _service_section(text, service_name):
-    """Return the text of a single top-level service block (from its header
-    up to, but not including, the next top-level service header, or the
-    `volumes:`/`networks:` top-level keys that follow the last service)."""
+    """
+    Extracts a top-level service block from compose file text.
+    
+    Parameters:
+        text (str): Complete compose file content.
+        service_name (str): Name of the service whose block to extract.
+    
+    Returns:
+        str: The service block from its header through the line before the next top-level service, volumes, or networks section.
+    """
     header = f"\n  {service_name}:\n"
     start = text.index(header)
     other_markers = [f"\n  {s}:\n" for s in SERVICE_ORDER if s != service_name]
@@ -223,9 +230,12 @@ class TestServiceStartedConditionFullyMigrated:
         assert "condition: service_started" not in compose_text
 
     def test_service_healthy_condition_used_at_least_three_times(self, compose_text):
-        """There are 3 depends_on edges touched by this PR (frontend ->
-        erp-backend, nginx -> erp-backend, nginx -> frontend), plus the
-        pre-existing erp-backend -> postgres/redis edges."""
+        """
+        Verify that the production Compose configuration uses healthy-service dependency conditions at least three times.
+        
+        Parameters:
+        	compose_text (str): Complete contents of the Docker Compose file.
+        """
         assert compose_text.count("condition: service_healthy") >= 3
 
 

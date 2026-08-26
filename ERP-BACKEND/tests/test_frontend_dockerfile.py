@@ -87,8 +87,7 @@ class TestFrontendDockerfileNpmInstallFix:
         assert "npm ci --include=dev && npm cache clean --force" in dockerfile_text
 
     def test_npm_install_happens_before_source_copy(self, dockerfile_text):
-        """Dependency install should stay before `COPY . .` to preserve
-        Docker layer caching semantics."""
+        """Ensure dependencies are installed before application source files are copied to preserve Docker layer caching."""
         install_index = dockerfile_text.index("npm ci --include=dev")
         copy_source_index = dockerfile_text.index("COPY . .")
         assert install_index < copy_source_index

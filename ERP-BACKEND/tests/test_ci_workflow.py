@@ -30,8 +30,16 @@ def ci_workflow_text():
 
 
 def _job_section(text, job_name):
-    """Return the text of a single top-level job block (from its header up
-    to, but not including, the next top-level job header)."""
+    """
+    Extract a single top-level job block from workflow text.
+    
+    Parameters:
+        text (str): Complete workflow text.
+        job_name (str): Name of the job to extract.
+    
+    Returns:
+        str: Text from the specified job header through the end of its block.
+    """
     header = f"\n  {job_name}:\n"
     start = text.index(header)
     other_headers = [f"\n  {j}:\n" for j in JOB_ORDER if j != job_name]
@@ -193,8 +201,7 @@ class TestCiWorkflowProductionConfigJob:
         assert "docker compose -f docker-compose.prod.yml config --quiet" in production_config_job
 
     def test_referenced_compose_file_exists_in_repo(self):
-        """Cross-file sanity check: the file this job validates must exist
-        at the repo root path referenced by the workflow."""
+        """Verify that the production Docker Compose file referenced by the workflow exists in the repository."""
         compose_path = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "..", "docker-compose.prod.yml")
         )
