@@ -1,37 +1,48 @@
 ```
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.py~
-*.py.class
-*.py.backup
-*.swp
-*.swo
-
-# Coverage
-.coverage
-coverage/
-htmlcov/
-
-# Environment
+# Environment and secrets
 .env
 .env.local
 .env.*
+secrets/
+
+# Dependencies
+node_modules/
 .venv/
 venv/
-ENV/
+__pycache__/
+*.egg-info/
+dist/
+build/
+target/
+.gradle/
+.mypy_cache/
+.pytest_cache/
+coverage/
+htmlcov/
+.coverage
+
+# Compiled files
+*.pyc
+*.class
+*.o
+*.exe
+*.dll
+*.so
+*.a
+*.obj
+*.out
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# System files
+.DS_Store
+Thumbs.db
 
 # Logs
 *.log
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
 ```
