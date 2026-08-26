@@ -77,7 +77,7 @@ class SearchService:
     def _bulk_index(self, batch_data: List[Dict[str, Any]]):
         """
         Bulk inserts or updates search index records.
-        
+
         Parameters:
             batch_data (List[Dict[str, Any]]): Records to index, including entity type,
                 entity ID, title, and content. Optional fields include searchable text,
@@ -85,10 +85,11 @@ class SearchService:
                 error, records are indexed individually.
         """
         from sqlalchemy.exc import IntegrityError
-        
+        import logging
+
         if not batch_data:
             return
-        
+
         # Prepare bulk upsert using PostgreSQL's execute_values for efficiency
         try:
             values_list = []
@@ -101,10 +102,10 @@ class SearchService:
                     "searchable_text": item.get("searchable_text", f"{item['title']} {item['content']}"),
                     "meta_data": item.get("meta_data", {}),
                     "tags": item.get("tags", []),
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
+                    "created_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc)
                 })
-            
+
             # Use bulk insert with upsert on conflict
             stmt = postgresql_insert(SearchIndex).values(values_list).on_conflict_do_update(
                 index_elements=['entity_type', 'entity_id'],
@@ -114,7 +115,7 @@ class SearchService:
                     'searchable_text': stmt.excluded.searchable_text,
                     'meta_data': stmt.excluded.meta_data,
                     'tags': stmt.excluded.tags,
-                    'updated_at': datetime.utcnow()
+                    'updated_at': datetime.now(timezone.utc)
                 }
             )
             self.db.execute(stmt)
@@ -148,7 +149,7 @@ class SearchService:
     def index_all_contacts(self, batch_size: int = 500):
         """
         Index all contacts in batches for full-text search.
-        
+
         Parameters:
         	batch_size (int): The maximum number of contacts processed per batch.
         """
@@ -182,7 +183,7 @@ class SearchService:
     def index_all_companies(self, batch_size: int = 500):
         """
         Index all companies in batches.
-        
+
         Parameters:
         	batch_size (int): Maximum number of companies to process per batch.
         """
@@ -214,7 +215,7 @@ class SearchService:
     def index_all_products(self, batch_size: int = 500):
         """
         Index all products for search.
-        
+
         Parameters:
         	batch_size (int): Maximum number of products processed per batch.
         """
@@ -247,7 +248,7 @@ class SearchService:
 
     def index_all_employees(self, batch_size: int = 500):
         """Index all employees in batches.
-        
+
         Parameters:
         	batch_size (int): Maximum number of employees processed per batch.
         """
@@ -280,7 +281,7 @@ class SearchService:
     def index_all_documents(self, batch_size: int = 500):
         """
         Index all documents in the search index using batches.
-        
+
         Parameters:
         	batch_size (int): Maximum number of documents to process per batch.
         """

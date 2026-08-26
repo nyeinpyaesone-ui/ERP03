@@ -13,7 +13,11 @@ SECRET = os.environ["GITHUB_WEBHOOK_SECRET"].encode()
 REPOSITORY = os.getenv("GITHUB_REPOSITORY", "nyeinpyaesone-ui/ERP03")
 BRANCH = os.getenv("GITHUB_BRANCH", "main")
 DEPLOY_WORKFLOW = os.getenv("DEPLOY_WORKFLOW", "Container Build and Publish")
-DEPLOY_SCRIPT = os.getenv("DEPLOY_SCRIPT", "/opt/erp03/ops/github-webhook/deploy-from-github.sh")
+# Validate DEPLOY_SCRIPT to prevent command injection - must be an absolute path to approved script
+DEPLOY_SCRIPT_RAW = os.getenv("DEPLOY_SCRIPT", "/opt/erp03/ops/github-webhook/deploy-from-github.sh")
+if not DEPLOY_SCRIPT_RAW.startswith("/opt/erp03/") or ".." in DEPLOY_SCRIPT_RAW:
+    raise ValueError("Invalid DEPLOY_SCRIPT path: must be under /opt/erp03/ and contain no '..'")
+DEPLOY_SCRIPT = DEPLOY_SCRIPT_RAW
 
 
 def valid_signature(body: bytes, header: str | None) -> bool:

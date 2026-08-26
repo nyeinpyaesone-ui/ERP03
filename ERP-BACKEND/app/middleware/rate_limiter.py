@@ -30,7 +30,7 @@ class RateLimiter:
         Initialize the rate limiter with a default request limit.
 
         Parameters:
-        	default_limit (str): The default rate limit applied to requests.
+            default_limit (str): The default rate limit applied to requests.
         """
         self.limiter = Limiter(
             key_func=get_remote_address,
@@ -58,8 +58,8 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
         """Configure authentication request rate limiting for the middleware.
 
         Parameters:
-        	max_attempts (int): Maximum number of authentication attempts allowed within the time window.
-        	window_seconds (int): Duration of the rate-limiting window in seconds.
+            max_attempts (int): Maximum number of authentication attempts allowed within the time window.
+            window_seconds (int): Duration of the rate-limiting window in seconds.
         """
         super().__init__(app)
         self.max_attempts = max_attempts
@@ -84,6 +84,7 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
         # Get client IP
         client_ip = request.client.host if request.client else "unknown"
         current_time = time.time()
+
 
         # Clean old attempts
         if client_ip in self.attempts:

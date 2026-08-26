@@ -1,6 +1,7 @@
 """
 Unit tests for the AI assistant module (app/ai/assistant.py).
 """
+import httpx
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -22,19 +23,22 @@ from app.database import get_db
 class TestAIAgentActor:
     """Tests for the AIAgentActor dataclass."""
 
-    def test_default_actor_kind_is_ai_agent(self):
+    def test_actor_kind_defaults_to_ai_agent(self):
         actor = AIAgentActor(id=5)
         assert actor.id == 5
         assert actor.actor_kind == "ai_agent"
 
-    def test_actor_kind_can_be_overridden(self):
-        actor = AIAgentActor(id=None, actor_kind="custom_kind")
+    def test_actor_id_can_be_none(self):
+        actor = AIAgentActor(id=None)
         assert actor.id is None
+
+    def test_actor_kind_can_be_overridden(self):
+        actor = AIAgentActor(id=1, actor_kind="custom_kind")
         assert actor.actor_kind == "custom_kind"
 
 
 class TestChatModels:
-    """Tests for the ChatMessage/ChatResponse pydantic models."""
+    """Tests for the ChatMessage / ChatResponse pydantic models."""
 
     def test_chat_message_context_defaults_to_none(self):
         msg = ChatMessage(message="hello")
@@ -42,10 +46,10 @@ class TestChatModels:
         assert msg.context is None
 
     def test_chat_message_accepts_context(self):
-        msg = ChatMessage(message="hi", context="some context")
-        assert msg.context == "some context"
+        msg = ChatMessage(message="hi", context="extra context")
+        assert msg.context == "extra context"
 
-    def test_chat_response_sources_default_to_none(self):
+    def test_chat_response_sources_defaults_to_none(self):
         resp = ChatResponse(response="ok")
         assert resp.response == "ok"
         assert resp.sources is None
@@ -56,7 +60,7 @@ class TestChatModels:
 
 
 class TestQueryOllama:
-    """Tests for the query_ollama helper."""
+    """Tests for the query_ollama helper coroutine."""
 
     def _mock_async_client(self, json_payload):
         mock_response = MagicMock()
@@ -68,7 +72,7 @@ class TestQueryOllama:
         return mock_client
 
     @pytest.mark.asyncio
-    async def test_uses_default_model_and_settings_url(self):
+    async def test_uses_default_model_and_configured_url(self):
         mock_client = self._mock_async_client({"response": "hello world"})
 
         with patch("app.ai.assistant.httpx.AsyncClient", return_value=mock_client):
@@ -84,7 +88,7 @@ class TestQueryOllama:
         )
 
     @pytest.mark.asyncio
-    async def test_custom_model_overrides_default(self):
+    async def test_custom_model_overrides_default_setting(self):
         mock_client = self._mock_async_client({"response": "custom answer"})
 
         with patch("app.ai.assistant.httpx.AsyncClient", return_value=mock_client):
@@ -105,9 +109,23 @@ class TestQueryOllama:
 
         assert result == ""
 
+    @pytest.mark.asyncio
+    async def test_network_error_propagates_and_is_not_swallowed(self):
+        """Negative case: query_ollama has no try/except around the HTTP call,
+        so a connection failure must propagate to the caller instead of being
+        silently converted into an empty/default response."""
+        mock_client = MagicMock()
+        mock_client.post = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.ai.assistant.httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(httpx.ConnectError):
+                await query_ollama("prompt")
+
 
 class TestChatEndpoint:
-    """Integration tests for the /chat endpoint built by build_router()."""
+    """Integration-style tests for the /chat endpoint built by build_router()."""
 
     def _make_app(self, current_user=None):
         app = FastAPI()
@@ -120,7 +138,7 @@ class TestChatEndpoint:
         app.dependency_overrides[get_current_user] = lambda: current_user or MagicMock(id=1)
         return app
 
-    def test_chat_returns_finance_summary_as_source_when_available(self):
+    def test_chat_returns_ollama_response_and_finance_source_when_available(self):
         user = MagicMock(id=42)
         app = self._make_app(current_user=user)
 
@@ -140,7 +158,7 @@ class TestChatEndpoint:
         assert kwargs["actor"].id == 42
         assert kwargs["actor"].actor_kind == "ai_agent"
 
-    def test_chat_handles_boundary_error_gracefully(self):
+    def test_chat_falls_back_gracefully_when_boundary_raises(self):
         app = self._make_app(current_user=MagicMock(id=7))
 
         with patch("app.ai.assistant.boundary.query", side_effect=BoundaryError("denied")), \
@@ -173,9 +191,52 @@ class TestChatEndpoint:
 
         assert response.status_code == 422
 
+    def test_chat_sources_empty_when_finance_summary_is_none_without_error(self):
+        app = self._make_app(current_user=MagicMock(id=1))
+
+        with patch("app.ai.assistant.boundary.query", return_value=None), \
+             patch("app.ai.assistant.query_ollama", new=AsyncMock(return_value="answer")):
+            client = TestClient(app)
+            response = client.post("/chat", json={"message": "hi"})
+
+        assert response.status_code == 200
+        assert response.json()["sources"] == []
+
+    def test_chat_context_field_is_accepted_but_not_included_in_prompt(self):
+        """Regression: ChatMessage.context is accepted by the request schema
+        but the /chat handler never reads `data.context` when building the
+        prompt, so supplying it should not raise and must not appear in the
+        text sent to Ollama."""
+        app = self._make_app(current_user=MagicMock(id=1))
+
+        with patch("app.ai.assistant.boundary.query", return_value=None), \
+             patch("app.ai.assistant.query_ollama", new=AsyncMock(return_value="ok")) as mock_ollama:
+            client = TestClient(app)
+            response = client.post(
+                "/chat",
+                json={"message": "hello", "context": "SENTINEL_CONTEXT_VALUE"},
+            )
+
+        assert response.status_code == 200
+        prompt_arg = mock_ollama.call_args[0][0]
+        assert "SENTINEL_CONTEXT_VALUE" not in prompt_arg
+
+    def test_chat_propagates_500_when_ollama_backend_is_unreachable(self):
+        """Negative case: the chat endpoint has no error handling around
+        query_ollama, so a downstream failure should surface as a server
+        error rather than a fabricated 200 response."""
+        app = self._make_app(current_user=MagicMock(id=1))
+
+        with patch("app.ai.assistant.boundary.query", return_value=None), \
+             patch("app.ai.assistant.query_ollama", new=AsyncMock(side_effect=httpx.ConnectError("down"))):
+            client = TestClient(app, raise_server_exceptions=False)
+            response = client.post("/chat", json={"message": "hi"})
+
+        assert response.status_code == 500
+
 
 class TestMainAppWiring:
-    """Regression test for the app/main.py wiring that mounts the AI router."""
+    """Regression test verifying app/main.py mounts the AI assistant router."""
 
     def test_ai_chat_route_is_mounted_under_expected_prefix(self):
         from app.main import app as main_app

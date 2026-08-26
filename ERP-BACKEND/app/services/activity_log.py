@@ -22,7 +22,7 @@ def log_activity(
 ):
     """
     Record an audit event and persist it to the database.
-    
+
     Parameters:
         user_id (Optional[int]): Identifier of the user associated with the event.
         action (str): Action recorded by the event.
@@ -35,7 +35,7 @@ def log_activity(
         request_id (Optional[str]): Identifier of the request that produced the event.
         status (str): Outcome status recorded for the event.
         commit (bool): Whether to commit the transaction; when false, flushes the record instead.
-    
+
     Returns:
         ActivityLog: The created audit log record.
     """
@@ -72,13 +72,13 @@ def log_before_after(
 ):
     """
     Create an audit log entry containing entity states and field-level changes.
-    
+
     Parameters:
         before_state (Optional[Dict[str, Any]]): State before the operation.
         after_state (Optional[Dict[str, Any]]): State after the operation.
         kwargs: Additional activity log arguments; any ``details`` values are
             merged into the generated audit details.
-    
+
     Returns:
         ActivityLog: The created audit log record.
     """

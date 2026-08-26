@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "erp03-enterprise-data-seeding"
+version = "0.1.0"
+description = "Enterprise data seeding framework for ERP03 - production-ready data initialization, test factories, and legacy import utilities"
+authors = [
+    {name = "ERP03 Team"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.13.0",
+    "pydantic>=2.5.0",
+    "asyncpg>=0.29.0",
+    "python-dotenv>=1.0.0",
+    "structlog>=24.1.0",
+    "factory-boy>=3.3.0",
+    "faker>=21.0.0",
+    "pandas>=2.1.0",
+    "openpyxl>=3.1.0",
+    "click>=8.1.0",
+    "rich>=13.7.0",
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=23.12.0",
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+    "pre-commit>=3.6.0"
+]
+
+[project.scripts]
+erp-seed = "src.cli:main"
+erp-factory = "src.factories.cli:generate"
+erp-import = "src.importers.cli:import_data"
+erp-validate = "src.validators.cli:validate"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310', 'py311', 'py312']
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --cov=src --cov-report=term-missing"
