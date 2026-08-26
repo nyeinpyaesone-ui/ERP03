@@ -1,0 +1,170 @@
+name: Reusable Docker Build and Publish
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        description: 'Component to build (backend/frontend/worker)'
+        required: true
+        type: string
+      context:
+        description: 'Build context path'
+        required: true
+        type: string
+      dockerfile:
+        description: 'Dockerfile path'
+        required: true
+        type: string
+      platforms:
+        description: 'Target platforms'
+        required: false
+        type: string
+        default: 'linux/amd64'
+      push:
+        description: 'Push to registry'
+        required: false
+        type: boolean
+        default: true
+      python-version:
+        description: 'Python version for backend'
+        required: false
+        type: string
+        default: '3.11'
+      node-version:
+        description: 'Node version for frontend'
+        required: false
+        type: string
+        default: '18'
+    outputs:
+      image-tag:
+        description: 'Full image tag'
+        value: ${{ jobs.build.outputs.image-tag }}
+      image-digest:
+        description: 'Image digest'
+        value: ${{ jobs.build.outputs.image-digest }}
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/erp-${{ inputs.component }}
+
+jobs:
+  build:
+    name: Build ${{ inputs.component }} Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry (GHCR)
+        if: ${{ inputs.push && github.event_name != 'pull_request' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+
+      - name: Run Trivy vulnerability scanner (base image)
+        if: ${{ inputs.component == 'backend' || inputs.component == 'worker' }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: python:${{ inputs.python-version }}-slim
+          format: 'sarif'
+          output: 'trivy-${{ inputs.component }}-base.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results (base image)
+        if: ${{ inputs.component == 'backend' || inputs.component == 'worker' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-${{ inputs.component }}-base.sarif'
+        continue-on-error: true
+
+      - name: Set up Node.js (frontend only)
+        if: ${{ inputs.component == 'frontend' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'npm'
+          cache-dependency-path: ${{ inputs.context }}/package-lock.json
+
+      - name: Install dependencies and build (frontend only)
+        if: ${{ inputs.component == 'frontend' }}
+        run: |
+          cd ${{ inputs.context }}
+          npm ci
+          npm run build
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          push: ${{ inputs.push && github.event_name != 'pull_request' }}
+          load: ${{ !inputs.push || github.event_name == 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: ${{ inputs.platforms }}
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ github.ref_name }}
+
+      - name: Run Trivy vulnerability scanner (built image)
+        if: ${{ inputs.push && github.event_name != 'pull_request' && (inputs.component == 'backend' || inputs.component == 'worker') }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-${{ inputs.component }}-built.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results (built image)
+        if: ${{ inputs.push && github.event_name != 'pull_request' && (inputs.component == 'backend' || inputs.component == 'worker') }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-${{ inputs.component }}-built.sarif'
+        continue-on-error: true
+
+      - name: Generate SBOM
+        if: ${{ inputs.push && github.event_name != 'pull_request' }}
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: spdx-json
+          output-file: ${{ inputs.component }}-sbom.spdx.json
+
+      - name: Upload SBOM artifact
+        if: ${{ inputs.push && github.event_name != 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ inputs.component }}
+          path: ${{ inputs.component }}-sbom.spdx.json
+          retention-days: 90

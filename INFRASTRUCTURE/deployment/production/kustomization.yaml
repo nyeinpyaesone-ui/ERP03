@@ -1,0 +1,57 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+bases:
+  - ../base
+
+namespace: erp03-production
+
+commonLabels:
+  environment: production
+
+replicas:
+  - name: erp-backend
+    count: 4
+  - name: erp-frontend
+    count: 4
+  - name: erp-worker
+    count: 3
+
+patches:
+  # Increase resources for production
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "512Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "500m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "1Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "1000m"
+    target:
+      kind: Deployment
+      name: erp-backend
+  - patch: |-
+      - op: replace
+        path: /metadata/data/environment
+        value: "production"
+    target:
+      kind: ConfigMap
+      name: erp03-config
+
+configMapGenerator:
+  - name: erp03-config
+    behavior: merge
+    literals:
+      - environment=production
+      - api-url=http://erp-backend-service.erp03-production.svc.cluster.local:8000
+      - log-level=warning
+
+# Horizontal Pod Autoscaler for production
+resources:
+  - hpa.yaml
+  - pdb.yaml

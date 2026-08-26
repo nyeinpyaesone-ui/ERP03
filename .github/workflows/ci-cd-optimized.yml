@@ -1,0 +1,243 @@
+name: ERP03 CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+jobs:
+  # ============================================================================
+  # Run All Tests Using Reusable Workflow
+  # ============================================================================
+  backend-tests:
+    uses: ./.github/workflows/reusable-tests.yml
+    with:
+      test-type: backend
+      python-version: ${{ env.PYTHON_VERSION }}
+      coverage-min: 80
+
+  frontend-tests:
+    uses: ./.github/workflows/reusable-tests.yml
+    with:
+      test-type: frontend
+      node-version: ${{ env.NODE_VERSION }}
+      coverage-min: 80
+
+  mobile-tests:
+    uses: ./.github/workflows/reusable-tests.yml
+    with:
+      test-type: mobile
+      node-version: ${{ env.NODE_VERSION }}
+      coverage-min: 80
+
+  integration-tests:
+    uses: ./.github/workflows/reusable-tests.yml
+    with:
+      test-type: integration
+      python-version: ${{ env.PYTHON_VERSION }}
+
+  # ============================================================================
+  # Security Scanning
+  # ============================================================================
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python, javascript
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+      - name: Run Bandit (Python security linter)
+        run: |
+          pip install safety bandit
+          safety check -r erp-core/requirements.txt || true
+          bandit -r erp-core/ -ll || true
+
+      - name: Run npm audit for JavaScript dependencies
+        run: |
+          cd frontend
+          npm audit --audit-level=high || true
+          cd ../mobile
+          npm audit --audit-level=high || true
+
+  # ============================================================================
+  # Build Docker Images Using Reusable Workflow
+  # ============================================================================
+  build-backend:
+    needs: [backend-tests]
+    uses: ./.github/workflows/reusable-docker-build.yml
+    with:
+      component: backend
+      context: ./ERP-BACKEND
+      dockerfile: ./ERP-BACKEND/Dockerfile
+      platforms: linux/amd64,linux/arm64
+      push: ${{ github.event_name != 'pull_request' }}
+      python-version: ${{ env.PYTHON_VERSION }}
+    if: github.event_name != 'pull_request' || github.ref == 'refs/heads/main'
+
+  build-frontend:
+    needs: [frontend-tests]
+    uses: ./.github/workflows/reusable-docker-build.yml
+    with:
+      component: frontend
+      context: ./frontend
+      dockerfile: ./frontend/Dockerfile
+      platforms: linux/amd64
+      push: ${{ github.event_name != 'pull_request' }}
+      node-version: ${{ env.NODE_VERSION }}
+    if: github.event_name != 'pull_request' || github.ref == 'refs/heads/main'
+
+  build-worker:
+    needs: [backend-tests]
+    uses: ./.github/workflows/reusable-docker-build.yml
+    with:
+      component: worker
+      context: ./docker
+      dockerfile: ./docker/Dockerfile.worker
+      platforms: linux/amd64,linux/arm64
+      push: ${{ github.event_name != 'pull_request' }}
+      python-version: ${{ env.PYTHON_VERSION }}
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+
+  # ============================================================================
+  # Deploy to Staging (on main branch merge)
+  # ============================================================================
+  deploy-staging:
+    name: Deploy to Staging Environment
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: staging
+      url: https://staging.erp03.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Kubernetes manifests
+        run: |
+          echo "Downloading deployment manifests..."
+          mkdir -p k8s/staging
+          
+          cat << 'EOF' > k8s/staging/backend-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: erp-backend
+  labels:
+    app: erp-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: erp-backend
+  template:
+    metadata:
+      labels:
+        app: erp-backend
+    spec:
+      containers:
+      - name: backend
+        image: ghcr.io/${{ github.repository }}/erp-backend:${{ github.sha }}
+        ports:
+        - containerPort: 8000
+        env:
+        - name: ENVIRONMENT
+          value: "staging"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+EOF
+
+      - name: Deploy to Kubernetes cluster
+        run: |
+          echo "Deploying to staging Kubernetes cluster..."
+          echo "In production, configure kubectl credentials and run:"
+          echo "kubectl apply -f k8s/staging/"
+
+  # ============================================================================
+  # Quality Gate - All Checks Must Pass
+  # ============================================================================
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests, mobile-tests, integration-tests, security-scan]
+    
+    if: always()
+
+    steps:
+      - name: Check if all required jobs passed
+        run: |
+          if [[ "${{ needs.backend-tests.result }}" != "success" ]] || \
+             [[ "${{ needs.frontend-tests.result }}" != "success" ]] || \
+             [[ "${{ needs.mobile-tests.result }}" != "success" ]] || \
+             [[ "${{ needs.integration-tests.result }}" != "success" ]] || \
+             [[ "${{ needs.security-scan.result }}" != "success" ]]; then
+            echo "❌ Quality gate failed - one or more required checks did not pass"
+            exit 1
+          fi
+          echo "✅ All quality gates passed ✓"
+
+  # ============================================================================
+  # Summary Report
+  # ============================================================================
+  publish-summary:
+    name: Publish Build Summary
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests, mobile-tests, build-backend, build-frontend]
+    if: always()
+
+    steps:
+      - name: Generate build summary
+        run: |
+          echo "# 🚀 ERP03 CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | ${{ needs.backend-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | ${{ needs.frontend-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Mobile | ${{ needs.mobile-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration | ${{ needs.integration-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Docker Builds" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status | Image |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | ${{ needs.build-backend.result }} | \`ghcr.io/${{ github.repository }}/erp-backend:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | ${{ needs.build-frontend.result }} | \`ghcr.io/${{ github.repository }}/erp-frontend:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
