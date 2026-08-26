@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgres:15.8-alpine
     container_name: erp-postgres
     restart: unless-stopped
     environment:
@@ -18,7 +18,7 @@ services:
     networks: [erp-network]
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.2.4-alpine
     container_name: erp-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "$${REDIS_PASSWORD}"]
@@ -63,7 +63,7 @@ services:
     networks: [erp-network]
 
   ollama:
-    image: ollama/ollama:0.1.44
+    image: ollama/ollama:0.3.9
     container_name: erp-ollama
     restart: unless-stopped
     volumes:
@@ -75,13 +75,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    resources:
-      limits:
-        memory: 8Gi
-        cpus: "4.0"
-      requests:
-        memory: 4Gi
-        cpus: "2.0"
+    deploy:
+      resources:
+        limits:
+          memory: 8Gi
+          cpus: "4.0"
+        reservations:
+          memory: 4Gi
+          cpus: "2.0"
 
   nginx:
     image: nginx:1.29-alpine
