@@ -1,29 +1,6 @@
-```
-# Environment
-.env
-.env.local
-*.env.*
-
-# Docker
-.dockerenv
-!docker-compose.prod.yml
-
-# Dependencies
-node_modules/
-.venv/
-venv/
-__pycache__/
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.tox/
-
-# Build artifacts
-dist/
-build/
-target/
+# Compiled and build artifacts
 *.pyc
-*.class
+__pycache__/
 *.o
 *.obj
 *.exe
@@ -31,23 +8,36 @@ target/
 *.so
 *.a
 *.out
+dist/
+build/
+target/
 
-# Logs and temporary files
+# Dependencies
+.venv/
+venv/
+node_modules/
+.mypy_cache/
+.pytest_cache/
+.gradle/
+
+# Logs and temp files
 *.log
 *.tmp
 *.swp
 *.swo
 
-# OS generated files
-.DS_Store
-Thumbs.db
+# Environment
+.env
+.env.local
+*.env.*
 
 # Editors
 .vscode/
 .idea/
-*.iml
-*.ipr
-*.iws
+
+# System files
+.DS_Store
+Thumbs.db
 
 # Coverage
 coverage/
@@ -73,4 +63,7 @@ htmlcov/
 *.Z
 *.lz
 *.lzo
-```
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
