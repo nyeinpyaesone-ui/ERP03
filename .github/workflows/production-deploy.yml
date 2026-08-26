@@ -38,6 +38,13 @@ jobs:
             *) echo "Invalid release tag: $VERSION"; exit 1 ;;
           esac
 
+      - name: Checkout immutable release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.version }}
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Configure SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
@@ -51,7 +58,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
-      - name: Deploy with remote atomic compose update
+      - name: Deploy immutable release
         env:
           VERSION: ${{ inputs.version }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -66,8 +73,8 @@ jobs:
           test -n "$GHCR_USER"
           test -n "$GHCR_TOKEN"
           ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/releases/$VERSION'"
-          git archive --format=tar "$VERSION" | gzip | ssh "$DEPLOY_USER@$DEPLOY_HOST" "gzip -d | tar -xf - -C '$DEPLOY_PATH/releases/$VERSION'"
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; cd '$DEPLOY_PATH/releases/$VERSION'; printf '%s' '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USER' --password-stdin; export BACKEND_IMAGE_TAG='$VERSION' FRONTEND_IMAGE_TAG='$VERSION'; docker compose -f docker-compose.prod.yml pull --quiet; docker compose -f docker-compose.prod.yml up -d --remove-orphans; docker compose -f docker-compose.prod.yml ps; docker image prune -f"
+          tar --exclude=.git -czf - . | ssh "$DEPLOY_USER@$DEPLOY_HOST" "tar -xzf - -C '$DEPLOY_PATH/releases/$VERSION'"
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; cd '$DEPLOY_PATH/releases/$VERSION'; printf '%s' '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USER' --password-stdin; export BACKEND_IMAGE_TAG='$VERSION' FRONTEND_IMAGE_TAG='$VERSION'; docker compose -f docker-compose.prod.yml pull --quiet; docker compose -f docker-compose.prod.yml up -d --remove-orphans; docker compose -f docker-compose.prod.yml ps"
 
       - name: Verify production health
         env:
