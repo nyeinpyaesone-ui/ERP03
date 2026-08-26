@@ -479,8 +479,41 @@ export class WorkerPool {
     const code = `
       self.onmessage = function(e) {
         const { fn, args } = e.data;
+        
+        // Safe function mapping instead of eval
+        const safeFunctions = {
+            'Math.max': Math.max,
+            'Math.min': Math.min,
+            'Math.pow': Math.pow,
+            'Math.sqrt': Math.sqrt,
+            'Math.abs': Math.abs,
+            'Math.round': Math.round,
+            'Math.ceil': Math.ceil,
+            'Math.floor': Math.floor,
+            'Math.sin': Math.sin,
+            'Math.cos': Math.cos,
+            'Math.tan': Math.tan,
+            'Math.log': Math.log,
+            'Math.exp': Math.exp,
+            'Date.now': Date.now,
+            'parseInt': parseInt,
+            'parseFloat': parseFloat,
+            'Number.isNaN': Number.isNaN,
+            'Number.isFinite': Number.isFinite,
+            'Array.isArray': Array.isArray,
+            'Object.keys': Object.keys,
+            'Object.values': Object.values,
+            'Object.entries': Object.entries,
+            'JSON.parse': JSON.parse,
+            'JSON.stringify': JSON.stringify,
+        };
+        
         try {
-          const result = eval(fn)(...args);
+          // Validate function name exists in whitelist
+          if (!safeFunctions.hasOwnProperty(fn)) {
+            throw new Error('Unsafe function call attempted: ' + fn);
+          }
+          const result = safeFunctions[fn](...args);
           self.postMessage({ success: true, result });
         } catch (error) {
           self.postMessage({ success: false, error: error.message });
