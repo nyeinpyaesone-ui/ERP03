@@ -17,7 +17,7 @@ ENV VITE_APP_VERSION=$VITE_APP_VERSION
 RUN npm run build
 
 # Stage 2: Production Runtime (Nginx Alpine)
-FROM nginx:1.25-alpine AS production
+FROM nginx:1.31-alpine AS production
 
 RUN apk add --no-cache bash \
     && rm /etc/nginx/conf.d/default.conf
