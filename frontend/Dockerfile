@@ -1,10 +1,10 @@
-# Stage 1: Build Environment
-FROM node:26-alpine AS builder
+# Stage 1: deterministic production build
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --include=dev && npm cache clean --force
 
 COPY . .
 
@@ -19,15 +19,14 @@ RUN npm run build
 # Stage 2: Production Runtime (Nginx Alpine)
 FROM nginx:1.31-alpine AS production
 
-RUN apk add --no-cache bash
-RUN rm /etc/nginx/conf.d/default.conf
+RUN apk add --no-cache bash \
+    && rm /etc/nginx/conf.d/default.conf
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-RUN chown -R nginx:nginx /usr/share/nginx/html && \
-    chmod -R 755 /usr/share/nginx/html
+RUN chown -R nginx:nginx /usr/share/nginx/html \
+    && chmod -R 755 /usr/share/nginx/html
 
 EXPOSE 80
 
