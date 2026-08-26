@@ -1,0 +1,74 @@
+/* 
+ * QUANTUM DESIGN TOKENS
+ * High-performance CSS variables with no runtime overhead.
+ * Features: Glassmorphism, Neon Glows, Deep Depth.
+ */
+
+:root {
+  /* Palette: Deep Space & Neon */
+  --q-color-bg: #030014;
+  --q-color-surface: #0f0c29;
+  --q-color-surface-glass: rgba(15, 12, 41, 0.7);
+  
+  /* Primary: Cyber Purple */
+  --q-primary: #7b2cbf;
+  --q-primary-glow: #9d4edd;
+  --q-primary-text: #e0aaff;
+  
+  /* Secondary: Electric Cyan */
+  --q-secondary: #00b4d8;
+  --q-secondary-glow: #48cae4;
+  
+  /* Status */
+  --q-success: #00ff9d;
+  --q-error: #ff0055;
+  --q-warning: #ffbe0b;
+
+  /* Typography */
+  --q-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --q-font-mono: 'JetBrains Mono', monospace;
+  
+  /* Spacing Scale (4px base) */
+  --q-space-1: 0.25rem;
+  --q-space-2: 0.5rem;
+  --q-space-3: 0.75rem;
+  --q-space-4: 1rem;
+  --q-space-6: 1.5rem;
+  --q-space-8: 2rem;
+
+  /* Radii */
+  --q-radius-sm: 4px;
+  --q-radius-md: 8px;
+  --q-radius-lg: 16px;
+  --q-radius-full: 9999px;
+
+  /* Shadows & Glows */
+  --q-shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
+  --q-shadow-md: 0 4px 6px rgba(0,0,0,0.5);
+  --q-glow-primary: 0 0 20px rgba(123, 44, 191, 0.4);
+  --q-glow-focus: 0 0 0 2px var(--q-color-bg), 0 0 0 4px var(--q-primary);
+
+  /* Transitions */
+  --q-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --q-transition-spring: 400ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Dark Mode is default, but ready for light override */
+@media (prefers-color-scheme: light) {
+  :root {
+    --q-color-bg: #f8f9fa;
+    --q-color-surface: #ffffff;
+    --q-color-surface-glass: rgba(255, 255, 255, 0.8);
+    --q-primary: #6366f1;
+    --q-color-text-main: #1e293b;
+  }
+}
+
+/* Global Reset for Components */
+.q-reset {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: var(--q-font-sans);
+  -webkit-font-smoothing: antialiased;
+}
