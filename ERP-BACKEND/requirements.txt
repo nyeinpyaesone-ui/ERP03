@@ -2,24 +2,24 @@
 # Python: 3.11
 # Pinned for reproducible CI/builds.
 
-fastapi==0.115.6
-uvicorn[standard]==0.52.1
-slowapi==0.1.9
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+slowapi==0.1.10
 pydantic==2.13.4
 pydantic-settings==2.15.0
-sqlalchemy==2.0.37
-asyncpg==0.29.0
-alembic==1.14.0
+sqlalchemy==2.0.52
+asyncpg==0.31.0
+alembic==1.19.1
 psycopg2-binary==2.9.12
 python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
 bcrypt==5.0.0
-python-dotenv==1.2.2
+python-dotenv==1.2.3
 python-multipart==0.0.32
 email-validator==2.3.0
 redis==8.1.0
 httpx==0.28.1
-stripe==15.4.0
+stripe==15.5.1
 aiofiles==25.1.0
 prometheus-client==0.26.0
 pytest==7.4.4
@@ -27,8 +27,8 @@ pytest-asyncio==1.4.0
 pytest-cov==4.1.0
 
 # Celery - Async task queue
-celery==5.4.0
-flower==2.0.1
+celery==5.6.3
+flower==2.1.0
 
 # Prometheus - Metrics export
 prometheus-client==0.19.0
