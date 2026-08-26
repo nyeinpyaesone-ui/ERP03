@@ -30,16 +30,8 @@ def ci_workflow_text():
 
 
 def _job_section(text, job_name):
-    """
-    Extract a single top-level job block from workflow text.
-    
-    Parameters:
-        text (str): Complete workflow text.
-        job_name (str): Name of the job to extract.
-    
-    Returns:
-        str: Text from the specified job header through the end of its block.
-    """
+    """Return the text of a single top-level job block (from its header up
+    to, but not including, the next top-level job header)."""
     header = f"\n  {job_name}:\n"
     start = text.index(header)
     other_headers = [f"\n  {j}:\n" for j in JOB_ORDER if j != job_name]
@@ -201,7 +193,8 @@ class TestCiWorkflowProductionConfigJob:
         assert "docker compose -f docker-compose.prod.yml config --quiet" in production_config_job
 
     def test_referenced_compose_file_exists_in_repo(self):
-        """Verify that the production Docker Compose file referenced by the workflow exists in the repository."""
+        """Cross-file sanity check: the file this job validates must exist
+        at the repo root path referenced by the workflow."""
         compose_path = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "..", "docker-compose.prod.yml")
         )
@@ -245,24 +238,62 @@ class TestCiWorkflowDockerBuildJob:
 
 
 class TestCiWorkflowPinnedActionVersions:
-    """Regression guard against unpinned/downgraded third-party actions."""
+    """Regression guard against unpinned/downgraded third-party actions.
+
+    Org policy requires every third-party action to be pinned to a
+    full-length commit SHA (not a mutable tag like `@v4`), so each
+    reference below is the commit SHA for the version noted in the
+    trailing comment.
+    """
 
     def test_checkout_pinned_to_v4_in_every_job(self, ci_workflow_text):
-        """Verify that all jobs use actions/checkout@v4."""
-        assert ci_workflow_text.count("actions/checkout@v4") == len(JOB_ORDER)
+        """Verify that all jobs use actions/checkout pinned to a v4 commit SHA."""
+        assert (
+            ci_workflow_text.count(
+                "actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0"
+            )
+            == len(JOB_ORDER)
+        )
 
     def test_setup_python_pinned_to_v5(self, ci_workflow_text):
-        """Verify that Python setup uses v5 of the action."""
-        assert "actions/setup-python@v5" in ci_workflow_text
+        """Verify that Python setup uses a v5 commit SHA of the action."""
+        assert (
+            "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0"
+            in ci_workflow_text
+        )
 
     def test_setup_node_pinned_to_v4(self, ci_workflow_text):
-        """Verify that Node.js setup uses v4 of the action."""
-        assert "actions/setup-node@v4" in ci_workflow_text
+        """Verify that Node.js setup uses a v4 commit SHA of the action."""
+        assert (
+            "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0"
+            in ci_workflow_text
+        )
 
     def test_setup_buildx_pinned_to_v3(self, ci_workflow_text):
-        """Verify that Docker buildx setup uses v3 of the action."""
-        assert ci_workflow_text.count("docker/setup-buildx-action@v3") == 2
+        """Verify that Docker buildx setup uses a v3 commit SHA of the action."""
+        assert (
+            ci_workflow_text.count(
+                "docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0"
+            )
+            == 2
+        )
 
     def test_build_push_action_pinned_to_v6(self, ci_workflow_text):
-        """Verify that Docker build-push action uses v6."""
-        assert ci_workflow_text.count("docker/build-push-action@v6") == 2
+        """Verify that Docker build-push action uses a v6 commit SHA."""
+        assert (
+            ci_workflow_text.count(
+                "docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2"
+            )
+            == 2
+        )
+
+    def test_actions_are_pinned_to_full_length_commit_shas(self, ci_workflow_text):
+        """Org policy: every action reference must be pinned to a
+        full-length (40 character) commit SHA rather than a mutable tag,
+        or GitHub Actions rejects the workflow run outright."""
+        uses_refs = re.findall(r"uses:\s*\S+@(\S+)", ci_workflow_text)
+        assert uses_refs, "No 'uses:' action references found"
+        for ref in uses_refs:
+            assert re.fullmatch(r"[0-9a-f]{40}", ref), (
+                f"Action ref '{ref}' is not a full-length commit SHA"
+            )
