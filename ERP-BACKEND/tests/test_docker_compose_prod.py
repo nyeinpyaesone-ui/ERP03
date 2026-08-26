@@ -37,6 +37,7 @@ SERVICE_ORDER = ["postgres", "redis", "erp-backend", "frontend", "ollama", "ngin
 
 @pytest.fixture(scope="module")
 def compose_text():
+    """Read and return the complete text content of docker-compose.prod.yml."""
     with open(COMPOSE_PATH, "r", encoding="utf-8") as f:
         return f.read()
 
@@ -57,25 +58,31 @@ def _service_section(text, service_name):
 
 class TestComposeFileIntegrity:
     def test_compose_file_exists(self):
+        """Verify that docker-compose.prod.yml exists at the expected path."""
         assert os.path.isfile(COMPOSE_PATH)
 
     def test_compose_file_is_not_empty(self, compose_text):
+        """Verify that the compose file contains non-whitespace content."""
         assert len(compose_text.strip()) > 0
 
     def test_starts_with_services_key(self, compose_text):
+        """Verify that the compose file starts with the services key."""
         assert compose_text.startswith("services:\n")
 
     @pytest.mark.parametrize("service_name", SERVICE_ORDER)
     def test_all_expected_services_present(self, compose_text, service_name):
+        """Verify that all expected services are defined in the compose file."""
         assert f"\n  {service_name}:\n" in compose_text
 
 
 class TestPostgresHealthcheckFix:
     @pytest.fixture(scope="class")
     def postgres_section(self, compose_text):
+        """Extract and return the postgres service section from the compose file."""
         return _service_section(compose_text, "postgres")
 
     def test_uses_postgres_user_and_db_env_vars(self, postgres_section):
+        """Verify that the healthcheck uses POSTGRES_USER and POSTGRES_DB variables."""
         assert (
             'test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]'
             in postgres_section
@@ -89,6 +96,7 @@ class TestPostgresHealthcheckFix:
         assert "$${DB_NAME}" not in postgres_section
 
     def test_has_start_period_grace(self, postgres_section):
+        """Verify that the postgres healthcheck includes a start_period grace period."""
         assert "start_period: 10s" in postgres_section
 
     def test_environment_still_sets_postgres_vars_from_db_vars(self, postgres_section):
@@ -102,9 +110,11 @@ class TestPostgresHealthcheckFix:
 class TestRedisHealthcheckStartPeriod:
     @pytest.fixture(scope="class")
     def redis_section(self, compose_text):
+        """Extract and return the redis service section from the compose file."""
         return _service_section(compose_text, "redis")
 
     def test_has_start_period_grace(self, redis_section):
+        """Verify that the redis healthcheck includes a start_period grace period."""
         assert "start_period: 10s" in redis_section
 
     def test_existing_ping_check_still_present(self, redis_section):
@@ -116,9 +126,11 @@ class TestRedisHealthcheckStartPeriod:
 class TestErpBackendDatabaseUrlScheme:
     @pytest.fixture(scope="class")
     def backend_section(self, compose_text):
+        """Extract and return the erp-backend service section from the compose file."""
         return _service_section(compose_text, "erp-backend")
 
     def test_database_url_uses_asyncpg_scheme(self, backend_section):
+        """Verify that DATABASE_URL uses the postgresql+asyncpg scheme."""
         assert (
             "DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}"
             in backend_section
@@ -134,18 +146,23 @@ class TestErpBackendDatabaseUrlScheme:
 class TestErpBackendHealthcheck:
     @pytest.fixture(scope="class")
     def backend_section(self, compose_text):
+        """Extract and return the erp-backend service section from the compose file."""
         return _service_section(compose_text, "erp-backend")
 
     def test_healthcheck_present(self, backend_section):
+        """Verify that a healthcheck is defined for the erp-backend service."""
         assert "healthcheck:" in backend_section
 
     def test_healthcheck_hits_health_endpoint(self, backend_section):
+        """Verify that the healthcheck targets the health endpoint."""
         assert "http://127.0.0.1:8000/api/v1/health" in backend_section
 
     def test_healthcheck_uses_python_urllib(self, backend_section):
+        """Verify that the healthcheck uses Python with urllib for the HTTP check."""
         assert '"CMD", "python", "-c"' in backend_section
 
     def test_healthcheck_timing_values(self, backend_section):
+        """Verify that the healthcheck has the correct timing parameters."""
         assert "interval: 30s" in backend_section
         assert "timeout: 10s" in backend_section
         assert "retries: 5" in backend_section
@@ -155,21 +172,26 @@ class TestErpBackendHealthcheck:
 class TestFrontendHealthcheckAndDependsOn:
     @pytest.fixture(scope="class")
     def frontend_section(self, compose_text):
+        """Extract and return the frontend service section from the compose file."""
         return _service_section(compose_text, "frontend")
 
     def test_depends_on_backend_waits_for_healthy(self, frontend_section):
+        """Verify that frontend depends on erp-backend being healthy."""
         assert "erp-backend:\n        condition: service_healthy" in frontend_section
 
     def test_healthcheck_present(self, frontend_section):
+        """Verify that a healthcheck is defined for the frontend service."""
         assert "healthcheck:" in frontend_section
 
     def test_healthcheck_uses_wget_spider(self, frontend_section):
+        """Verify that the healthcheck uses wget in spider mode."""
         assert (
             '["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]'
             in frontend_section
         )
 
     def test_healthcheck_timing_values(self, frontend_section):
+        """Verify that the healthcheck has the correct timing parameters."""
         assert "interval: 30s" in frontend_section
         assert "timeout: 10s" in frontend_section
         assert "retries: 5" in frontend_section
@@ -179,12 +201,15 @@ class TestFrontendHealthcheckAndDependsOn:
 class TestNginxDependsOnHealthy:
     @pytest.fixture(scope="class")
     def nginx_section(self, compose_text):
+        """Extract and return the nginx service section from the compose file."""
         return _service_section(compose_text, "nginx")
 
     def test_depends_on_backend_waits_for_healthy(self, nginx_section):
+        """Verify that nginx depends on erp-backend being healthy."""
         assert "erp-backend:\n        condition: service_healthy" in nginx_section
 
     def test_depends_on_frontend_waits_for_healthy(self, nginx_section):
+        """Verify that nginx depends on frontend being healthy."""
         assert "frontend:\n        condition: service_healthy" in nginx_section
 
 
@@ -194,6 +219,7 @@ class TestServiceStartedConditionFullyMigrated:
     remain anywhere in the file."""
 
     def test_no_service_started_condition_remains(self, compose_text):
+        """Verify that no service_started conditions remain in the compose file."""
         assert "condition: service_started" not in compose_text
 
     def test_service_healthy_condition_used_at_least_three_times(self, compose_text):
@@ -211,6 +237,7 @@ class TestHealthyDependenciesHaveHealthchecks:
 
     @pytest.mark.parametrize("service_name", ["erp-backend", "frontend", "postgres", "redis"])
     def test_service_referenced_as_healthy_dependency_has_healthcheck(self, compose_text, service_name):
+        """Verify that services referenced as healthy dependencies define healthchecks."""
         section = _service_section(compose_text, service_name)
         assert "healthcheck:" in section, (
             f"Service '{service_name}' is depended on with "
