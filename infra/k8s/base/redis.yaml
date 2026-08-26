@@ -34,11 +34,10 @@ spec:
         command:
         - redis-server
         - /etc/redis/redis.conf
-        args:
         - --requirepass
-        - $(REDIS_PASSWORD)
+        - $(REDIS_PASSWORD_ENV)
         env:
-        - name: REDIS_PASSWORD
+        - name: REDIS_PASSWORD_ENV
           valueFrom:
             secretKeyRef:
               name: erp_solution-secrets
@@ -55,7 +54,7 @@ spec:
             command:
             - redis-cli
             - -a
-            - $(REDIS_PASSWORD)
+            - $(REDIS_PASSWORD_ENV)
             - ping
           initialDelaySeconds: 30
           periodSeconds: 10
@@ -64,7 +63,7 @@ spec:
             command:
             - redis-cli
             - -a
-            - $(REDIS_PASSWORD)
+            - $(REDIS_PASSWORD_ENV)
             - ping
           initialDelaySeconds: 5
           periodSeconds: 5

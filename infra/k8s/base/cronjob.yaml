@@ -23,14 +23,14 @@ spec:
           restartPolicy: OnFailure
           containers:
           - name: backup
-            image: postgres:15-alpine
+            image: postgres:15.8-alpine
             command:
             - /bin/sh
             - -c
             - |
-              export PGPASSWORD=$(DB_PASSWORD)
-              pg_dump -h erp_solution-postgres -U $(DB_USER) -d $(DB_NAME) --clean --if-exists --verbose | gzip > /backup/erp_solution-$(date +%Y%m%d-%H%M%S).sql.gz
-              aws s3 cp /backup/ s3://$(S3_BUCKET)/backups/database/ --recursive --storage-class STANDARD_IA
+              export PGPASSWORD="$DB_PASSWORD"
+              pg_dump -h erp_solution-postgres -U "$DB_USER" -d "$DB_NAME" --clean --if-exists --verbose | gzip > /backup/erp_solution-$(date +%Y%m%d-%H%M%S).sql.gz
+              aws s3 cp /backup/ s3://$S3_BUCKET/backups/database/ --recursive --storage-class STANDARD_IA
               find /backup -name "*.sql.gz" -mtime +30 -delete
             env:
             - name: DB_USER
@@ -96,13 +96,13 @@ spec:
           restartPolicy: OnFailure
           containers:
           - name: backup
-            image: redis:7-alpine
+            image: redis:7.2.4-alpine
             command:
             - /bin/sh
             - -c
             - |
-              redis-cli -h erp_solution-redis -a $(REDIS_PASSWORD) --rdb /backup/erp_solution-redis-$(date +%Y%m%d-%H%M%S).rdb
-              aws s3 cp /backup/ s3://$(S3_BUCKET)/backups/redis/ --recursive --storage-class STANDARD_IA
+              redis-cli -h erp_solution-redis -a "$REDIS_PASSWORD" --rdb /backup/erp_solution-redis-$(date +%Y%m%d-%H%M%S).rdb
+              aws s3 cp /backup/ s3://$S3_BUCKET/backups/redis/ --recursive --storage-class STANDARD_IA
               find /backup -name "*.rdb" -mtime +30 -delete
             env:
             - name: REDIS_PASSWORD

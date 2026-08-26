@@ -194,24 +194,6 @@ spec:
 #           storage: 100Gi
 ---
 apiVersion: v1
-kind: Service
-metadata:
-  name: erp_solution-postgres
-  namespace: erp_solution
-  labels:
-    app.kubernetes.io/name: erp_solution-postgres
-    app.kubernetes.io/component: database
-spec:
-  type: ClusterIP
-  ports:
-  - name: postgres
-    port: 5432
-    targetPort: 5432
-    protocol: TCP
-  selector:
-    app.kubernetes.io/name: erp_solution-postgres
----
-apiVersion: v1
 kind: ConfigMap
 metadata:
   name: erp_solution-postgres-init
