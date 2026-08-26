@@ -119,7 +119,13 @@ jobs:
             curl -fsS --max-time 10 http://127.0.0.1/api/v1/health >/dev/null
           }
 
-          if ! timeout 180 bash -c 'until check_health; do sleep 5; done'; then
+          healthy=0
+          for attempt in $(seq 1 36); do
+            if check_health; then healthy=1; break; fi
+            sleep 5
+          done
+
+          if [ "$healthy" -ne 1 ]; then
             echo "Release $VERSION failed production health checks."
             docker compose -f docker-compose.prod.yml logs --tail=200 || true
             if [ -n "$PREVIOUS_DIR" ]; then
