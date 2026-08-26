@@ -65,15 +65,22 @@ class Settings(BaseSettings):
             self.DATABASE_URL = database_url
         if secret_key:
             self.SECRET_KEY = secret_key
+        
+        # Validate DATABASE_URL first
         if not self.DATABASE_URL:
             raise ValueError("DATABASE_URL or DATABASE_URL_FILE is required")
+        
+        # Validate SECRET_KEY length - must be at least 32 characters
+        if not self.SECRET_KEY:
+            raise ValueError("SECRET_KEY or SECRET_KEY_FILE is required")
         if len(self.SECRET_KEY) < 32:
             raise ValueError("SECRET_KEY must contain at least 32 characters")
 
 
 @lru_cache()
 def get_settings() -> Settings:
-    return Settings()
+    return Settings(_env_file=None)
 
 
+# Always create global settings instance - test_mode is handled in model_post_init
 settings = get_settings()

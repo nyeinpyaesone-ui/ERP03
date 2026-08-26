@@ -45,18 +45,46 @@ class TestSettings:
                 assert "DATABASE_URL" in str(exc_info.value)
 
     def test_settings_secret_key_minimum_length(self):
-        """Test that SECRET_KEY must be at least 32 characters."""
-        from app.config import Settings
+        """Test that SECRET_KEY must be at least 32 characters in production mode."""
+        from pydantic import ValidationError
         
-        with patch.dict(os.environ, {
-            'DATABASE_URL': 'postgresql://test:test@localhost/test',
-            'SECRET_KEY': 'short'  # Too short
-        }, clear=False):
-            with patch('app.config._read_secret', return_value=None):
-                with pytest.raises(ValueError) as exc_info:
-                    Settings()
-                
-                assert "SECRET_KEY" in str(exc_info.value) or "32" in str(exc_info.value)
+        # Need to test with a fresh module import since settings is created at module load
+        import sys
+        
+        # Remove cached modules to get fresh import
+        modules_to_remove = [k for k in sys.modules.keys() if k.startswith('app.config')]
+        for mod in modules_to_remove:
+            del sys.modules[mod]
+        
+        # Set environment without TEST_MODE (which is set by conftest fixture)
+        old_test_mode = os.environ.pop('TEST_MODE', None)
+        old_db_url = os.environ.get('DATABASE_URL')
+        old_secret_key = os.environ.get('SECRET_KEY')
+        
+        os.environ['DATABASE_URL'] = 'postgresql://test:test@localhost/test'
+        os.environ['SECRET_KEY'] = 'short'  # Too short
+        
+        try:
+            # The exception will be raised during module import when Settings() is instantiated
+            with pytest.raises((ValueError, ValidationError)) as exc_info:
+                with patch('app.config._read_secret', return_value=None):
+                    from app.config import Settings
+                    Settings(_env_file=None)
+            
+            error_msg = str(exc_info.value)
+            assert "SECRET_KEY" in error_msg or "32" in error_msg
+        finally:
+            # Restore environment
+            if old_test_mode is not None:
+                os.environ['TEST_MODE'] = old_test_mode
+            if old_db_url is not None:
+                os.environ['DATABASE_URL'] = old_db_url
+            else:
+                os.environ.pop('DATABASE_URL', None)
+            if old_secret_key is not None:
+                os.environ['SECRET_KEY'] = old_secret_key
+            else:
+                os.environ.pop('SECRET_KEY', None)
 
     def test_settings_from_env_file(self):
         """Test loading settings from .env file."""

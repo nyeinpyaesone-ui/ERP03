@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models import Product, InventoryMovement
 from app.auth import get_current_user
 from app.services.activity_log import log_activity
+from app.core.repositories import ProductRepository, InventoryMovementRepository
 
 router = APIRouter()
 
@@ -77,6 +78,8 @@ def create_product(data: ProductCreate, db: Session = Depends(get_db), current_u
     """
     Create a product and record its creation activity.
     
+    Uses Repository pattern for clean data access separation.
+    
     Parameters:
         data (ProductCreate): Product details, including its SKU.
         current_user: Authenticated user creating the product.
@@ -84,14 +87,17 @@ def create_product(data: ProductCreate, db: Session = Depends(get_db), current_u
     Returns:
         Product: The newly created product.
     """
-    existing = db.query(Product).filter(Product.sku == data.sku).first()
+    repo = ProductRepository(db)
+    
+    # Check for duplicate SKU using repository
+    existing = repo.get_by_sku(data.sku)
     if existing:
         raise HTTPException(status_code=400, detail="SKU already exists")
 
-    product = Product(**data.model_dump())
-    db.add(product)
-    db.commit()
-    db.refresh(product)
+    # Create product using repository
+    product = repo.create(data.model_dump())
+    
+    # Log activity
     log_activity(db, user_id=current_user.id, action="product_created", entity_type="product", entity_id=product.id)
     return product
 
@@ -107,6 +113,8 @@ def list_products(
     """
     List products with optional category, status, low-stock, and name filters.
     
+    Uses Repository pattern for clean data access separation.
+    
     Parameters:
         category (Optional[str]): Restrict results to a product category.
         status (Optional[str]): Restrict results to a product status.
@@ -116,29 +124,40 @@ def list_products(
     Returns:
         list[Product]: Matching products.
     """
-    query = db.query(Product)
+    repo = ProductRepository(db)
+    
+    # Build filters
+    filters = {}
     if category:
-        query = query.filter(Product.category == category)
+        filters["category"] = category
     if status:
-        query = query.filter(Product.status == status)
+        filters["status"] = status
+    
+    # Use specialized repository methods when available
     if low_stock:
-        query = query.filter(Product.quantity_in_stock <= Product.reorder_level)
-    if search:
-        query = query.filter(Product.name.ilike(f"%{search}%"))
-    return query.all()
+        return repo.get_low_stock_products()
+    elif search:
+        return repo.search("name", search, limit=100)
+    elif filters:
+        return repo.filter(filters, limit=100)
+    else:
+        return repo.list(limit=100)
 
 @router.get("/products/{product_id}", response_model=ProductResponse)
 def get_product(product_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Retrieve a product by its identifier.
     
+    Uses Repository pattern for clean data access separation.
+    
     Parameters:
-    	product_id (int): The product identifier.
+        product_id (int): The product identifier.
     
     Returns:
-    	Product: The matching product record.
+        Product: The matching product record.
     """
-    product = db.query(Product).filter(Product.id == product_id).first()
+    repo = ProductRepository(db)
+    product = repo.get(product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return product
@@ -148,24 +167,22 @@ def update_product(product_id: int, data: ProductCreate, db: Session = Depends(g
     """
     Update an existing product with the supplied fields.
     
+    Uses Repository pattern for clean data access separation.
+    
     Parameters:
-    	product_id (int): Identifier of the product to update.
-    	data (ProductCreate): Product fields and values to apply.
+        product_id (int): Identifier of the product to update.
+        data (ProductCreate): Product fields and values to apply.
     
     Returns:
-    	Product: The updated product.
+        Product: The updated product.
     
     Raises:
-    	HTTPException: If the product does not exist.
+        HTTPException: If the product does not exist.
     """
-    product = db.query(Product).filter(Product.id == product_id).first()
+    repo = ProductRepository(db)
+    product = repo.update(product_id, data.model_dump())
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    for key, value in data.model_dump().items():
-        setattr(product, key, value)
-    product.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(product)
     return product
 
 @router.delete("/products/{product_id}")
@@ -173,23 +190,25 @@ def delete_product(product_id: int, db: Session = Depends(get_db), current_user 
     """
     Delete a product by its identifier.
     
+    Uses Repository pattern for clean data access separation.
+    
     Parameters:
         product_id (int): Identifier of the product to delete.
     
     Returns:
         dict: Confirmation message indicating that the product was deleted.
     """
-    product = db.query(Product).filter(Product.id == product_id).first()
-    if not product:
+    repo = ProductRepository(db)
+    if not repo.delete(product_id):
         raise HTTPException(status_code=404, detail="Product not found")
-    db.delete(product)
-    db.commit()
     return {"message": "Product deleted"}
 
 @router.post("/movements", response_model=MovementResponse)
 def create_movement(data: MovementCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Create an inventory movement and update the associated product's stock.
+    
+    Uses Repository pattern for clean data access separation.
     
     Parameters:
         data (MovementCreate): Movement details, including the product, movement type, and quantity.
@@ -200,13 +219,20 @@ def create_movement(data: MovementCreate, db: Session = Depends(get_db), current
     Raises:
         HTTPException: If the product does not exist or an outgoing movement exceeds available stock.
     """
-    product = db.query(Product).filter(Product.id == data.product_id).first()
+    product_repo = ProductRepository(db)
+    movement_repo = InventoryMovementRepository(db)
+    
+    # Get product using repository
+    product = product_repo.get(data.product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    movement = InventoryMovement(**data.model_dump(), created_by=current_user.id)
+    # Create movement
+    movement_data = data.model_dump()
+    movement_data["created_by"] = current_user.id
+    movement = movement_repo.create(movement_data)
 
-    # Update stock
+    # Update stock based on movement type
     if data.movement_type == "in":
         product.quantity_in_stock += data.quantity
     elif data.movement_type == "out":
@@ -217,9 +243,10 @@ def create_movement(data: MovementCreate, db: Session = Depends(get_db), current
         product.quantity_in_stock = data.quantity
 
     product.updated_at = datetime.now(timezone.utc)
-    db.add(movement)
     db.commit()
     db.refresh(movement)
+    
+    # Log activity
     log_activity(db, user_id=current_user.id, action="inventory_moved", entity_type="inventory_movement", entity_id=movement.id)
     return movement
 
@@ -228,30 +255,47 @@ def list_movements(product_id: Optional[int] = None, db: Session = Depends(get_d
     """
     List inventory movements, optionally filtered by product.
     
+    Uses Repository pattern for clean data access separation.
+    
     Parameters:
         product_id (Optional[int]): Product identifier used to filter the movements.
     
     Returns:
         List[InventoryMovement]: Inventory movements ordered from newest to oldest.
     """
-    query = db.query(InventoryMovement)
+    repo = InventoryMovementRepository(db)
+    
     if product_id:
-        query = query.filter(InventoryMovement.product_id == product_id)
-    return query.order_by(InventoryMovement.created_at.desc()).all()
+        return repo.get_by_product(product_id, limit=100)
+    else:
+        return repo.list(limit=100, order_by="created_at", desc=True)
 
 @router.get("/dashboard")
 def inventory_dashboard(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """
+    Get inventory dashboard with key metrics.
+    
+    Uses Repository pattern for clean data access separation.
+    
+    Returns:
+        dict: Inventory metrics including total products, stock value, low stock count, and categories.
+    """
+    repo = ProductRepository(db)
+    
+    total_products = repo.count()
+    total_stock_value = repo.get_total_stock_value()
+    low_stock_count = len(repo.get_low_stock_products())
+    out_of_stock_count = len(repo.get_out_of_stock_products())
+    
+    # Get category counts
     from sqlalchemy import func
-    total_products = db.query(Product).count()
-    total_stock_value = db.query(func.sum(Product.quantity_in_stock * Product.unit_price)).scalar() or 0
-    low_stock_count = db.query(Product).filter(Product.quantity_in_stock <= Product.reorder_level).count()
-    out_of_stock = db.query(Product).filter(Product.quantity_in_stock == 0).count()
+    categories = db.query(Product.category, func.count(Product.id)).group_by(Product.category).all()
 
     return {
         "total_products": total_products,
-        "total_stock_value": float(total_stock_value),
+        "total_stock_value": total_stock_value,
         "low_stock_count": low_stock_count,
-        "out_of_stock": out_of_stock,
-        "categories": db.query(Product.category, func.count(Product.id)).group_by(Product.category).all()
+        "out_of_stock": out_of_stock_count,
+        "categories": categories
     }
 

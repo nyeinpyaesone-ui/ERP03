@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
+import type {
   Cart,
   CartItem,
   POSSale,
@@ -12,8 +12,12 @@ import {
   AppliedDiscount,
 } from '../types/pos';
 
+/**
+ * POS Module State Interface
+ * Enterprise-grade Point of Sale state management
+ */
 interface POSState {
-  // Cart
+  // Cart Management
   cart: Cart;
   addToCart: (product: POSProduct, quantity?: number, variantId?: string) => void;
   updateCartItemQuantity: (itemId: string, quantity: number) => void;
@@ -33,13 +37,13 @@ interface POSState {
   resumeSale: (saleId: string) => void;
   removeSuspendedSale: (saleId: string) => void;
 
-  // Shift
+  // Shift Management
   currentShift: POSShift | null;
   setCurrentShift: (shift: POSShift | null) => void;
   shiftHistory: POSShift[];
   addShiftToHistory: (shift: POSShift) => void;
 
-  // Register
+  // Register Management
   currentRegister: POSRegister | null;
   setCurrentRegister: (register: POSRegister | null) => void;
   availableRegisters: POSRegister[];
@@ -77,11 +81,16 @@ const initialCart: Cart = {
   appliedDiscounts: [],
 };
 
+/**
+ * POS Store Factory - Enterprise Implementation
+ * Uses Zustand with persistence for offline-first architecture
+ */
 export const usePOSStore = create<POSState>()(
   persist(
     (set, get) => ({
-      // Cart
+      // Cart Management
       cart: initialCart,
+      
       addToCart: (product, quantity = 1, variantId) => {
         const state = get();
         const existingItem = state.cart.items.find(
@@ -129,6 +138,7 @@ export const usePOSStore = create<POSState>()(
         const newItems = [...state.cart.items, newItem];
         state.recalculateCartWithItems(newItems);
       },
+      
       updateCartItemQuantity: (itemId, quantity) => {
         const state = get();
         if (quantity <= 0) {
@@ -151,32 +161,40 @@ export const usePOSStore = create<POSState>()(
         });
         state.recalculateCartWithItems(newItems);
       },
+      
       removeFromCart: (itemId) => {
         const state = get();
         const newItems = state.cart.items.filter((item) => item.id !== itemId);
         state.recalculateCartWithItems(newItems);
       },
+      
       clearCart: () => set({ cart: initialCart }),
+      
       applyDiscount: (discount) => {
         const state = get();
         const newDiscounts = [...state.cart.appliedDiscounts, discount];
         set({ cart: { ...state.cart, appliedDiscounts: newDiscounts } });
         state.recalculateCart();
       },
+      
       removeDiscount: (discountId) => {
         const state = get();
         const newDiscounts = state.cart.appliedDiscounts.filter((d) => d.id !== discountId);
         set({ cart: { ...state.cart, appliedDiscounts: newDiscounts } });
         state.recalculateCart();
       },
+      
       setCustomer: (customerId, customerName) =>
         set((state) => ({ cart: { ...state.cart, customerId, customerName } })),
+      
       setCartNotes: (notes) =>
         set((state) => ({ cart: { ...state.cart, notes } })),
+      
       recalculateCart: () => {
         const state = get();
         state.recalculateCartWithItems(state.cart.items);
       },
+      
       recalculateCartWithItems: (items) => {
         const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
         const totalTax = items.reduce((sum, item) => sum + item.taxAmount, 0);
@@ -204,9 +222,11 @@ export const usePOSStore = create<POSState>()(
       // Current Sale
       currentSale: null,
       setCurrentSale: (currentSale) => set({ currentSale }),
+      
       suspendedSales: [],
       suspendSale: (sale) =>
         set((state) => ({ suspendedSales: [...state.suspendedSales, sale] })),
+      
       resumeSale: (saleId) => {
         const state = get();
         const sale = state.suspendedSales.find((s) => s.id === saleId);
@@ -218,41 +238,50 @@ export const usePOSStore = create<POSState>()(
           });
         }
       },
+      
       removeSuspendedSale: (saleId) =>
         set((state) => ({
           suspendedSales: state.suspendedSales.filter((s) => s.id !== saleId),
         })),
 
-      // Shift
+      // Shift Management
       currentShift: null,
       setCurrentShift: (currentShift) => set({ currentShift }),
+      
       shiftHistory: [],
       addShiftToHistory: (shift) =>
         set((state) => ({ shiftHistory: [shift, ...state.shiftHistory] })),
 
-      // Register
+      // Register Management
       currentRegister: null,
       setCurrentRegister: (currentRegister) => set({ currentRegister }),
+      
       availableRegisters: [],
       setAvailableRegisters: (availableRegisters) => set({ availableRegisters }),
 
       // Products & Categories
       products: [],
       setProducts: (products) => set({ products }),
+      
       categories: [],
       setCategories: (categories) => set({ categories }),
+      
       selectedCategory: null,
       setSelectedCategory: (selectedCategory) => set({ selectedCategory }),
+      
       searchQuery: '',
       setSearchQuery: (searchQuery) => set({ searchQuery }),
 
       // UI State
       isLoading: false,
       setIsLoading: (isLoading) => set({ isLoading }),
+      
       error: null,
       setError: (error) => set({ error }),
+      
       showPaymentModal: false,
       setShowPaymentModal: (showPaymentModal) => set({ showPaymentModal }),
+      
       showShiftModal: false,
       setShowShiftModal: (showShiftModal) => set({ showShiftModal }),
     }),
@@ -267,6 +296,3 @@ export const usePOSStore = create<POSState>()(
     }
   )
 );
-
----
-

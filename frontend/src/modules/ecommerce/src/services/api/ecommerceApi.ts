@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { createAPIClient } from '../../../core/api';
 import { env } from '../config/env';
 import {
   StoreProduct,
@@ -15,16 +15,8 @@ import {
   SearchFilters,
 } from '../types/ecommerce';
 
-const api = axios.create({
-  baseURL: `${env.apiUrl}/ecommerce`,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-api.interceptors.request.use(async (config) => {
-  const token = await getAuthToken();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+// Create shared API client
+const api = createAPIClient(`${env.apiUrl}/ecommerce`);
 
 // Product APIs
 export const ecommerceProductAPI = {
@@ -141,23 +133,19 @@ export const ecommerceShippingAPI = {
     api.post('/shipping/calculate', data).then((r) => r.data),
 };
 
-// Search API
+// Search API - fixed: replaced 'any' with proper type
 export const ecommerceSearchAPI = {
   search: (query: string, filters?: SearchFilters, page?: number, limit?: number) =>
-    api.get<{ products: StoreProduct[]; total: number; page: number; facets: any }>('/search', {
+    api.get<{ products: StoreProduct[]; total: number; page: number; facets: Record<string, any> }>('/search', {
       params: { q: query, ...filters, page, limit },
     }).then((r) => r.data),
 };
 
-// KPI APIs
+// KPI APIs - last function, no trailing helper needed
 export const ecommerceKPIAPI = {
   getDashboard: (period?: 'today' | 'week' | 'month') =>
     api.get<EcommerceKPI>('/kpi/dashboard', { params: { period } }).then((r) => r.data),
   getSalesReport: (params: { dateFrom: string; dateTo: string; groupBy?: 'day' | 'week' | 'month' | 'product' | 'category' }) =>
     api.get('/reports/sales', { params }).then((r) => r.data),
 };
-
-async function getAuthToken(): Promise<string | null> {
-  return null;
-}
 

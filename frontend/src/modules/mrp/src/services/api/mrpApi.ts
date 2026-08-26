@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { createAPIClient, handleResponse, handlePaginatedResponse, PaginatedResponse } from '../../../core/api';
 import { env } from '../config/env';
 import {
   BillOfMaterials,
@@ -10,32 +10,8 @@ import {
   Routing,
 } from '../types/mrp';
 
-const api = axios.create({
-  baseURL: `${env.apiUrl}/manufacturing`,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Request interceptor for auth token
-api.interceptors.request.use(async (config) => {
-  const token = await getAuthToken(); // Your existing auth utility
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Response interceptor for error handling
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Handle token refresh or logout
-    }
-    return Promise.reject(error);
-  }
-);
+// Create shared API client
+const api = createAPIClient(`${env.apiUrl}/manufacturing`);
 
 // BOM APIs
 export const bomAPI = {
@@ -120,9 +96,6 @@ export const routingAPI = {
     api.post<Routing>('/routings', data).then((r) => r.data),
 };
 
-// Helper function - replace with your actual auth token retrieval
-async function getAuthToken(): Promise<string | null> {
-  // Import from your existing auth utility
-  return null;
-}
+// Helper function - now using shared implementation from core/api
+// getAuthToken is no longer needed here as it's handled by createAPIClient
 

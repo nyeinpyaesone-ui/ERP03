@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { createAPIClient } from '../../../core/api';
 import { env } from '../config/env';
 import {
   POSProduct,
@@ -11,16 +11,8 @@ import {
   Payment,
 } from '../types/pos';
 
-const api = axios.create({
-  baseURL: `${env.apiUrl}/pos`,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-api.interceptors.request.use(async (config) => {
-  const token = await getAuthToken();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+// Create shared API client
+const api = createAPIClient(`${env.apiUrl}/pos`);
 
 // Product APIs
 export const posProductAPI = {
@@ -81,7 +73,7 @@ export const posRegisterAPI = {
     api.put<POSRegister>(`/registers/${id}`, data).then((r) => r.data),
 };
 
-// KPI APIs
+// KPI APIs - last function, no trailing helper needed
 export const posKPIAPI = {
   getDashboard: (registerId?: string, shiftId?: string) =>
     api.get<POSKPI>('/kpi/dashboard', { params: { registerId, shiftId } }).then((r) => r.data),
@@ -90,8 +82,4 @@ export const posKPIAPI = {
   getSalesReport: (params: { dateFrom: string; dateTo: string; groupBy?: 'day' | 'week' | 'month' | 'product' | 'category' }) =>
     api.get('/reports/sales', { params }).then((r) => r.data),
 };
-
-async function getAuthToken(): Promise<string | null> {
-  return null;
-}
 

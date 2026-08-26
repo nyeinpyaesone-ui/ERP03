@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import {
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type {
   DashboardSummary,
   RevenueAnalytics,
   KPIMetrics,
@@ -11,174 +11,211 @@ import {
   ForecastData,
   AIInsight,
   InventoryStats,
+  AnomalyDetectionResult,
 } from '../types/dashboard';
+import { apiClient } from '../../../core/api';
 
-const API_BASE = 'https://api.erp_solution.com/v1';
-
-const useApi = <T>(endpoint: string, params?: Record<string, string>) => {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  const fetchData = useCallback(async () => {
-    if (abortRef.current) abortRef.current.abort();
-    abortRef.current = new AbortController();
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const queryParams = params ? new URLSearchParams(params).toString() : '';
-      const url = `${API_BASE}${endpoint}${queryParams ? `?${queryParams}` : ''}`;
-
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${getToken()}`,
-          'Content-Type': 'application/json',
-        },
-        signal: abortRef.current.signal,
-      });
-
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const result = await response.json();
-      setData(result);
-    } catch (err) {
-      if (err instanceof Error && err.name !== 'AbortError') {
-        setError(err.message);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [endpoint, JSON.stringify(params)]);
-
-  useEffect(() => {
-    fetchData();
-    return () => abortRef.current?.abort();
-  }, [fetchData]);
-
-  return { data, loading, error, refetch: fetchData };
+/**
+ * BI Dashboard API Service
+ * Enterprise-grade analytics and business intelligence endpoints
+ */
+const dashboardAPI = {
+  getSummary: (params: DashboardFilter) =>
+    apiClient.get<DashboardSummary>('/dashboard/summary', { params }).then((r) => r.data),
+  getRevenueAnalytics: (period: string) =>
+    apiClient.get<RevenueAnalytics>(`/dashboard/revenue`, { params: { period, groupBy: 'daily' } }).then((r) => r.data),
+  getKPIMetrics: (period: string) =>
+    apiClient.get<KPIMetrics>(`/dashboard/kpis`, { params: { period } }).then((r) => r.data),
+  getSalesChart: (period: string = '30d') =>
+    apiClient.get<ChartData>('/dashboard/charts/sales', { params: { period } }).then((r) => r.data),
+  getInventoryChart: () =>
+    apiClient.get<ChartData>('/dashboard/charts/inventory').then((r) => r.data),
+  getCustomerChart: (period: string = '30d') =>
+    apiClient.get<ChartData>('/dashboard/charts/customers', { params: { period } }).then((r) => r.data),
+  getActivities: (limit: number = 20, type: string = 'all') =>
+    apiClient.get<ActivityItem[]>('/dashboard/activities', { params: { limit, type } }).then((r) => r.data),
+  getTopProducts: (period: string = 'this_month', limit: number = 10) =>
+    apiClient.get<TopProduct[]>('/dashboard/top-products', { params: { period, limit } }).then((r) => r.data),
+  getTopCustomers: (period: string = 'this_month', limit: number = 10) =>
+    apiClient.get<TopCustomer[]>('/dashboard/top-customers', { params: { period, limit } }).then((r) => r.data),
+  getSalesForecast: (horizon: string = '30d') =>
+    apiClient.get<ForecastData>('/ai/forecast', { params: { type: 'sales', horizon } }).then((r) => r.data),
+  getAIInsights: (limit: number = 5) =>
+    apiClient.get<AIInsight[]>('/ai/insights', { params: { type: 'all', limit } }).then((r) => r.data),
+  getInventoryStats: () =>
+    apiClient.get<InventoryStats>('/inventory/stats').then((r) => r.data),
+  getAnomalyDetection: (module: string = 'all', sensitivity: string = 'medium') =>
+    apiClient.get<AnomalyDetectionResult[]>('/ai/anomaly-detection', { params: { module, sensitivity } }).then((r) => r.data),
 };
 
-const getToken = (): string => {
-  // Replace with your actual token retrieval logic
-  return (globalThis as any).__ERP_TOKEN__ || '';
-};
-
+/**
+ * Dashboard Summary Hook
+ * Fetches high-level KPI summary with period comparison
+ */
 export const useDashboardSummary = (filter: DashboardFilter) => {
-  return useApi<DashboardSummary>('/dashboard/summary', {
-    period: filter.period,
-    compareWith: filter.compareWith,
+  return useQuery<DashboardSummary>({
+    queryKey: ['bi', 'dashboard', 'summary', filter],
+    queryFn: () => dashboardAPI.getSummary(filter),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 3,
   });
 };
 
+/**
+ * Revenue Analytics Hook
+ * Fetches revenue data with daily grouping for charts
+ */
 export const useRevenueAnalytics = (period: string) => {
-  return useApi<RevenueAnalytics>('/dashboard/revenue', {
-    period,
-    groupBy: 'daily',
+  return useQuery<RevenueAnalytics>({
+    queryKey: ['bi', 'revenue', period],
+    queryFn: () => dashboardAPI.getRevenueAnalytics(period),
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    retry: 3,
   });
 };
 
+/**
+ * KPI Metrics Hook
+ * Fetches key performance indicators for the specified period
+ */
 export const useKPIMetrics = (period: string) => {
-  return useApi<KPIMetrics>('/dashboard/kpis', { period });
+  return useQuery<KPIMetrics>({
+    queryKey: ['bi', 'kpi', period],
+    queryFn: () => dashboardAPI.getKPIMetrics(period),
+    staleTime: 5 * 60 * 1000,
+    retry: 3,
+  });
 };
 
+/**
+ * Sales Chart Data Hook
+ * Fetches time-series sales data for visualization
+ */
 export const useSalesChart = (period: string = '30d') => {
-  return useApi<ChartData>('/dashboard/charts/sales', { period });
+  return useQuery<ChartData>({
+    queryKey: ['bi', 'charts', 'sales', period],
+    queryFn: () => dashboardAPI.getSalesChart(period),
+    staleTime: 5 * 60 * 1000,
+    retry: 3,
+  });
 };
 
+/**
+ * Inventory Chart Data Hook
+ * Fetches inventory level trends
+ */
 export const useInventoryChart = () => {
-  return useApi<ChartData>('/dashboard/charts/inventory');
+  return useQuery<ChartData>({
+    queryKey: ['bi', 'charts', 'inventory'],
+    queryFn: () => dashboardAPI.getInventoryChart(),
+    staleTime: 10 * 60 * 1000,
+    retry: 3,
+  });
 };
 
+/**
+ * Customer Analytics Chart Hook
+ * Fetches customer growth and activity data
+ */
 export const useCustomerChart = (period: string = '30d') => {
-  return useApi<ChartData>('/dashboard/charts/customers', { period });
+  return useQuery<ChartData>({
+    queryKey: ['bi', 'charts', 'customers', period],
+    queryFn: () => dashboardAPI.getCustomerChart(period),
+    staleTime: 5 * 60 * 1000,
+    retry: 3,
+  });
 };
 
+/**
+ * Activity Feed Hook
+ * Fetches recent system activities
+ */
 export const useActivities = (limit: number = 20, type: string = 'all') => {
-  return useApi<ActivityItem[]>('/dashboard/activities', {
-    limit: String(limit),
-    type,
+  return useQuery<ActivityItem[]>({
+    queryKey: ['bi', 'activities', limit, type],
+    queryFn: () => dashboardAPI.getActivities(limit, type),
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    retry: 3,
   });
 };
 
+/**
+ * Top Products Hook
+ * Fetches best-selling products for the period
+ */
 export const useTopProducts = (period: string = 'this_month', limit: number = 10) => {
-  return useApi<TopProduct[]>('/dashboard/top-products', {
-    period,
-    limit: String(limit),
+  return useQuery<TopProduct[]>({
+    queryKey: ['bi', 'top-products', period, limit],
+    queryFn: () => dashboardAPI.getTopProducts(period, limit),
+    staleTime: 5 * 60 * 1000,
+    retry: 3,
   });
 };
 
+/**
+ * Top Customers Hook
+ * Fetches highest-value customers for the period
+ */
 export const useTopCustomers = (period: string = 'this_month', limit: number = 10) => {
-  return useApi<TopCustomer[]>('/dashboard/top-customers', {
-    period,
-    limit: String(limit),
+  return useQuery<TopCustomer[]>({
+    queryKey: ['bi', 'top-customers', period, limit],
+    queryFn: () => dashboardAPI.getTopCustomers(period, limit),
+    staleTime: 5 * 60 * 1000,
+    retry: 3,
   });
 };
 
+/**
+ * Sales Forecast Hook
+ * Fetches AI-powered sales predictions
+ */
 export const useSalesForecast = (horizon: string = '30d') => {
-  return useApi<ForecastData>('/ai/forecast', {
-    type: 'sales',
-    horizon,
+  return useQuery<ForecastData>({
+    queryKey: ['bi', 'forecast', 'sales', horizon],
+    queryFn: () => dashboardAPI.getSalesForecast(horizon),
+    staleTime: 15 * 60 * 1000, // 15 minutes
+    retry: 2,
   });
 };
 
+/**
+ * AI Insights Hook
+ * Fetches actionable business insights from AI
+ */
 export const useAIInsights = (limit: number = 5) => {
-  return useApi<AIInsight[]>('/ai/insights', {
-    type: 'all',
-    limit: String(limit),
+  return useQuery<AIInsight[]>({
+    queryKey: ['bi', 'ai', 'insights', limit],
+    queryFn: () => dashboardAPI.getAIInsights(limit),
+    staleTime: 10 * 60 * 1000,
+    retry: 2,
   });
 };
 
+/**
+ * Inventory Statistics Hook
+ * Fetches comprehensive inventory metrics
+ */
 export const useInventoryStats = () => {
-  return useApi<InventoryStats>('/inventory/stats');
-};
-
-export const useAnomalyDetection = () => {
-  return useApi<Array<{ id: string; module: string; metric: string; severity: string; description: string }>>(
-    '/ai/anomaly-detection',
-    { module: 'all', sensitivity: 'medium' }
-  );
-};
-
-export const useDashboardRefresh = (interval: number = 300000) => {
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setLastRefresh(new Date());
-    }, interval);
-
-    return () => clearInterval(timer);
-  }, [interval]);
-
-  return lastRefresh;
-};
-
-export const usePeriodFilter = () => {
-  const [filter, setFilter] = useState<DashboardFilter>({
-    period: 'this_month',
-    compareWith: 'previous_period',
+  return useQuery<InventoryStats>({
+    queryKey: ['bi', 'inventory', 'stats'],
+    queryFn: () => dashboardAPI.getInventoryStats(),
+    staleTime: 5 * 60 * 1000,
+    retry: 3,
   });
-
-  const setPeriod = useCallback((period: string) => {
-    setFilter(prev => ({ ...prev, period }));
-  }, []);
-
-  const setCompareWith = useCallback((compareWith: 'previous_period' | 'previous_year') => {
-    setFilter(prev => ({ ...prev, compareWith }));
-  }, []);
-
-  return { filter, setPeriod, setCompareWith, setFilter };
 };
 
----
-
-
-# merged-converted (2)-converted.md
-
-# useLanguage (1)-converted.md
+/**
+ * Anomaly Detection Hook
+ * Fetches AI-detected anomalies across modules
+ */
+export const useAnomalyDetection = (module: string = 'all', sensitivity: string = 'medium') => {
+  return useQuery<AnomalyDetectionResult[]>({
+    queryKey: ['bi', 'anomaly', module, sensitivity],
+    queryFn: () => dashboardAPI.getAnomalyDetection(module, sensitivity),
+    staleTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+};
 
 import { useTranslation } from 'react-i18next';
 import { useCallback } from 'react';

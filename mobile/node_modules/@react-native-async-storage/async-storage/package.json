@@ -1,0 +1,126 @@
+{
+  "name": "@react-native-async-storage/async-storage",
+  "version": "3.1.1",
+  "description": "Asynchronous, persistent, key-value storage system for React Native.",
+  "main": "./lib/module/index.js",
+  "types": "./lib/typescript/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.tsx",
+      "types": "./lib/typescript/index.d.ts",
+      "default": "./lib/module/index.js"
+    },
+    "./package.json": "./package.json",
+    "./jest": {
+      "source": "./src/jest/AsyncStorageMock.ts",
+      "types": "./lib/typescript/jest/AsyncStorageMock.d.ts",
+      "default": "./lib/module/jest/AsyncStorageMock.js"
+    }
+  },
+  "scripts": {
+    "prepare": "yarn build",
+    "build": "del-cli lib && bob build",
+    "build:watch": "watch 'bob build' src",
+    "test:ts": "tsc --noEmit",
+    "test:lint": "eslint src/*.{js,ts,tsx}"
+  },
+  "files": [
+    "src",
+    "lib",
+    "android",
+    "apple",
+    "apple-frameworks",
+    "windows",
+    "*.podspec",
+    "!apple/build",
+    "!android/build",
+    "!android/gradle",
+    "!android/gradlew",
+    "!android/gradlew.bat",
+    "!android/local.properties",
+    "!**/__tests__",
+    "!**/__fixtures__",
+    "!**/__mocks__",
+    "!**/.*",
+    "!docs",
+    "!examples",
+    "!scripts",
+    "!shared-storage"
+  ],
+  "dependencies": {
+    "idb": "8.0.3"
+  },
+  "devDependencies": {
+    "@react-native-community/cli": "18.0.1",
+    "@types/react": "^19.0.0",
+    "del-cli": "^5.1.0",
+    "eslint": "9.34.0",
+    "prettier": "3.6.2",
+    "react": "19.0.0",
+    "react-native": "0.79.6",
+    "react-native-builder-bob": "^0.40.13",
+    "typescript": "5.9.2",
+    "watch": "1.0.2"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
+  },
+  "react-native-builder-bob": {
+    "source": "src",
+    "output": "lib",
+    "targets": [
+      [
+        "module",
+        {
+          "esm": true
+        }
+      ],
+      [
+        "typescript",
+        {
+          "project": "tsconfig.json"
+        }
+      ]
+    ]
+  },
+  "codegenConfig": {
+    "name": "AsyncStorageSpec",
+    "type": "modules",
+    "jsSrcsDir": "src",
+    "android": {
+      "javaPackageName": "org.asyncstorage"
+    },
+    "windows": {
+      "namespace": "RNCAsyncStorage",
+      "outputDirectory": "windows/code/codegen",
+      "separateDataTypes": true
+    }
+  },
+  "create-react-native-library": {
+    "languages": "kotlin-objc",
+    "type": "turbo-module",
+    "version": "0.53.0"
+  },
+  "keywords": [
+    "react-native",
+    "react native",
+    "async storage",
+    "asyncstorage",
+    "storage"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/react-native-async-storage/async-storage.git",
+    "directory": "packages/async-storage"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/react-native-async-storage/async-storage/issues"
+  },
+  "homepage": "https://github.com/react-native-async-storage/async-storage#readme",
+  "author": "Krzysztof Borowy <contact@kborowy.com> (https://www.kborowy.com)",
+  "contributors": [
+    "Tommy Nguyen <4123478+tido64@users.noreply.github.com> (https://github.com/tido64)"
+  ]
+}
