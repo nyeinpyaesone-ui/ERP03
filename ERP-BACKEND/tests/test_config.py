@@ -48,13 +48,17 @@ class TestSettings:
         """Test that SECRET_KEY must be at least 32 characters."""
         from app.config import Settings
         
+        # Clear the lru_cache to get a fresh Settings instance
+        from app.config import get_settings
+        get_settings.cache_clear()
+        
         with patch.dict(os.environ, {
             'DATABASE_URL': 'postgresql://test:test@localhost/test',
             'SECRET_KEY': 'short'  # Too short
         }, clear=False):
             with patch('app.config._read_secret', return_value=None):
                 with pytest.raises(ValueError) as exc_info:
-                    Settings()
+                    Settings(_env_file=None)
                 
                 assert "SECRET_KEY" in str(exc_info.value) or "32" in str(exc_info.value)
 

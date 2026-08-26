@@ -1,0 +1,1 @@
+{"version":3,"file":"AsyncStorageMock.d.ts","sourceRoot":"","sources":["../../../src/jest/AsyncStorageMock.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,2CAA2C,CAAC;AA+C9E,wBAAgB,kBAAkB,CAAC,YAAY,EAAE,MAAM,GAAG,YAAY,CAKrE;AAED,wBAAgB,oBAAoB,IAAI,IAAI,CAE3C;;AAED,wBAA4C"}
