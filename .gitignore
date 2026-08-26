@@ -1,30 +1,30 @@
 ```
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.py~
-*.py.class
-*.py.backup
-*.swp
-*.swo
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# Coverage
-.coverage
+# Build outputs
+dist/
+build/
 coverage/
-htmlcov/
+.nyc_output/
+.eslintcache
 
-# Environment
+# Environment variables
 .env
 .env.local
 .env.*
-.venv/
-venv/
-ENV/
+!.env.example
 
-# Logs
-*.log
+# IDE specific
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
 # OS generated files
 .DS_Store
@@ -34,4 +34,34 @@ ENV/
 .Trashes
 ehthumbs.db
 Thumbs.db
+Icon?
+.directory
+*.nfs*
+
+# Logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Temporary folders
+tmp/
+temp/
+tmp/**
+temp/**
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Docker
+.dockerenv
+!Dockerfile
+
+# Package manager
+.yarn/
+pnpm-lock.yaml
 ```

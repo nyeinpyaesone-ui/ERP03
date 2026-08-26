@@ -1,0 +1,32 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: erp-backend-pdb
+  namespace: erp03-production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: erp-backend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: erp-frontend-pdb
+  namespace: erp03-production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: erp-frontend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: erp-worker-pdb
+  namespace: erp03-production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: erp-worker

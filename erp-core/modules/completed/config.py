@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "erp03_prod"
     DATABASE_URL: str | None = None
     
+    # Redis
+    REDIS_URL: str = "redis://localhost:6379"
+    
     # Security
     SECRET_KEY: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
