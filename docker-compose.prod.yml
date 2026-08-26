@@ -63,12 +63,25 @@ services:
     networks: [erp-network]
 
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.1.44
     container_name: erp-ollama
     restart: unless-stopped
     volumes:
       - ollama_data:/root/.ollama
     networks: [erp-network]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    resources:
+      limits:
+        memory: 8Gi
+        cpus: "4.0"
+      requests:
+        memory: 4Gi
+        cpus: "2.0"
 
   nginx:
     image: nginx:1.29-alpine

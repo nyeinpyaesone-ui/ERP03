@@ -26,7 +26,7 @@ spec:
         fsGroup: 999
       containers:
       - name: postgres
-        image: postgres:15-alpine
+        image: postgres:15.8-alpine
         ports:
         - name: postgres
           containerPort: 5432
@@ -99,6 +99,99 @@ spec:
       resources:
         requests:
           storage: 100Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: erp_solution-postgres
+  namespace: erp_solution
+  labels:
+    app.kubernetes.io/name: erp_solution-postgres
+    app.kubernetes.io/component: database
+spec:
+  type: ClusterIP
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: erp_solution-postgres
+---
+# PostgreSQL Replica for Read Scaling (optional, disabled by default)
+# Uncomment and configure for production read replicas
+# apiVersion: apps/v1
+# kind: StatefulSet
+# metadata:
+#   name: erp_solution-postgres-replica
+#   namespace: erp_solution
+#   labels:
+#     app.kubernetes.io/name: erp_solution-postgres-replica
+#     app.kubernetes.io/component: database-replica
+# spec:
+#   serviceName: erp_solution-postgres-replica
+#   replicas: 1
+#   selector:
+#     matchLabels:
+#       app.kubernetes.io/name: erp_solution-postgres-replica
+#   template:
+#     metadata:
+#       labels:
+#         app.kubernetes.io/name: erp_solution-postgres-replica
+#     spec:
+#       securityContext:
+#         runAsUser: 999
+#         runAsGroup: 999
+#         fsGroup: 999
+#       containers:
+#       - name: postgres
+#         image: postgres:15.8-alpine
+#         ports:
+#         - name: postgres
+#           containerPort: 5432
+#         env:
+#         - name: PGUSER
+#           valueFrom:
+#             secretKeyRef:
+#               name: erp_solution-secrets
+#               key: DB_USER
+#         - name: PGPASSWORD
+#           valueFrom:
+#             secretKeyRef:
+#               name: erp_solution-secrets
+#               key: DB_PASSWORD
+#         command:
+#         - sh
+#         - -c
+#         - |
+#           until pg_basebackup -h erp_solution-postgres -D /var/lib/postgresql/data -R -v -P --wal-method=stream; do
+#             echo "Waiting for primary to be ready..."; sleep 5;
+#           done
+#           echo "Replica initialized, starting PostgreSQL..."
+#           pg_ctl -D /var/lib/postgresql/data -l /var/lib/postgresql/data/logfile start
+#           tail -f /var/lib/postgresql/data/logfile
+#         resources:
+#           requests:
+#             memory: "1Gi"
+#             cpu: "500m"
+#           limits:
+#             memory: "4Gi"
+#             cpu: "2000m"
+#         volumeMounts:
+#         - name: data
+#           mountPath: /var/lib/postgresql/data
+#       volumes: []
+#   volumeClaimTemplates:
+#   - metadata:
+#       name: data
+#       labels:
+#         app.kubernetes.io/name: erp_solution-postgres-replica
+#     spec:
+#       accessModes: ["ReadWriteOnce"]
+#       storageClassName: fast-ssd
+#       resources:
+#         requests:
+#           storage: 100Gi
 ---
 apiVersion: v1
 kind: Service
