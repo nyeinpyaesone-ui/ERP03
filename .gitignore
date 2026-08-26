@@ -1,48 +1,49 @@
 ```
-# Environment and secrets
+# Environment variables and secrets
 .env
 .env.local
 .env.*
 secrets/
 
 # Dependencies
-node_modules/
 .venv/
 venv/
+node_modules/
 __pycache__/
-*.egg-info/
+*.pyc
+*.pyo
+*.pyd
+
+# Build artifacts
 dist/
 build/
 target/
-.gradle/
-.mypy_cache/
-.pytest_cache/
+*.egg-info/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Editors
+.vscode/
+.idea/
+*.iml
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Coverage reports
 coverage/
 htmlcov/
 .coverage
 
-# Compiled files
-*.pyc
-*.class
-*.o
-*.exe
-*.dll
+# Python specific
+__pycache__/
+*.py[cod]
+*$py.class
 *.so
-*.a
-*.obj
-*.out
-
-# Editor/IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
-
-# System files
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
+.Python
 ```
