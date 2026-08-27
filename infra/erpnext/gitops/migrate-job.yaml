@@ -12,7 +12,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: ghcr.io/nyeinpyaesone-ui/erp03-erpnext:RELEASE_DIGEST
+          image: ghcr.io/nyeinpyaesone-ui/erp03-erpnext:IMAGE_TAG
           command: ["bench", "migrate"]
           envFrom:
             - secretRef:
