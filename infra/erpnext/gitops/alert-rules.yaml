@@ -1,0 +1,22 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: erpnext
+spec:
+  groups:
+    - name: erpnext.rules
+      rules:
+        - alert: ERPNextPodRestarting
+          expr: increase(kube_pod_container_status_restarts_total{container="erpnext"}[15m]) > 3
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: ERPNext pod is restarting repeatedly
+        - alert: ERPNextPodUnavailable
+          expr: kube_deployment_status_replicas_available{deployment="erpnext"} < 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: No ERPNext replicas are available
