@@ -1,0 +1,27 @@
+name: ERPNext CI Sanity
+
+on:
+  push:
+    branches:
+      - feat/erpnext-production
+  pull_request:
+    branches:
+      - feat/erpnext-production
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate ERPNext metadata
+        run: python -m json.tool infra/erpnext/apps.json >/dev/null
+      - name: Validate required GitOps files
+        run: |
+          set -eu
+          for f in deployment.yaml service.yaml ingress.yaml migrate-job.yaml kustomization.yaml external-secret.yaml servicemonitor.yaml alert-rules.yaml; do
+            test -f "infra/erpnext/gitops/$f"
+          done
