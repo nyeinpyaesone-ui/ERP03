@@ -1,0 +1,19 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: erpnext-migrate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: ghcr.io/nyeinpyaesone-ui/erp03/erpnext-custom:IMAGE_TAG
+          command: ["bench", "migrate"]
+          envFrom:
+            - secretRef:
+                name: erpnext-secrets
