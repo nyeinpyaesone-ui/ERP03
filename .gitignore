@@ -1,44 +1,57 @@
-```
 # Dependencies
 node_modules/
 
 # Build outputs
-dist/
 build/
-*.js
-*.ts
-*.tsx
-*.css
+dist/
+*.egg-info/
 
-# Logs and temp files
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+
+# Python environments
+.venv/
+venv/
+ENV/
+
+# Tests / coverage
+.pytest_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage/
+htmlcov/
+
+# Environment / secrets
+.env
+.env.*
+*.env
+*.env.*
+secrets/*
+!secrets/README.md
+
+# ERP runtime data
+ERP-BACKEND/erp.db
+ERP-BACKEND/*.db
+
+# Logs / temporary files
 *.log
 *.tmp
-
-# Environment variables
-.env
-.env.local
-*.env.*
+*.swp
+*.swo
 
 # Editors
 .vscode/
 .idea/
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Coverage
-coverage/
-htmlcov/
-.coverage
-
 # OS generated files
 .DS_Store
 Thumbs.db
 
-# Compressed files
+# Archives
 *.zip
 *.gz
 *.tar
@@ -57,4 +70,3 @@ Thumbs.db
 *.Z
 *.lz
 *.lzo
-```
