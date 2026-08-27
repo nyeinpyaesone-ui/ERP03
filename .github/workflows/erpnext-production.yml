@@ -1,0 +1,133 @@
+name: ERPNext Production Image
+
+on:
+  push:
+    branches:
+      - feat/erpnext-isolated
+    paths-ignore:
+      - infra/erpnext/gitops/kustomization.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+  security-events: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/erp03-erpnext
+  FRAPPE_BRANCH: version-16
+  FRAPPE_DOCKER_REF: v3.2.1
+
+jobs:
+  build-scan-publish:
+    name: Build, scan, publish, and promote ERPNext
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ERP03
+        uses: actions/checkout@v4
+
+      - name: Validate apps.json
+        run: python -m json.tool infra/erpnext/apps.json >/dev/null
+
+      - name: Checkout pinned official Frappe Docker
+        uses: actions/checkout@v4
+        with:
+          repository: frappe/frappe_docker
+          ref: ${{ env.FRAPPE_DOCKER_REF }}
+          path: frappe_docker
+          fetch-depth: 1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build candidate image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./frappe_docker
+          file: ./frappe_docker/images/layered/Containerfile
+          load: true
+          build-args: |
+            FRAPPE_PATH=https://github.com/frappe/frappe
+            FRAPPE_BRANCH=${{ env.FRAPPE_BRANCH }}
+            CACHE_BUST=${{ github.sha }}
+          secrets: |
+            apps_json=${{ github.workspace }}/infra/erpnext/apps.json
+          tags: erp03-erpnext:${{ github.sha }}
+          cache-from: type=gha,scope=erpnext
+          cache-to: type=gha,mode=max,scope=erpnext
+          provenance: true
+          sbom: true
+
+      - name: Scan candidate image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: erp03-erpnext:${{ github.sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Generate Trivy SARIF
+        if: always()
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: erp03-erpnext:${{ github.sha }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish immutable image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./frappe_docker
+          file: ./frappe_docker/images/layered/Containerfile
+          push: true
+          build-args: |
+            FRAPPE_PATH=https://github.com/frappe/frappe
+            FRAPPE_BRANCH=${{ env.FRAPPE_BRANCH }}
+            CACHE_BUST=${{ github.sha }}
+          secrets: |
+            apps_json=${{ github.workspace }}/infra/erpnext/apps.json
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha,scope=erpnext
+          cache-to: type=gha,mode=max,scope=erpnext
+          provenance: true
+          sbom: true
+
+      - name: Promote immutable image tag into isolated GitOps
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          p = Path("infra/erpnext/gitops/kustomization.yaml")
+          text = p.read_text()
+          old = "    newTag: IMAGE_TAG"
+          new = f"    newTag: {os.environ['IMAGE_TAG']}"
+          if old not in text:
+              raise SystemExit("expected IMAGE_TAG placeholder not found")
+          p.write_text(text.replace(old, new, 1))
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add infra/erpnext/gitops/kustomization.yaml
+          git commit -m "chore(gitops): promote ERPNext image $IMAGE_TAG"
+          git push origin HEAD:feat/erpnext-isolated
