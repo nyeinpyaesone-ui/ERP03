@@ -6,6 +6,7 @@ resources:
   - ingress.yaml
   - migrate-job.yaml
   - external-secret.yaml
+  - monitoring.yaml
 images:
   - name: ghcr.io/nyeinpyaesone-ui/erp03/erpnext-custom
     newTag: IMAGE_TAG
