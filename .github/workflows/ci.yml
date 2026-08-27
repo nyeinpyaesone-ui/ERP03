@@ -1,0 +1,81 @@
+name: Build and Push ERPNext
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: erpnext-custom
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate ERPNext deployment configuration
+        run: |
+          test -f Dockerfile.erpnext
+          test -f gitops/deployment.yaml
+          test -f gitops/service.yaml
+          test -f gitops/ingress.yaml
+          test -f gitops/migrate-job.yaml
+          test -f gitops/kustomization.yaml
+          test -f gitops/argocd-application.yaml
+          test -f gitops/external-secret.yaml
+      - name: Validate YAML
+        uses: docker://cytopia/yamllint:latest
+        with:
+          args: .github/workflows/ci.yml gitops/*.yaml
+
+  build-scan-push:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build immutable image locally
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.erpnext
+          load: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      - name: Upload Trivy results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push immutable image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.erpnext
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:latest

@@ -1,0 +1,24 @@
+# Custom ERPNext image
+# Based on the exact ERPNext version requested by the deployment specification.
+FROM frappe/erpnext:v15.39.4
+
+USER root
+
+# Custom Frappe apps are copied into the bench at build time.
+COPY --chown=frappe:frappe ./apps/erpnext_custom /home/frappe/bench/apps/erpnext_custom
+
+# Install custom-app Python dependencies when present.
+RUN if [ -f /home/frappe/bench/apps/erpnext_custom/requirements.txt ]; then \
+      cd /home/frappe/bench/apps/erpnext_custom && \
+      pip install --no-cache-dir -r requirements.txt; \
+    fi
+
+# Build custom application assets when the app is present.
+RUN cd /home/frappe/bench && \
+    bench build --app erpnext_custom
+
+USER frappe
+
+EXPOSE 8000
+
+CMD ["bench", "serve", "--port=8000"]

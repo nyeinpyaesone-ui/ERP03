@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/nyeinpyaesone-ui/ERP03.git
     targetRevision: feat/erpnext-production
-    path: infra/erpnext/gitops
+    path: gitops
   destination:
     server: https://kubernetes.default.svc
     namespace: erpnext
@@ -16,9 +16,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
-    retry:
-      limit: 5
-      backoff:
-        duration: 5s
-        factor: 2
-        maxDuration: 3m
+    syncOptions:
+      - CreateNamespace=true

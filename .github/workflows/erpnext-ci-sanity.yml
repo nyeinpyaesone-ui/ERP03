@@ -1,0 +1,26 @@
+name: ERPNext CI Sanity
+
+on:
+  push:
+    branches:
+      - feat/erpnext-production
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate apps metadata
+        run: python -m json.tool infra/erpnext/apps.json >/dev/null
+      - name: Validate GitOps manifests exist
+        run: |
+          set -eu
+          for f in deployment.yaml service.yaml ingress.yaml migrate-job.yaml kustomization.yaml external-secret.yaml servicemonitor.yaml alert-rules.yaml; do
+            test -f "infra/erpnext/gitops/$f"
+          done
+      # Force a fresh post-incident Actions registration on the branch.

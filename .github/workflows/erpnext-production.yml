@@ -3,14 +3,10 @@ name: ERPNext Production Image
 on:
   push:
     branches:
-      - feat/erpnext-isolated
+      - feat/erpnext-production
     paths-ignore:
       - infra/erpnext/gitops/kustomization.yaml
   workflow_dispatch:
-
-concurrency:
-  group: erpnext-isolated-production
-  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -55,7 +51,7 @@ jobs:
             FRAPPE_PATH=https://github.com/frappe/frappe
             FRAPPE_BRANCH=${{ env.FRAPPE_BRANCH }}
             CACHE_BUST=${{ github.sha }}
-          secret-files: |
+          secrets: |
             apps_json=${{ github.workspace }}/infra/erpnext/apps.json
           tags: erp03-erpnext:${{ github.sha }}
           cache-from: type=gha,scope=erpnext
@@ -105,7 +101,7 @@ jobs:
             FRAPPE_PATH=https://github.com/frappe/frappe
             FRAPPE_BRANCH=${{ env.FRAPPE_BRANCH }}
             CACHE_BUST=${{ github.sha }}
-          secret-files: |
+          secrets: |
             apps_json=${{ github.workspace }}/infra/erpnext/apps.json
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
@@ -114,7 +110,7 @@ jobs:
           provenance: true
           sbom: true
 
-      - name: Promote immutable image tag into isolated GitOps
+      - name: Promote immutable image tag into GitOps
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
@@ -134,4 +130,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add infra/erpnext/gitops/kustomization.yaml
           git commit -m "chore(gitops): promote ERPNext image $IMAGE_TAG"
-          git push origin HEAD:feat/erpnext-isolated
+          git push origin HEAD:feat/erpnext-production
