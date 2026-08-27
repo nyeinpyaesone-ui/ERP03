@@ -23,3 +23,4 @@ jobs:
           for f in deployment.yaml service.yaml ingress.yaml migrate-job.yaml kustomization.yaml external-secret.yaml servicemonitor.yaml alert-rules.yaml; do
             test -f "infra/erpnext/gitops/$f"
           done
+      # Force a fresh post-incident Actions registration on the branch.
