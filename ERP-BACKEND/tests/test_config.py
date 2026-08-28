@@ -71,23 +71,37 @@ class TestSettings:
 
                 assert settings.OLLAMA_URL == "http://ollama:11434"
 
-    def test_settings_database_url_required(self):
-        """Test that DATABASE_URL is required."""
+    @pytest.mark.parametrize("missing_credential", ["POSTGRES_USER", "POSTGRES_PASSWORD"])
+    def test_settings_database_credentials_required_without_database_url(self, missing_credential):
+        """Test that both Postgres credentials are required without DATABASE_URL."""
         from app.config import Settings
-        
-        # Clear environment and cache to ensure fresh settings instance
-        # Also need to prevent .env file from being loaded
-        with patch.dict(os.environ, {}, clear=True):
+        environment = {
+            "SECRET_KEY": "test_secret_key_for_testing_purposes_only_123456",
+            "POSTGRES_USER": "test_user",
+            "POSTGRES_PASSWORD": "test_password",
+        }
+        environment[missing_credential] = ""
+
+        with patch.dict(os.environ, environment, clear=True):
             with patch('app.config._read_secret', return_value=None):
-                # Need to clear the lru_cache to get a fresh Settings instance
-                from app.config import get_settings
-                get_settings.cache_clear()
-                
-                # Create settings without loading .env file
                 with pytest.raises(ValueError) as exc_info:
                     Settings(_env_file=None)
-                
-                assert "DATABASE_URL" in str(exc_info.value)
+
+                assert missing_credential in str(exc_info.value)
+
+    def test_settings_postgres_credentials_allow_database_url_fallback(self):
+        """Test that Postgres credentials are accepted when DATABASE_URL is absent."""
+        from app.config import Settings
+
+        with patch.dict(os.environ, {
+            "SECRET_KEY": "test_secret_key_for_testing_purposes_only_123456",
+            "POSTGRES_USER": "test_user",
+            "POSTGRES_PASSWORD": "test_password",
+        }, clear=True):
+            with patch('app.config._read_secret', return_value=None):
+                settings = Settings(_env_file=None)
+
+                assert settings.get_database_url == "postgresql+asyncpg://test_user:test_password@db:5432/erp03_prod"
 
     def test_settings_secret_key_minimum_length(self):
         """Test that SECRET_KEY must be at least 32 characters."""

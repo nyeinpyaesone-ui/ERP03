@@ -82,7 +82,8 @@ class Settings(BaseSettings):
         Initialize settings, applying test-mode defaults or validating production configuration.
         
         Raises:
-            ValueError: If production mode lacks a database URL or the secret key is shorter than 32 characters.
+            ValueError: If production mode lacks both a database URL and Postgres credentials,
+                or the secret key is shorter than 32 characters.
         """
         if self.TEST_MODE:
             if not self.DATABASE_URL:
@@ -98,8 +99,10 @@ class Settings(BaseSettings):
             self.DATABASE_URL = database_url
         if secret_key:
             self.SECRET_KEY = secret_key
-        if not self.DATABASE_URL:
-            raise ValueError("DATABASE_URL or DATABASE_URL_FILE is required")
+        if not self.DATABASE_URL and not (self.POSTGRES_USER and self.POSTGRES_PASSWORD):
+            raise ValueError(
+                "POSTGRES_USER and POSTGRES_PASSWORD must be set when DATABASE_URL is absent"
+            )
         if len(self.SECRET_KEY) < 32:
             raise ValueError("SECRET_KEY must contain at least 32 characters")
 
