@@ -17,7 +17,7 @@ env:
   PYTHON_VERSION: "3.12"
   NODE_VERSION: "20"
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/nyeinpyaesone-ui/erp03
+  IMAGE_PREFIX: ghcr.io/nyeinpyaesone-ui/erp_solution
 
 jobs:
   backend:
@@ -98,7 +98,6 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@v5
       - uses: actions/dependency-review-action@v4
 
   container:
@@ -150,7 +149,6 @@ jobs:
 
   deploy:
     name: Manual Kubernetes deployment
-    needs: [container]
     if: github.event_name == 'workflow_dispatch' && inputs.deploy == true
     runs-on: ubuntu-latest
     permissions:
