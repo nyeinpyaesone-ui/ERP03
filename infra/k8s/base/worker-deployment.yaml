@@ -27,48 +27,61 @@ spec:
       serviceAccountName: erp_solution
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
+        runAsUser: 10001
+        runAsGroup: 10001
       containers:
-      - name: worker
-        image: ghcr.io/nyeinpyaesone-ui/erp_solution-worker:latest
-        imagePullPolicy: Always
-        env:
-        - name: NODE_ENV
-          value: "production"
-        - name: WORKER_CONCURRENCY
-          value: "5"
-        envFrom:
-        - configMapRef:
-            name: erp_solution-config
-        - secretRef:
-            name: erp_solution-secrets
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "100m"
-          limits:
-            memory: "1Gi"
-            cpu: "500m"
-        livenessProbe:
-          exec:
-            command:
-            - node
-            - -e
-            - "require('http').get('http://localhost:3000/health/live')"
-          initialDelaySeconds: 30
-          periodSeconds: 30
+        - name: worker
+          image: ghcr.io/nyeinpyaesone-ui/erp_solution-worker:latest
+          imagePullPolicy: Always
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: erp_solution-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: erp_solution-secrets
+                  key: POSTGRES_PASSWORD
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: erp_solution-secrets
+                  key: SECRET_KEY
+            - name: CELERY_CONCURRENCY
+              value: "2"
+          envFrom:
+            - configMapRef:
+                name: erp_solution-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "kill -0 1"]
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app.kubernetes.io/name
-                  operator: In
-                  values:
-                  - erp_solution-worker
-              topologyKey: kubernetes.io/hostname
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values: [erp_solution-worker]
+                topologyKey: kubernetes.io/hostname
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -83,17 +96,15 @@ spec:
   minReplicas: 2
   maxReplicas: 10
   metrics:
-  - type: Resource
-    resource:
-      name: cpu
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
       target:
         type: Utilization
-        averageUtilization: 70
-  - type: Pods
-    pods:
-      metric:
-        name: queue_depth
-      target:
-        type: AverageValue
-        averageValue: "50"
-
+        averageUtilization: 80
