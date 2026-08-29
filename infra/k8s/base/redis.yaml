@@ -21,69 +21,67 @@ spec:
         app.kubernetes.io/part-of: erp_solution
     spec:
       securityContext:
+        runAsNonRoot: true
         runAsUser: 999
         runAsGroup: 999
         fsGroup: 999
       containers:
-      - name: redis
-        image: redis:7-alpine
-        ports:
         - name: redis
-          containerPort: 6379
-          protocol: TCP
-        command:
-        - redis-server
-        - /etc/redis/redis.conf
-        args:
-        - --requirepass
-        - $(REDIS_PASSWORD)
-        env:
-        - name: REDIS_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: erp_solution-secrets
-              key: REDIS_PASSWORD
+          image: redis:7-alpine
+          ports:
+            - name: redis
+              containerPort: 6379
+          command: ["sh", "-c"]
+          args: ["exec redis-server /etc/redis/redis.conf --requirepass \"$REDIS_PASSWORD\""]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: erp_solution-secrets
+                  key: REDIS_PASSWORD
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep -q PONG"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep -q PONG"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/redis
+      volumes:
+        - name: config
+          configMap:
+            name: erp_solution-redis-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: erp_solution-redis
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: fast-ssd
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "100m"
-          limits:
-            memory: "1Gi"
-            cpu: "500m"
-        livenessProbe:
-          exec:
-            command:
-            - redis-cli
-            - ping
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          exec:
-            command:
-            - redis-cli
-            - ping
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        volumeMounts:
-        - name: data
-          mountPath: /data
-        - name: config
-          mountPath: /etc/redis
-      volumes:
-      - name: config
-        configMap:
-          name: erp_solution-redis-config
-  volumeClaimTemplates:
-  - metadata:
-      name: data
-      labels:
-        app.kubernetes.io/name: erp_solution-redis
-    spec:
-      accessModes: ["ReadWriteOnce"]
-      storageClassName: fast-ssd
-      resources:
-        requests:
-          storage: 10Gi
+            storage: 10Gi
 ---
 apiVersion: v1
 kind: Service
@@ -96,10 +94,9 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - name: redis
-    port: 6379
-    targetPort: 6379
-    protocol: TCP
+    - name: redis
+      port: 6379
+      targetPort: redis
   selector:
     app.kubernetes.io/name: erp_solution-redis
 ---
@@ -125,4 +122,3 @@ data:
     tcp-keepalive 300
     timeout 0
     databases 16
-

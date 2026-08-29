@@ -6,7 +6,6 @@ namespace: erp_solution
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secrets.yaml
   - rbac.yaml
   - network-policy.yaml
   - pvc.yaml
@@ -16,11 +15,11 @@ resources:
   - web-deployment.yaml
   - worker-deployment.yaml
   - ingress.yaml
-  - cronjob.yaml
 
-commonLabels:
-  app.kubernetes.io/part-of: erp_solution
-  app.kubernetes.io/managed-by: kustomize
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: erp_solution
+      app.kubernetes.io/managed-by: kustomize
 
 images:
   - name: ghcr.io/nyeinpyaesone-ui/erp_solution-api
@@ -29,4 +28,3 @@ images:
     newTag: latest
   - name: ghcr.io/nyeinpyaesone-ui/erp_solution-worker
     newTag: latest
-

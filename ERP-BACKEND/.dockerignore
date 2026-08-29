@@ -1,8 +1,8 @@
 .git
 .gitignore
+.github
 __pycache__
 *.py[cod]
-*.pyo
 .pytest_cache
 .mypy_cache
 .ruff_cache
@@ -17,7 +17,13 @@ frontend
 mobile
 backend-v1.8
 backend-v2.1
-.github
 *.log
+.coverage
+coverage.*
+coverage.json
+erp.db
+*.sqlite
+*.sqlite3
 uploads/*
 static/*
+tests

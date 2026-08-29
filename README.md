@@ -1,408 +1,250 @@
-# ERP03 — Enterprise Resource Planning Platform with AI Integration
+# ERP03 — Enterprise Resource Planning Platform
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/fastapi-0.115.6-green.svg)](https://fastapi.tiangolo.com/)
-[![React Native](https://img.shields.io/badge/react_native-0.73-blue.svg)](https://reactnative.dev/)
-[![Docker](https://img.shields.io/badge/docker--compose-ready-blue.svg)](https://docs.docker.com/compose/)
-[![CodeQL](https://github.com/nyeinpyaesone-ui/ERP03/actions/workflows/codeql.yml/badge.svg)](https://github.com/nyeinpyaesone-ui/ERP03/actions/workflows/codeql.yml)
+ERP03 is a modular ERP system of record with a FastAPI backend, React/Vite web frontend, PostgreSQL, Redis/Celery workers, Prometheus metrics, Docker Compose runtime, and Kubernetes/Terraform deployment foundations.
 
-## Overview
+## Production engineering baseline
 
-**ERP03** is a modular enterprise resource planning (ERP) platform designed with a clear architectural boundary between the transactional ERP system of record and an external AI/agent platform. The system ensures data integrity, auditability, and secure integration patterns for enterprise deployments.
+This repository is maintained with the following boundaries:
 
-### Key Features
-
-- **System of Record Architecture**: Authoritative transactional database with ACID compliance
-- **AI Integration Boundary**: Clean separation between ERP core and AI/agent systems
-- **Modular Design**: Independent modules for CRM, HR, Inventory, Finance, Projects, Analytics
-- **Real-time Communication**: WebSocket support for live updates
-- **Multi-platform Frontend**: React Native mobile app + React web dashboard
-- **Production Ready**: Docker Compose, Nginx reverse proxy, Prometheus metrics
-- **Security First**: RBAC, JWT authentication, audit logging, structured JSON logs
-
----
-
-## Quick Start
-
-### Prerequisites
-
-- Docker & Docker Compose v2+
-- Git
-- (Optional) Node.js 18+ for frontend development
-- (Optional) Python 3.12 for backend development
-
-### 5-Minute Setup
-
-```bash
-# 1. Clone repository
-git clone https://github.com/nyeinpyaesone-ui/ERP03.git
-cd ERP03
-
-# 2. Configure environment
-cp .env.example .env
-# Edit .env with your secrets (SECRET_KEY, DATABASE_URL, etc.)
-
-# 3. Start all services
-docker compose up -d
-
-# 4. Run migrations
-docker compose exec erp-backend alembic upgrade head
-
-# 5. Verify health
-./scripts/health-check.sh
-```
-
-### Access Points
-
-| Service | URL | Description |
-|---------|-----|-------------|
-| **ERP API** | http://localhost:8000 | FastAPI REST backend |
-| **Frontend** | http://localhost:3000 | React web dashboard |
-| **PostgreSQL** | localhost:5432 | Primary database |
-| **Redis** | localhost:6379 | Cache & session store |
-| **Ollama** | http://localhost:11434 | Local LLM runtime |
-| **Metrics** | http://localhost:8000/metrics | Prometheus endpoint |
-
-### API Documentation
-
-Once running, visit:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-
----
+- ERP-BACKEND owns transactional business logic and the system of record.
+- AI/integration components remain outside the ERP database boundary.
+- Runtime credentials are supplied through environment variables, Docker secrets, Kubernetes Secrets, or an external secret manager.
+- Production containers run as non-root users and use multi-stage builds.
+- Health, readiness, metrics, dependency auditing, tests, container builds, and infrastructure validation are CI gates.
+- Production deployment is an explicit, manual Kubernetes action; Terraform `apply` is never executed automatically by CI.
 
 ## Architecture
 
-### System Diagram
+```text
+Browser / Mobile / External Systems
+                |
+                v
+        Ingress / Nginx
+                |
+        +-------+--------+
+        |                |
+        v                v
+   React/Vite         FastAPI API
+                         |
+                 +-------+-------+
+                 |               |
+                 v               v
+             PostgreSQL       Redis
+                                 |
+                                 v
+                              Celery
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         CLIENTS                                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │   Mobile     │  │     Web      │  │  External    │          │
-│  │  (React Nat) │  │  (React.js)  │  │   Systems    │          │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘          │
-└─────────┼─────────────────┼─────────────────┼──────────────────┘
-          │                 │                 │
-          ▼                 ▼                 ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    INTEGRATION LAYER                             │
-│         (Authentication, Contracts, Event Bus)                   │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-              ┌──────────────┴──────────────┐
-              │                             │
-              ▼                             ▼
-┌─────────────────────────┐     ┌─────────────────────────┐
-│     ERP-BACKEND         │     │      AI-BACKEND         │
-│  (System of Record)     │     │   (AI / Agents)         │
-│                         │     │                         │
-│ • Transactions          │     │ • Inference             │
-│ • Validation            │     │ • Predictions           │
-│ • Authorization (RBAC)  │◄────│ • Recommendations       │
-│ • Audit Logging         │     │ • Pattern Detection     │
-│ • PostgreSQL + Redis    │     │ • Separate State        │
-└─────────────────────────┘     └─────────────────────────┘
+AI / agent integrations communicate through authenticated API contracts;
+they do not receive direct database access.
 ```
 
-### Core Principles
+## Repository layout
 
-1. **ERP owns truth**: All authoritative writes flow through ERP-BACKEND
-2. **No direct DB access**: AI systems interact via authenticated contracts only
-3. **Audit everything**: Every transaction logged with correlation IDs
-4. **Fail safely**: Rollback on errors, no partial state
-5. **Independent deployability**: ERP can run without AI, and vice versa
-
-### Directory Structure
-
-```
+```text
 ERP03/
-├── ERP-BACKEND/          # Core ERP system (FastAPI + PostgreSQL)
-│   ├── app/
-│   │   ├── routers/      # API endpoints (auth, crm, hr, inventory...)
-│   │   ├── models/       # SQLAlchemy ORM models
-│   │   ├── services/     # Business logic layer
-│   │   └── config.py     # Settings management
-│   ├── alembic/          # Database migrations
-│   └── requirements.txt
-│
-├── AI-BACKEND/           # AI agents and ML services
-│   ├── agents/           # Autonomous agent implementations
-│   ├── api/              # AI service endpoints
-│   ├── models/           # ML model definitions
-│   └── orchestrator/     # Agent coordination
-│
-├── INTEGRATION/          # ERP ↔ AI bridge layer
-│   ├── contracts/        # API contracts (OpenAPI/YAML)
-│   ├── authentication/   # Auth middleware
-│   ├── event-bus/        # Async event streaming
-│   └── erp-client/       # ERP API client library
-│
-├── INFRASTRUCTURE/       # Platform services
-│   ├── docker/           # Container configurations
-│   └── nginx/            # Reverse proxy configs
-│
-├── frontend/             # React web dashboard
-├── mobile/               # React Native mobile app
-├── docs/                 # Architecture & developer docs
-├── scripts/              # DevOps utilities
-└── tests/                # Integration & E2E tests
+├── ERP-BACKEND/                  # FastAPI ERP core
+├── frontend/                     # React + Vite web application
+├── mobile/                       # Mobile application sources
+├── infra/k8s/                    # Kubernetes base + production overlay
+├── infra/terraform/              # Terraform production foundation
+├── docker-compose.yml            # Secure local/production-like compose stack
+├── docker-compose.prod.yml       # Existing image-based production variant
+├── compose.production.yml        # Existing deployment variant
+├── scripts/                      # Operational utilities
+├── docs/                         # Architecture and operational docs
+├── tests/                        # Repository-level tests
+└── .github/workflows/ci.yml      # CI, security, build and deployment gates
 ```
 
----
+## Local development
 
-## Technology Stack
+### Prerequisites
 
-### Backend (ERP-BACKEND)
+- Docker Engine + Docker Compose v2
+- Python 3.12 for backend-only development
+- Node.js 20 for frontend-only development
 
-| Component | Technology | Version |
-|-----------|------------|---------|
-| Framework | FastAPI | 0.115.6 |
-| Language | Python | 3.12 |
-| ORM | SQLAlchemy | 2.0.37 |
-| Database | PostgreSQL | 15.18 |
-| Cache | Redis | 7.4.9 |
-| Migrations | Alembic | 1.14.0 |
-| Auth | python-jose + passlib | Latest |
-| Validation | Pydantic | 2.13.4 |
-| Metrics | Prometheus Client | 0.26.0 |
-| Payments | Stripe SDK | 15.4.0 |
+### Backend
+
+```bash
+cd ERP-BACKEND
+cp .env.example .env
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+pytest -q
+```
 
 ### Frontend
 
-| Component | Technology | Version |
-|-----------|------------|---------|
-| Mobile | React Native + Expo | 0.73 / 57.0 |
-| Web | React.js | 18+ |
-| Navigation | React Navigation | 7.x |
-| State | Zustand + TanStack Query | Latest |
-| UI | React Native Paper | 5.11.0 |
-| Charts | react-native-chart-kit | 7.0.1 |
-
-### Infrastructure
-
-| Component | Technology | Version |
-|-----------|------------|---------|
-| Containers | Docker Compose | v2+ |
-| Reverse Proxy | Nginx | Latest |
-| LLM Runtime | Ollama | 0.32.5 |
-| CI/CD | GitHub Actions | Latest |
-| Security | CodeQL | v4 |
-
----
-
-## Development
-
-### Running Tests
-
 ```bash
-# Backend unit tests
-docker compose exec erp-backend pytest
-
-# Integration tests
-./tests/run-integration-tests.sh
-
-# Frontend tests
-cd mobile && npm test
+cd frontend
+npm install
+npm run lint
+npm run build
 ```
 
-### Code Quality
+### Compose
+
+The canonical compose stack uses Docker secrets for the production-like API/database path. Create local secret files before starting it:
 
 ```bash
-# Type checking
-docker compose exec erp-backend mypy app
-
-# Linting
-docker compose exec erp-backend ruff check app
-
-# Format
-docker compose exec erp-backend black app
+mkdir -p secrets
+printf '%s' 'erp03' > secrets/db_user.txt
+printf '%s' 'change-this-password' > secrets/db_password.txt
+printf '%s' 'generate-a-random-secret-at-least-32-chars' > secrets/jwt_secret.txt
+docker compose up --build
 ```
 
-### Database Operations
+Do not commit those files.
 
-```bash
-# Create new migration
-docker compose exec erp-backend alembic revision --autogenerate -m "description"
+## Runtime endpoints
 
-# Apply migrations
-docker compose exec erp-backend alembic upgrade head
+| Component | Endpoint |
+|---|---|
+| API liveness | `GET /health` |
+| API readiness | `GET /api/v1/health` |
+| Prometheus metrics | `GET /metrics` |
+| API docs | `/docs` |
+| Web health | `GET /health` |
 
-# Rollback one migration
-docker compose exec erp-backend alembic downgrade -1
-
-# View migration history
-docker compose exec erp-backend alembic history
-```
-
-### Environment Variables
-
-Key variables in `.env`:
-
-```bash
-# Database
-DATABASE_URL=postgresql://erp:password@postgres:5432/erp_solution
-POSTGRES_USER=erp
-POSTGRES_PASSWORD=your_secure_password
-
-# Security
-SECRET_KEY=your-super-secret-key-min-32-chars
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-
-# Redis
-REDIS_URL=redis://redis:6379/0
-
-# Environment
-ENVIRONMENT=development  # or production
-DEBUG=true
-```
-
-See `.env.example` for full list.
-
----
-
-## Deployment
-
-### Production Deployment
-
-For production setup, see [docs/PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md):
-
-```bash
-# Use production compose file
-docker compose -f compose.production.yml up -d
-
-# Run health checks
-./scripts/health-check.sh
-
-# Monitor logs
-docker compose logs -f erp-backend
-```
-
-### Key Production Considerations
-
-- ✅ Set `ENVIRONMENT=production` and `DEBUG=false`
-- ✅ Use strong SECRET_KEY (min 32 chars, cryptographically random)
-- ✅ Configure SSL/TLS termination at Nginx
-- ✅ Enable database connection pooling
-- ✅ Set up log aggregation (ELK, Loki, etc.)
-- ✅ Configure backup strategy for PostgreSQL
-- ✅ Monitor Prometheus metrics + alerts
-
----
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [Architecture Boundary](docs/ARCHITECTURE_BOUNDARY.md) | System boundaries and dependency rules |
-| [Testing Guide](docs/TESTING.md) | Test strategies and execution |
-| [Production Setup](docs/PRODUCTION_SETUP.md) | Production deployment checklist |
-| [Roadmap](ROADMAP.md) | Product roadmap and milestones |
-| [Onboarding](docs/ONBOARDING.md) | New developer guide |
-| [API Summary](docs/API_SUMMARY.md) | Endpoint reference |
-| [Troubleshooting](docs/TROUBLESHOOTING.md) | Common issues and solutions |
-| [FAQ](docs/FAQ.md) | Frequently asked questions |
-
----
-
-## Contributing
-
-We welcome contributions! Please see:
-
-1. [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
-2. [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - Community standards
-3. [SECURITY.md](SECURITY.md) - Security policy
-
-### Pull Request Process
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes with clear messages
-4. Push to your branch
-5. Open a Pull Request with description
-6. Ensure CI passes (CodeQL, container build)
-7. Request review from maintainers
-
----
-
-## Status & Roadmap
-
-### Current Status (M0 Complete)
-
-- ✅ Architecture baseline established
-- ✅ ERP-BACKEND runtime stabilized
-- ✅ AI-BACKEND boundary enforced
-- ✅ Legacy backends removed from main
-- ✅ Docker & CI/CD pipelines operational
-
-### Next Milestone (M1 - ERP Core Stabilization)
-
-- 🔄 Inventory route/service/model audit
-- 🔄 Transaction rollback testing
-- 🔄 API contract tests for critical paths
-- 🔄 Migration reproducibility verification
-
-See [ROADMAP.md](ROADMAP.md) for detailed timeline.
-
----
+The readiness endpoint returns HTTP 503 when the database is unavailable. Kubernetes readiness probes should use it to prevent traffic from reaching an instance that cannot serve requests. Kubernetes liveness/startup probes use the lightweight `/health` endpoint.
 
 ## Security
 
-### Reporting Vulnerabilities
+### Secrets
 
-Please report security issues responsibly:
-- Email: [security contact]
-- Do not open public issues for security vulnerabilities
+The repository previously contained committed environment/secret material and local database/coverage artifacts. The production-hardening branch removes those files from the working tree and adds ignore rules for future credentials and runtime state.
 
-### Security Features
+**Important:** removing a secret from the current tree does not invalidate copies that may exist in Git history. Any credential that was ever real must be rotated/revoked outside GitHub.
 
-- JWT-based authentication with configurable expiry
-- Role-Based Access Control (RBAC)
-- Password hashing with bcrypt
-- CORS configuration
-- Input validation via Pydantic
-- SQL injection prevention (SQLAlchemy ORM)
-- Structured audit logging
-- CodeQL static analysis in CI
+Production secret sources:
 
----
+- Docker Compose: `secrets/*` files created locally or by deployment automation.
+- Kubernetes: `erp_solution-secrets` supplied by External Secrets Operator, Vault, AWS Secrets Manager, or another managed secret system.
+- Terraform: sensitive variables supplied through a secure CI/CD variable or secret manager; never through committed `.tfvars` files.
 
-## License
+See `infra/k8s/SECRET_PROVISIONING.md`.
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+### Container security
 
+- Backend: Python 3.12 slim, multi-stage build, UID 10001, dropped Linux capabilities.
+- Frontend: Node build stage and Nginx runtime, non-root runtime user.
+- Compose services use `no-new-privileges` and capability dropping where applicable.
+- Build contexts exclude `.env`, databases, coverage data, tests, and local caches.
+
+### Application security
+
+- JWT signing requires a secret of at least 32 characters.
+- CORS is configurable rather than wildcarded.
+- Request IDs and Prometheus HTTP metrics are emitted by the API.
+- Rate limiting and authentication middleware are enabled in the FastAPI application.
+- Nginx applies security response headers and a restrictive content-security policy.
+
+## CI/CD
+
+`.github/workflows/ci.yml` provides these gates:
+
+1. Backend dependency audit, compile check and pytest.
+2. Frontend dependency audit, ESLint and production build.
+3. Terraform validation and Kubernetes Kustomize rendering.
+4. Pull-request dependency review.
+5. Main-branch container publication to GHCR using immutable commit-SHA tags.
+6. Manual Kubernetes deployment through the `production` environment.
+
+Cloud credentials are not embedded in the workflow. Kubernetes deployment requires the `KUBE_CONFIG_DATA` environment secret and explicit `deploy=true` workflow input.
+
+GitHub repository settings should additionally require the CI workflow before merging to `main`, require at least one review, dismiss stale approvals, and prevent force pushes/deletions on `main`.
+
+## Kubernetes
+
+Production manifests live under `infra/k8s/`.
+
+The production overlay provides:
+
+- FastAPI API deployment with startup/liveness/readiness probes.
+- React/Nginx web deployment with health probes.
+- Celery worker deployment.
+- PostgreSQL and Redis stateful workloads for the self-hosted deployment path.
+- Prometheus scrape annotations on the API.
+- Network, RBAC and ingress resources already present in the base.
+
+Production credentials are deliberately excluded from the Kustomization. See `infra/k8s/SECRET_PROVISIONING.md`.
+
+Before applying to a cluster:
+
+```bash
+kubectl kustomize infra/k8s/overlays/production
 ```
-Copyright (c) 2026 ERP03 Contributors
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Never apply an unreviewed rendered manifest to production.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+## Terraform
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Terraform production foundations are under `infra/terraform/environments/production` and currently cover VPC, RDS, ElastiCache and encrypted/versioned S3 backup storage.
+
+CI validates Terraform with:
+
+```bash
+terraform init -backend=false
+terraform validate
 ```
 
----
+For a shared production environment, configure a remote encrypted backend with state locking before `plan`/`apply`. Terraform state must not be committed to Git. Do not run `terraform apply` without an explicit operational approval.
 
-## Support & Community
+Typical controlled workflow:
 
-- 📧 Issues: [GitHub Issues](https://github.com/nyeinpyaesone-ui/ERP03/issues)
-- 💬 Discussions: [GitHub Discussions](https://github.com/nyeinpyaesone-ui/ERP03/discussions)
-- 📖 Docs: [/docs](/docs) directory
+```bash
+terraform init
+terraform plan -var-file=production.tfvars
+# review plan
+terraform apply -var-file=production.tfvars
+```
 
----
+## Observability
 
-**Built with ❤️ using FastAPI, React Native, and PostgreSQL**
+The API exposes Prometheus metrics at `/metrics`. The HTTP middleware records request count, status and latency with request IDs. Production Kubernetes resources can scrape the endpoint using the existing Prometheus annotations.
+
+For a full production observability stack, connect the metrics endpoint to Prometheus and configure alerting for:
+
+- API 5xx rate
+- API latency
+- readiness failures
+- database connection failures
+- worker queue depth/task failures
+- container restarts
+- PostgreSQL storage and replication health
+
+## Database migrations
+
+Migrations are executed as a dedicated Compose `migrate` service before the API and worker start. This avoids having every API replica independently attempt schema migration at startup.
+
+In Kubernetes, migrations should be run as a controlled release job before switching application traffic to a new schema-dependent version.
+
+## Supply-chain and dependency management
+
+- Python dependencies are pinned in `ERP-BACKEND/requirements.txt`.
+- Frontend dependencies are declared in `frontend/package.json`; the repository currently does not carry a generated frontend lockfile, so CI/builds use `npm install` rather than falsely claiming `npm ci` reproducibility.
+- Dependabot is enabled for Python, npm, Docker and GitHub Actions dependencies.
+- CI performs Python and npm vulnerability audits.
+
+A generated `frontend/package-lock.json` should be added once dependency installation is performed in a network-enabled development/CI environment; after that, switch the frontend build and CI to `npm ci` and enforce lockfile consistency.
+
+## Release discipline
+
+Use Conventional Commits and short-lived branches. Production changes should merge through a reviewed pull request with all CI gates passing.
+
+Recommended branch policy:
+
+- `main` is protected.
+- No direct pushes.
+- Required CI status checks.
+- At least one approving review.
+- Force-push and branch deletion disabled.
+- Production deployment performed from an approved main commit.
+
+## Current status
+
+This repository is being hardened at the **Platform Bootstrap / Engineering Foundation** stage. The objective of this stage is to make the engineering foundation deterministic and operationally safe before expanding ERP business functionality.
+
+Next engineering priorities are verification of the CI pipeline, dependency remediation reported by audits, generation/commitment of the frontend lockfile, production secret-manager integration, and controlled Kubernetes/Terraform environment validation.

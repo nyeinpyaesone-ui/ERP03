@@ -1,19 +1,13 @@
 # Runtime secrets
 
-Production secret files are intentionally not committed.
+This directory is intentionally **not** a source of truth for credentials.
 
-Create on the deployment host:
+Create these files locally or provision them through your deployment secret manager:
 
-- `secrets/postgres_password.txt` — PostgreSQL password only.
-- `secrets/database_url.txt` — complete SQLAlchemy PostgreSQL URL using the same database credentials.
-- `secrets/secret_key.txt` — application signing key, minimum 32 characters; generate with `openssl rand -hex 32` or stronger.
+- `db_user.txt` — PostgreSQL username
+- `db_password.txt` — PostgreSQL password
+- `jwt_secret.txt` — random application signing secret, minimum 32 characters
 
-Production startup:
+The files are ignored by Git. Never commit real values.
 
-```bash
-docker compose -f docker-compose.yml -f compose.production.yml up -d --build
-```
-
-The production overlay removes development bind mounts/reload mode, does not publish PostgreSQL directly, and injects `DATABASE_URL` and `SECRET_KEY` through Docker secrets.
-
-Never commit real credentials, `.env`, or files under `secrets/`.
+For production Kubernetes deployments, use a native `Secret`, External Secrets Operator, or a managed secret store instead of mounting files from the repository.

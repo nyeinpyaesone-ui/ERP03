@@ -1,17 +1,11 @@
-variable "db_password" {
-  description = "Database master password"
+variable "db_password_secret_arn" {
+  description = "AWS Secrets Manager ARN containing the RDS master password"
   type        = string
   sensitive   = true
-  
-  # In production, use AWS Secrets Manager or SSM Parameter Store
-  # Do NOT set a default value here - it must be provided securely
 }
 
 variable "redis_auth_token" {
-  description = "Redis authentication token"
+  description = "Redis AUTH token supplied securely by CI/secret management"
   type        = string
   sensitive   = true
-  
-  # In production, use AWS Secrets Manager or SSM Parameter Store
-  # Do NOT set a default value here - it must be provided securely
 }
