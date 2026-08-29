@@ -44,16 +44,6 @@ variable "vpc_cidr" {
   default = "10.2.0.0/16"
 }
 
-variable "db_password_secret_arn" {
-  type      = string
-  sensitive = true
-}
-
-variable "redis_auth_token" {
-  type      = string
-  sensitive = true
-}
-
 module "vpc" {
   source = "../../modules/vpc"
 
@@ -66,27 +56,27 @@ module "vpc" {
 module "rds" {
   source = "../../modules/rds"
 
-  environment             = "production"
-  vpc_id                  = module.vpc.vpc_id
-  subnet_ids              = module.vpc.private_subnet_ids
-  db_name                 = "erpdb"
-  db_username             = "erpadmin"
-  db_password_secret_arn  = var.db_password_secret_arn
-  instance_class          = "db.r6g.xlarge"
-  allocated_storage       = 200
-  max_allocated_storage   = 1000
-  multi_az                = true
+  environment            = "production"
+  vpc_id                 = module.vpc.vpc_id
+  subnet_ids             = module.vpc.private_subnet_ids
+  db_name                = "erpdb"
+  db_username            = "erpadmin"
+  db_password_secret_arn = var.db_password_secret_arn
+  instance_class         = "db.r6g.xlarge"
+  allocated_storage      = 200
+  max_allocated_storage  = 1000
+  multi_az               = true
 }
 
 module "elasticache" {
   source = "../../modules/elasticache"
 
-  environment             = "production"
-  vpc_id                  = module.vpc.vpc_id
-  subnet_ids              = module.vpc.private_subnet_ids
-  node_type               = "cache.r6g.large"
-  num_cache_nodes         = 2
-  auth_token              = var.redis_auth_token
+  environment              = "production"
+  vpc_id                   = module.vpc.vpc_id
+  subnet_ids               = module.vpc.private_subnet_ids
+  node_type                = "cache.r6g.large"
+  num_cache_nodes          = 2
+  auth_token               = var.redis_auth_token
   snapshot_retention_limit = 30
 }
 
