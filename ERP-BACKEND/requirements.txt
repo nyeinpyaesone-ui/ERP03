@@ -11,7 +11,7 @@ sqlalchemy==2.0.52
 asyncpg==0.31.0
 alembic==1.19.1
 psycopg2-binary==2.9.12
-PyJWT==2.10.1
+PyJWT==2.13.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 python-dotenv==1.2.3
