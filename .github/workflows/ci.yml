@@ -1,0 +1,183 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy the selected commit to Kubernetes"
+        required: true
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/nyeinpyaesone-ui/erp03
+
+jobs:
+  backend:
+    name: Backend lint, test and audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: ERP-BACKEND/requirements.txt
+      - name: Install dependencies
+        working-directory: ERP-BACKEND
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Dependency audit
+        working-directory: ERP-BACKEND
+        run: python -m pip install --upgrade pip-audit && pip-audit -r requirements.txt
+      - name: Compile check
+        working-directory: ERP-BACKEND
+        run: python -m compileall -q app
+      - name: Tests
+        working-directory: ERP-BACKEND
+        env:
+          TEST_MODE: "True"
+          TESTING: "true"
+          SECRET_KEY: test-secret-key-for-ci-only-abcdefghijklmnopqrstuvwxyz
+        run: pytest -q --disable-warnings --maxfail=1
+
+  frontend:
+    name: Frontend lint and build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package.json
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Dependency audit
+        working-directory: frontend
+        run: npm audit --audit-level=high
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  infrastructure:
+    name: Validate infrastructure
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform validate - production
+        working-directory: infra/terraform/environments/production
+        run: terraform init -backend=false && terraform validate
+      - name: Kubernetes manifest validation
+        run: kubectl kustomize infra/k8s/overlays/production >/tmp/erp03-manifest.yaml
+      - name: Verify rendered Kubernetes manifest
+        run: test -s /tmp/erp03-manifest.yaml
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/dependency-review-action@v4
+
+  container:
+    name: Build and publish containers
+    needs: [backend, frontend, infrastructure]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set image metadata
+        id: meta
+        run: echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ERP-BACKEND
+          file: ./ERP-BACKEND/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-api:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-web:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+      - name: Build and push worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ERP-BACKEND
+          file: ./ERP-BACKEND/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-worker:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha,scope=worker
+          cache-to: type=gha,mode=max,scope=worker
+
+  deploy:
+    name: Manual Kubernetes deployment
+    needs: [container]
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v5
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          test -n "$KUBE_CONFIG_DATA"
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 --decode > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+      - name: Render production manifests
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          sed -i "s/newTag: v3.0.0/newTag: ${IMAGE_TAG}/g" infra/k8s/overlays/production/kustomization.yaml
+          kubectl kustomize infra/k8s/overlays/production >/tmp/erp03-production.yaml
+      - name: Apply production manifests
+        run: kubectl apply -f /tmp/erp03-production.yaml
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/erp_solution-api -n erp_solution --timeout=5m
+          kubectl rollout status deployment/erp_solution-web -n erp_solution --timeout=5m
+          kubectl rollout status deployment/erp_solution-worker -n erp_solution --timeout=5m
