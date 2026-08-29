@@ -49,6 +49,11 @@ spec:
                 secretKeyRef:
                   name: erp_solution-secrets
                   key: SECRET_KEY
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: erp_solution-secrets
+                  key: REDIS_URL
             - name: CELERY_CONCURRENCY
               value: "2"
           envFrom:
@@ -105,6 +110,6 @@ spec:
     - type: Resource
       resource:
         name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
+        target:
+          type: Utilization
+          averageUtilization: 80
