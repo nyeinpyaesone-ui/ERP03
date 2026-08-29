@@ -14,20 +14,20 @@ export default function Inventory() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    loadInventory();
-  }, []);
+    const loadInventory = async () => {
+      try {
+        setLoading(true);
+        const response = await inventoryAPI.list();
+        setItems(response.data || []);
+      } catch {
+        setError('Failed to load inventory');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const loadInventory = async () => {
-    try {
-      setLoading(true);
-      const response = await inventoryAPI.list();
-      setItems(response.data || []);
-    } catch (err: any) {
-      setError('Failed to load inventory');
-    } finally {
-      setLoading(false);
-    }
-  };
+    void loadInventory();
+  }, []);
 
   if (loading) {
     return (
