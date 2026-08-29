@@ -1,9 +1,6 @@
-version: '3.8'
-
 services:
   db:
-    image: postgres:15-alpine
-    container_name: erp03-db
+    image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER_FILE: /run/secrets/db_user
@@ -14,25 +11,21 @@ services:
     networks:
       - erp03_internal
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$(cat /run/secrets/db_user) -d ${POSTGRES_DB:-erp03_prod}"]
+      test: ["CMD-SHELL", "pg_isready -U $$(cat /run/secrets/db_user) -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
+    security_opt:
+      - no-new-privileges:true
     secrets:
       - db_user
       - db_password
 
   redis:
     image: redis:7-alpine
-    container_name: erp03-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
     volumes:
       - redis_data:/data
     networks:
@@ -42,196 +35,151 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
+    security_opt:
+      - no-new-privileges:true
 
-  worker:
+  migrate:
     build:
       context: ./ERP-BACKEND
-      dockerfile: Dockerfile.worker
+      dockerfile: Dockerfile
       target: production
-    container_name: erp03-worker
-    restart: unless-stopped
-    env_file:
-      - .env.production
+    restart: "no"
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-erp03_prod}
+      POSTGRES_USER_FILE: /run/secrets/db_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_DB: ${POSTGRES_DB:-erp03_prod}
+      SECRET_KEY_FILE: /run/secrets/jwt_secret
       REDIS_URL: redis://redis:6379/0
-      CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-4}
       ENVIRONMENT: production
-      LOG_LEVEL: INFO
     secrets:
-      - source: db_user
-        target: /run/secrets/db_user
-      - source: db_password
-        target: /run/secrets/db_password
+      - db_user
+      - db_password
+      - jwt_secret
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     networks:
       - erp03_internal
-    command: >
-      sh -c "celery -A app.workers.celery_app worker
-             --loglevel=info
-             --concurrency=${CELERY_CONCURRENCY:-4}
-             --prefetch-multiplier=1
-             --max-tasks-per-child=100
-             --pool=solo"
-    healthcheck:
-      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  flower:
-    build:
-      context: ./ERP-BACKEND
-      dockerfile: Dockerfile.worker
-      target: production
-    container_name: erp03-flower
-    restart: unless-stopped
-    env_file:
-      - .env.production
-    environment:
-      REDIS_URL: redis://redis:6379/0
-      ENVIRONMENT: production
-    ports:
-      - "5555:5555"
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - erp03_internal
-    command: >
-      sh -c "celery -A app.workers.celery_app flower
-             --port=5555
-             --basic_auth=${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-admin}"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5555 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+    command: ["alembic", "upgrade", "head"]
 
   api:
     build:
       context: ./ERP-BACKEND
       dockerfile: Dockerfile
       target: production
-    container_name: erp03-api
     restart: unless-stopped
-    env_file:
-      - .env.production
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-erp03_prod}
+      POSTGRES_USER_FILE: /run/secrets/db_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_DB: ${POSTGRES_DB:-erp03_prod}
+      SECRET_KEY_FILE: /run/secrets/jwt_secret
       REDIS_URL: redis://redis:6379/0
       ENVIRONMENT: production
-      LOG_LEVEL: INFO
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
     secrets:
-      - source: db_user
-        target: /run/secrets/db_user
-      - source: db_password
-        target: /run/secrets/db_password
-      - source: jwt_secret
-        target: /run/secrets/jwt_secret
+      - db_user
+      - db_password
+      - jwt_secret
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     networks:
       - erp03_internal
       - erp03_public
-    command: >
-      sh -c "alembic upgrade head &&
-             uvicorn app.main:app
-             --host 0.0.0.0
-             --port 8000
-             --workers 4
-             --loop uvloop
-             --http httptools
-             --log-level info"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8000/health"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          cpus: '4.0'
-          memory: 4G
-        reservations:
-          cpus: '1.0'
-          memory: 1G
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      start_period: 30s
+
+  worker:
+    build:
+      context: ./ERP-BACKEND
+      dockerfile: Dockerfile
+      target: production
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER_FILE: /run/secrets/db_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_DB: ${POSTGRES_DB:-erp03_prod}
+      SECRET_KEY_FILE: /run/secrets/jwt_secret
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: production
+      CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-2}
+    secrets:
+      - db_user
+      - db_password
+      - jwt_secret
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks:
+      - erp03_internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=INFO", "--prefetch-multiplier=1", "--max-tasks-per-child=100"]
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: production
       args:
-        - VITE_API_BASE_URL=/api/v1
-    container_name: erp03-frontend
+        VITE_API_BASE_URL: /api/v1
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "${WEB_PORT:-80}:80"
     depends_on:
       api:
         condition: service_healthy
     networks:
       - erp03_public
       - erp03_internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/health"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      start_period: 5s
+
+  flower:
+    profiles: ["ops"]
+    build:
+      context: ./ERP-BACKEND
+      dockerfile: Dockerfile
+      target: production
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: production
+    ports:
+      - "127.0.0.1:${FLOWER_PORT:-5555}:5555"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - erp03_internal
+    command: ["celery", "-A", "app.workers.celery_app", "flower", "--port=5555"]
 
 networks:
   erp03_internal:
@@ -242,9 +190,7 @@ networks:
 
 volumes:
   postgres_data:
-    driver: local
   redis_data:
-    driver: local
 
 secrets:
   db_user:
