@@ -31,84 +31,96 @@ spec:
       serviceAccountName: erp_solution
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        fsGroup: 1000
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
       containers:
-      - name: api
-        image: ghcr.io/nyeinpyaesone-ui/erp_solution-api:latest
-        imagePullPolicy: Always
-        ports:
-        - name: http
-          containerPort: 8000
-          protocol: TCP
-        env:
-        - name: NODE_ENV
-          value: "production"
-        envFrom:
-        - configMapRef:
-            name: erp_solution-config
-        - secretRef:
-            name: erp_solution-secrets
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "250m"
-          limits:
-            memory: "2Gi"
-            cpu: "1000m"
-        livenessProbe:
-          httpGet:
-            path: /health/live
-            port: 8000
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-        readinessProbe:
-          httpGet:
-            path: /health/ready
-            port: 8000
-          initialDelaySeconds: 5
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 3
-        startupProbe:
-          httpGet:
-            path: /health/startup
-            port: 8000
-          initialDelaySeconds: 10
-          periodSeconds: 5
-          failureThreshold: 30
-        volumeMounts:
-        - name: tmp
-          mountPath: /tmp
-        - name: uploads
-          mountPath: /app/uploads
+        - name: api
+          image: ghcr.io/nyeinpyaesone-ui/erp_solution-api:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: erp_solution-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: erp_solution-secrets
+                  key: POSTGRES_PASSWORD
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: erp_solution-secrets
+                  key: SECRET_KEY
+          envFrom:
+            - configMapRef:
+                name: erp_solution-config
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: false
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: uploads
+              mountPath: /app/uploads
       volumes:
-      - name: tmp
-        emptyDir: {}
-      - name: uploads
-        persistentVolumeClaim:
-          claimName: erp_solution-uploads
+        - name: tmp
+          emptyDir: {}
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: erp_solution-uploads
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app.kubernetes.io/name
-                  operator: In
-                  values:
-                  - erp_solution-api
-              topologyKey: kubernetes.io/hostname
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values: [erp_solution-api]
+                topologyKey: kubernetes.io/hostname
       topologySpreadConstraints:
-      - maxSkew: 1
-        topologyKey: topology.kubernetes.io/zone
-        whenUnsatisfiable: ScheduleAnyway
-        labelSelector:
-          matchLabels:
-            app.kubernetes.io/name: erp_solution-api
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: erp_solution-api
 ---
 apiVersion: v1
 kind: Service
@@ -121,10 +133,9 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - name: http
-    port: 8000
-    targetPort: 8000
-    protocol: TCP
+    - name: http
+      port: 8000
+      targetPort: http
   selector:
     app.kubernetes.io/name: erp_solution-api
 ---
@@ -133,8 +144,6 @@ kind: HorizontalPodAutoscaler
 metadata:
   name: erp_solution-api-hpa
   namespace: erp_solution
-  labels:
-    app.kubernetes.io/name: erp_solution-api
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -143,29 +152,15 @@ spec:
   minReplicas: 3
   maxReplicas: 20
   metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 60
-      policies:
-      - type: Percent
-        value: 100
-        periodSeconds: 60
-    scaleDown:
-      stabilizationWindowSeconds: 300
-      policies:
-      - type: Percent
-        value: 10
-        periodSeconds: 60
-
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
