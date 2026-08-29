@@ -57,6 +57,11 @@ spec:
                 secretKeyRef:
                   name: erp_solution-secrets
                   key: SECRET_KEY
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: erp_solution-secrets
+                  key: REDIS_URL
           envFrom:
             - configMapRef:
                 name: erp_solution-config
@@ -71,7 +76,6 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
-            readOnlyRootFilesystem: false
           livenessProbe:
             httpGet:
               path: /health
