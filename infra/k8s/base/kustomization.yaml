@@ -6,7 +6,6 @@ namespace: erp_solution
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secrets.yaml
   - rbac.yaml
   - network-policy.yaml
   - pvc.yaml
@@ -29,4 +28,3 @@ images:
     newTag: latest
   - name: ghcr.io/nyeinpyaesone-ui/erp_solution-worker
     newTag: latest
-
