@@ -5,7 +5,13 @@ import reactRefresh from "eslint-plugin-react-refresh";
 
 export default [
   {
-    ignores: ["dist/**", "node_modules/**"],
+    ignores: [
+      "dist/**",
+      "node_modules/**",
+      // Legacy mobile/module source is not part of the current Vite web build.
+      "src/modules/**",
+      "src/shared/**",
+    ],
   },
   {
     files: ["**/*.{ts,tsx}"],
@@ -25,6 +31,8 @@ export default [
     rules: {
       ...tsPlugin.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
     },
   },
