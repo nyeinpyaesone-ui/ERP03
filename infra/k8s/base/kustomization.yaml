@@ -15,7 +15,6 @@ resources:
   - web-deployment.yaml
   - worker-deployment.yaml
   - ingress.yaml
-  - cronjob.yaml
 
 commonLabels:
   app.kubernetes.io/part-of: erp_solution
