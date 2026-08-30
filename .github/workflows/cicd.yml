@@ -38,7 +38,9 @@ jobs:
           REDIS_CACHE: redis://redis.example.internal:6379
           REDIS_QUEUE: redis://redis.example.internal:6379
           REDIS_SOCKETIO: redis://redis.example.internal:6379
-        run: docker compose -f docker-compose.erpnext.prod.yml config --quiet
+        run: |
+          set -euo pipefail
+          docker compose -f docker-compose.erpnext.prod.yml config --quiet
       - name: Validate required deployment files
         run: |
           set -euo pipefail
