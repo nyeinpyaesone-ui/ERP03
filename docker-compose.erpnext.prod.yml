@@ -1,0 +1,67 @@
+name: erpnext
+
+services:
+  erpnext:
+    build:
+      context: .
+      dockerfile: docker/erpnext/Dockerfile
+    image: erpnext:production
+    restart: unless-stopped
+    init: true
+    environment:
+      SITE_NAME: ${SITE_NAME:?SITE_NAME is required}
+      DB_HOST: ${DB_HOST:?DB_HOST is required}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_ROOT_USER: ${DB_ROOT_USER:-root}
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      REDIS_CACHE: ${REDIS_CACHE:?REDIS_CACHE is required}
+      REDIS_QUEUE: ${REDIS_QUEUE:?REDIS_QUEUE is required}
+      REDIS_SOCKETIO: ${REDIS_SOCKETIO:?REDIS_SOCKETIO is required}
+      GUNICORN_THREADS: ${GUNICORN_THREADS:-4}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
+    volumes:
+      - erpnext_sites:/home/frappe/frappe-bench/sites
+      - erpnext_logs:/home/frappe/frappe-bench/logs
+    expose:
+      - "8000"
+      - "9000"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c 'import socket,urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/api/method/frappe.utils.health_check",timeout=5); s=socket.create_connection(("127.0.0.1",9000),5); s.close()'
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks: [erpnext]
+
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    image: erpnext-nginx:production
+    restart: unless-stopped
+    init: true
+    depends_on:
+      erpnext:
+        condition: service_healthy
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    volumes:
+      - erpnext_sites:/home/frappe/frappe-bench/sites:ro
+    read_only: true
+    tmpfs: [/tmp, /var/cache/nginx, /var/run]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    networks: [erpnext]
+
+volumes:
+  erpnext_sites:
+  erpnext_logs:
+
+networks:
+  erpnext:
+    driver: bridge
