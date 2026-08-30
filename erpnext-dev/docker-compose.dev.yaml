@@ -1,0 +1,186 @@
+# ERPNext Development Docker Compose
+# Based on official frappe_docker production architecture
+# Copy this file and customize for your environment
+
+version: "3.9"
+
+services:
+  # MariaDB Database
+  db:
+    image: mariadb:10.6
+    healthcheck:
+      test: mysqladmin ping -h localhost --password=${DB_PASSWORD:-changeit}
+      interval: 1s
+      retries: 15
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-changeit}
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - erpnext-network
+
+  # Redis Cache
+  redis-cache:
+    image: redis:alpine
+    volumes:
+      - redis-cache-data:/data
+    networks:
+      - erpnext-network
+
+  # Redis Queue
+  redis-queue:
+    image: redis:alpine
+    volumes:
+      - redis-queue-data:/data
+    networks:
+      - erpnext-network
+
+  # Redis SocketIO (for realtime events)
+  redis-socketio:
+    image: redis:alpine
+    volumes:
+      - redis-socketio-data:/data
+    networks:
+      - erpnext-network
+
+  # Scheduler & Worker
+  scheduler:
+    image: ${CUSTOM_IMAGE:-erp03-erpnext:dev}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    networks:
+      - erpnext-network
+    command:
+      - bench
+      - schedule
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_started
+      redis-queue:
+        condition: service_started
+
+  # Backend API Server
+  backend:
+    image: ${CUSTOM_IMAGE:-erp03-erpnext:dev}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    networks:
+      - erpnext-network
+    command:
+      - bench
+      - serve
+    environment:
+      - SOCKETIO_PORT=9000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_started
+      redis-queue:
+        condition: service_started
+
+  # Frontend Web Server
+  frontend:
+    image: ${CUSTOM_IMAGE:-erp03-erpnext:dev}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    networks:
+      - erpnext-network
+    command:
+      - nginx-entrypoint.sh
+    environment:
+      - BACKEND=backend:8000
+      - FRAPPE_SITE_NAME_HEADER=${SITE_NAME:-erp.localhost}
+      - SOCKETIO=websocket:9000
+      - UPDATER_WORKER=false
+    depends_on:
+      - backend
+      - websocket
+
+  # WebSocket Server (Socket.IO)
+  websocket:
+    image: ${CUSTOM_IMAGE:-erp03-erpnext:dev}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    networks:
+      - erpnext-network
+    command:
+      - node
+      - /home/frappe/frappe-bench/apps/frappe/socketio.js
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_started
+      redis-queue:
+        condition: service_started
+
+  # Configurator (runs before other services)
+  configurator:
+    image: ${CUSTOM_IMAGE:-erp03-erpnext:dev}
+    deploy:
+      restart_policy:
+        condition: none
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - >
+        bench set-config -g db_host db &&
+        bench set-config -gp db_port 3306 &&
+        bench set-config -g redis_cache redis://redis-cache:6379 &&
+        bench set-config -g redis_queue redis://redis-queue:6379 &&
+        bench set-config -g redis_socketio redis://redis-socketio:6379 &&
+        bench set-config -gp socketio_port 9000
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - REDIS_CACHE=redis://redis-cache:6379
+      - REDIS_QUEUE=redis://redis-queue:6379
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    networks:
+      - erpnext-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_started
+      redis-queue:
+        condition: service_started
+
+networks:
+  erpnext-network:
+    driver: bridge
+
+volumes:
+  db-data:
+  redis-cache-data:
+  redis-queue-data:
+  redis-socketio-data:
+  sites:
+  logs:
