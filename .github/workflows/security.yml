@@ -23,16 +23,16 @@ jobs:
       matrix:
         language: [python, javascript]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@7211b7c8077ea37d8641b6271f6a365a22a5fbfa
         with:
           languages: ${{ matrix.language }}
           queries: security-extended,security-and-quality
-      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/autobuild@7211b7c8077ea37d8641b6271f6a365a22a5fbfa
         if: matrix.language == 'python' || matrix.language == 'javascript'
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@7211b7c8077ea37d8641b6271f6a365a22a5fbfa
         with:
           category: "/language:${{ matrix.language }}"
 
@@ -41,8 +41,8 @@ jobs:
     runs-on: ubuntu-22.04
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/dependency-review-action@38ecb5b593bf0eb19e335c03f97670f792489a8b
         with:
           fail-on-severity: high
           comment-summary-in-pr: true
@@ -51,10 +51,10 @@ jobs:
     name: Secret Detection
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
@@ -69,8 +69,10 @@ jobs:
           - erp-core/requirements.txt
           - erp03/apps/erp/requirements.txt
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.11"
       - run: pip install pip-audit
@@ -92,8 +94,8 @@ jobs:
           - path: mobile
             name: Mobile
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 20
           cache: npm
@@ -120,7 +122,7 @@ jobs:
           - path: ./erp03/apps/erp/Dockerfile
             name: erp03-ai
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - id: check
         run: |
           if [ -f "${{ matrix.dockerfile.path }}" ]; then
@@ -128,14 +130,14 @@ jobs:
           else
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
-      - uses: hadolint/hadolint-action@v3.1.0
+      - uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf
         if: steps.check.outputs.exists == 'true'
         with:
           dockerfile: ${{ matrix.dockerfile.path }}
           format: sarif
           output-file: hadolint-${{ matrix.dockerfile.name }}.sarif
           no-fail: true
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa
         if: steps.check.outputs.exists == 'true'
         with:
           sarif_file: hadolint-${{ matrix.dockerfile.name }}.sarif
