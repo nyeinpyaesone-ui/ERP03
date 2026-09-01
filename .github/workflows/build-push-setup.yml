@@ -1,0 +1,223 @@
+name: Build-Push-Setup ERPNext
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      push_images:
+        description: 'Push images to GHCR'
+        required: false
+        default: 'false'
+      tag_version:
+        description: 'Tag version (e.g., v1.0.0)'
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_ERPNEXT: erpnext
+  IMAGE_NGINX: erpnext-nginx
+  TAG_LATEST: latest
+
+jobs:
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Validate compose file
+        run: |
+          set -euo pipefail
+          docker compose -f docker-compose.erpnext.prod.yml config --quiet
+
+      - name: Validate required files
+        run: |
+          set -euo pipefail
+          test -f docker/erpnext/Dockerfile
+          test -f docker/erpnext/production-entrypoint.sh
+          test -f docker/erpnext/configure-oidc.py
+          test -f docker/nginx/Dockerfile
+          test -f docker/nginx/nginx.conf
+
+  build:
+    name: Build Images
+    needs: validate
+    runs-on: ubuntu-22.04
+    outputs:
+      image_erpnext: ${{ steps.meta_erpnext.outputs.tags }}
+      image_nginx: ${{ steps.meta_nginx.outputs.tags }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Extract metadata for ERPNext
+        id: meta_erpnext
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_ERPNEXT }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+
+      - name: Extract metadata for Nginx
+        id: meta_nginx
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NGINX }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+
+      - name: Build ERPNext image
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: .
+          file: docker/erpnext/Dockerfile
+          push: false
+          load: true
+          tags: ${{ steps.meta_erpnext.outputs.tags }}
+          labels: ${{ steps.meta_erpnext.outputs.labels }}
+          cache-from: type=gha,scope=erpnext
+          cache-to: type=gha,mode=max,scope=erpnext
+          build-args: |
+            OIDC_ENABLED=${{ vars.OIDC_ENABLED || 'false' }}
+            SECRET_KEY=${{ secrets.SECRET_KEY || '' }}
+
+      - name: Build Nginx image
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: .
+          file: docker/nginx/Dockerfile
+          push: false
+          load: true
+          tags: ${{ steps.meta_nginx.outputs.tags }}
+          labels: ${{ steps.meta_nginx.outputs.labels }}
+          cache-from: type=gha,scope=nginx
+          cache-to: type=gha,mode=max,scope=nginx
+
+      - name: Test ERPNext image
+        run: |
+          docker image inspect "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_ERPNEXT }}:latest" >/dev/null
+
+      - name: Test Nginx image
+        run: |
+          docker image inspect "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NGINX }}:latest" >/dev/null
+
+  push:
+    name: Push Images to GHCR
+    needs: build
+    runs-on: ubuntu-22.04
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Log in to GHCR
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for ERPNext
+        id: meta_erpnext
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_ERPNEXT }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+
+      - name: Extract metadata for Nginx
+        id: meta_nginx
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NGINX }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+
+      - name: Build and push ERPNext image
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: .
+          file: docker/erpnext/Dockerfile
+          push: true
+          tags: ${{ steps.meta_erpnext.outputs.tags }}
+          labels: ${{ steps.meta_erpnext.outputs.labels }}
+          cache-from: type=gha,scope=erpnext
+          cache-to: type=gha,mode=max,scope=erpnext
+          build-args: |
+            OIDC_ENABLED=${{ vars.OIDC_ENABLED || 'false' }}
+
+      - name: Build and push Nginx image
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: .
+          file: docker/nginx/Dockerfile
+          push: true
+          tags: ${{ steps.meta_nginx.outputs.tags }}
+          labels: ${{ steps.meta_nginx.outputs.labels }}
+          cache-from: type=gha,scope=nginx
+          cache-to: type=gha,mode=max,scope=nginx
+
+      - name: Image digest ERPNext
+        run: echo "ERPNext image pushed with digest: ${{ steps.meta_erpnext.outputs.digest }}"
+
+      - name: Image digest Nginx
+        run: echo "Nginx image pushed with digest: ${{ steps.meta_nginx.outputs.digest }}"
+
+  setup:
+    name: Setup ERPNext Instance
+    needs: push
+    runs-on: ubuntu-22.04
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Deploy configuration notice
+        run: |
+          echo "✅ ERPNext images built and pushed successfully to GHCR"
+          echo ""
+          echo "📦 Images available:"
+          echo "   - ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_ERPNEXT }}:latest"
+          echo "   - ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NGINX }}:latest"
+          echo ""
+          echo "🔧 Next steps for deployment:"
+          echo "   1. Clone this repository"
+          echo "   2. Copy .env.production.example to .env"
+          echo "   3. Configure SECRET_KEY and OIDC settings"
+          echo "   4. Run: docker compose -f docker-compose.erpnext.prod.yml up -d"
+          echo ""
+          echo "🔐 Required environment variables:"
+          echo "   - SECRET_KEY (required)"
+          echo "   - OIDC_ENABLED (optional, default: false)"
+          echo "   - OIDC_PROVIDER (optional)"
+          echo "   - OIDC_CLIENT_ID (optional)"
+          echo "   - OIDC_CLIENT_SECRET (optional)"
