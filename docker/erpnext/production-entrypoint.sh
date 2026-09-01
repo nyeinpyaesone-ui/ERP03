@@ -12,6 +12,14 @@ REDIS_SOCKETIO=${REDIS_SOCKETIO:?REDIS_SOCKETIO is required}
 
 cd "$BENCH"
 
+# Configure OIDC if enabled
+if [[ "${OIDC_ENABLED:-false}" == "true" ]]; then
+  echo "[entrypoint] Configuring OIDC authentication..."
+  python /opt/scripts/configure-oidc.py || {
+    echo "[entrypoint] Warning: OIDC configuration failed, continuing without OIDC"
+  }
+fi
+
 wait_for_tcp() {
   local host="$1" port="$2" name="$3"
   python - "$host" "$port" "$name" <<'PY'
