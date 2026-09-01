@@ -1,0 +1,71 @@
+project.ext.AsyncStorage = [
+        isNewArch  : project.hasProperty("newArchEnabled") && project.newArchEnabled == "true",
+        roomVersion: getConfigValueOrDefault("roomVersion"),
+        sharedStorageVersion: getConfigValueOrDefault("sharedStorageVersion"),
+
+        compileSdk : getConfigValueOrDefault("compileSdkVersion").toInteger(),
+        minSdk     : getConfigValueOrDefault("minSdkVersion").toInteger(),
+        targetSdk  : getConfigValueOrDefault("targetSdkVersion").toInteger()
+]
+
+project.ext.AsyncStorage.kotlinVersion = getKotlinVersion()
+project.ext.AsyncStorage.kspVersion = getKspVersion(project.ext.AsyncStorage.kotlinVersion)
+
+String getKotlinVersion() {
+    String kotlin = getConfigValueOrDefault("kotlinVersion")
+    def (major, minor) = kotlin.tokenize('.')
+    if (major.toInteger() < 2 || minor.toInteger() < 1) {
+        project.logger.warn("[AsyncStorage] Min. supported version of Kotlin is 2.1.0, current: $kotlin.")
+    }
+
+
+    logger.info("[AsyncStorage] Using kotlin version: $kotlin")
+    return kotlin
+}
+
+String getKspVersion(String kotlinVersion) {
+    String overriddenKspVersion = getConfigValueOrDefault("kspVersion")
+    if (overriddenKspVersion != null) {
+        logger.info("[AsyncStorage] Overriden ksp version: ${overriddenKspVersion}")
+        return overriddenKspVersion
+    }
+
+    // https://kotlinlang.org/docs/releases.html#release-details
+    // https://github.com/google/ksp/releases
+    def kspVersions = [
+            "2.2.20-2.0.4",
+            "2.2.10-2.0.2",
+            "2.2.0-2.0.2",
+            "2.1.21-2.0.2",
+            "2.1.20-1.0.31",
+            "2.1.10-1.0.29",
+            "2.1.0-1.0.28",
+    ]
+
+    String found = kspVersions.find { it.startsWith(kotlinVersion) }
+    if (found != null) {
+        logger.info("[AsyncStorage] Using ksp version: ${found}")
+        return found
+    }
+
+    String defKsp = kspVersions.last()
+    logger.warn("[AsyncStorage] Could not find ksp version for $kotlinVersion. Min. supported kotlin is 2.1.0. Using default ksp: $defKsp")
+    return defKsp
+}
+
+def getConfigValueOrDefault(name) {
+    if (rootProject.ext.has(name)) {
+        return rootProject.ext.get(name)
+    }
+    if (rootProject.hasProperty(name)) {
+        return rootProject.properties[name]
+    }
+    if (rootProject.hasProperty("AsyncStorage_$name")) {
+        return rootProject.properties["AsyncStorage_$name"]
+    }
+
+    return project.properties["AsyncStorage_$name"]
+}
+
+
+

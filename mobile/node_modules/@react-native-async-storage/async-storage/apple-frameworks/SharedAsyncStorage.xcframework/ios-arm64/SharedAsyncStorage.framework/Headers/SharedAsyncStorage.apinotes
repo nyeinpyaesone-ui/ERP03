@@ -1,0 +1,1923 @@
+Name: "SharedAsyncStorage"
+Classes:
+- Name: "SASBase"
+  SwiftName: "KotlinBase"
+- Name: "SASMutableSet"
+  SwiftName: "KotlinMutableSet"
+- Name: "SASMutableDictionary"
+  SwiftName: "KotlinMutableDictionary"
+- Name: "SASNumber"
+  SwiftName: "KotlinNumber"
+- Name: "SASByte"
+  SwiftName: "KotlinByte"
+- Name: "SASUByte"
+  SwiftName: "KotlinUByte"
+- Name: "SASShort"
+  SwiftName: "KotlinShort"
+- Name: "SASUShort"
+  SwiftName: "KotlinUShort"
+- Name: "SASInt"
+  SwiftName: "KotlinInt"
+- Name: "SASUInt"
+  SwiftName: "KotlinUInt"
+- Name: "SASLong"
+  SwiftName: "KotlinLong"
+- Name: "SASULong"
+  SwiftName: "KotlinULong"
+- Name: "SASFloat"
+  SwiftName: "KotlinFloat"
+- Name: "SASDouble"
+  SwiftName: "KotlinDouble"
+- Name: "SASBoolean"
+  SwiftName: "KotlinBoolean"
+- Name: "SASKotlinCancellationException"
+  SwiftName: "KotlinCancellationException"
+  Methods:
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+  - Selector: "initWithMessage:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:)"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nullable"
+  - Selector: "initWithMessage:cause:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:cause:)"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nullable"
+    - Position: 1
+      Type: "SASKotlinThrowable * _Nullable"
+  - Selector: "initWithCause:"
+    MethodKind: "Instance"
+    SwiftName: "init(cause:)"
+    Parameters:
+    - Position: 0
+      Type: "SASKotlinThrowable * _Nullable"
+- Name: "SASKotlinThrowable"
+  SwiftName: "KotlinThrowable"
+  Properties:
+  - Name: "cause"
+    PropertyKind: "Instance"
+    SwiftName: "cause"
+    Type: "SASKotlinThrowable * _Nullable"
+  - Name: "message"
+    PropertyKind: "Instance"
+    SwiftName: "message"
+    Type: "NSString * _Nullable"
+  Methods:
+  - Selector: "initWithMessage:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:)"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nullable"
+  - Selector: "initWithCause:"
+    MethodKind: "Instance"
+    SwiftName: "init(cause:)"
+    Parameters:
+    - Position: 0
+      Type: "SASKotlinThrowable * _Nullable"
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+  - Selector: "initWithMessage:cause:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:cause:)"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nullable"
+    - Position: 1
+      Type: "SASKotlinThrowable * _Nullable"
+  - Selector: "getStackTrace"
+    MethodKind: "Instance"
+    SwiftName: "getStackTrace()"
+    ResultType: "SASKotlinArray<NSString *> * _Nonnull"
+  - Selector: "printStackTrace"
+    MethodKind: "Instance"
+    SwiftName: "printStackTrace()"
+    ResultType: "void"
+  - Selector: "description"
+    MethodKind: "Instance"
+    SwiftName: "description()"
+    ResultType: "NSString * _Nonnull"
+- Name: "SASKotlinArray"
+  SwiftName: "KotlinArray"
+  Properties:
+  - Name: "size"
+    PropertyKind: "Instance"
+    SwiftName: "size"
+    Type: "int32_t"
+  Methods:
+  - Selector: "arrayWithSize:init:"
+    MethodKind: "Instance"
+    SwiftName: "init(size:init:)"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+    - Position: 1
+      Type: "T _Nullable (^ _Nonnull)(SASInt * _Nonnull)"
+  - Selector: "getIndex:"
+    MethodKind: "Instance"
+    SwiftName: "get(index:)"
+    ResultType: "T _Nullable"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+  - Selector: "iterator"
+    MethodKind: "Instance"
+    SwiftName: "iterator()"
+    ResultType: "id<SASKotlinIterator> _Nonnull"
+  - Selector: "setIndex:value:"
+    MethodKind: "Instance"
+    SwiftName: "set(index:value:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+    - Position: 1
+      Type: "T _Nullable"
+- Name: "SASKotlinIllegalStateException"
+  SwiftName: "KotlinIllegalStateException"
+  Methods:
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+  - Selector: "initWithMessage:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:)"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nullable"
+  - Selector: "initWithMessage:cause:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:cause:)"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nullable"
+    - Position: 1
+      Type: "SASKotlinThrowable * _Nullable"
+  - Selector: "initWithCause:"
+    MethodKind: "Instance"
+    SwiftName: "init(cause:)"
+    Parameters:
+    - Position: 0
+      Type: "SASKotlinThrowable * _Nullable"
+- Name: "SASKotlinRuntimeException"
+  SwiftName: "KotlinRuntimeException"
+  Methods:
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+  - Selector: "initWithMessage:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:)"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nullable"
+  - Selector: "initWithMessage:cause:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:cause:)"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nullable"
+    - Position: 1
+      Type: "SASKotlinThrowable * _Nullable"
+  - Selector: "initWithCause:"
+    MethodKind: "Instance"
+    SwiftName: "init(cause:)"
+    Parameters:
+    - Position: 0
+      Type: "SASKotlinThrowable * _Nullable"
+- Name: "SASKotlinException"
+  SwiftName: "KotlinException"
+  Methods:
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+  - Selector: "initWithMessage:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:)"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nullable"
+  - Selector: "initWithMessage:cause:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:cause:)"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nullable"
+    - Position: 1
+      Type: "SASKotlinThrowable * _Nullable"
+  - Selector: "initWithCause:"
+    MethodKind: "Instance"
+    SwiftName: "init(cause:)"
+    Parameters:
+    - Position: 0
+      Type: "SASKotlinThrowable * _Nullable"
+- Name: "SASKotlinByteArray"
+  SwiftName: "KotlinByteArray"
+  Properties:
+  - Name: "size"
+    PropertyKind: "Instance"
+    SwiftName: "size"
+    Type: "int32_t"
+  Methods:
+  - Selector: "arrayWithSize:init:"
+    MethodKind: "Instance"
+    SwiftName: "init(size:init:)"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+    - Position: 1
+      Type: "SASByte * _Nonnull (^ _Nonnull)(SASInt * _Nonnull)"
+  - Selector: "arrayWithSize:"
+    MethodKind: "Instance"
+    SwiftName: "init(size:)"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+  - Selector: "getIndex:"
+    MethodKind: "Instance"
+    SwiftName: "get(index:)"
+    ResultType: "int8_t"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+  - Selector: "iterator"
+    MethodKind: "Instance"
+    SwiftName: "iterator()"
+    ResultType: "SASKotlinByteIterator * _Nonnull"
+  - Selector: "setIndex:value:"
+    MethodKind: "Instance"
+    SwiftName: "set(index:value:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+    - Position: 1
+      Type: "int8_t"
+- Name: "SASKotlinByteIterator"
+  SwiftName: "KotlinByteIterator"
+  Methods:
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+  - Selector: "next"
+    MethodKind: "Instance"
+    SwiftName: "next()"
+    ResultType: "SASByte * _Nonnull"
+  - Selector: "nextByte"
+    MethodKind: "Instance"
+    SwiftName: "nextByte()"
+    ResultType: "int8_t"
+- Name: "SASKotlinIllegalArgumentException"
+  SwiftName: "KotlinIllegalArgumentException"
+  Methods:
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+  - Selector: "initWithMessage:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:)"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nullable"
+  - Selector: "initWithMessage:cause:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:cause:)"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nullable"
+    - Position: 1
+      Type: "SASKotlinThrowable * _Nullable"
+  - Selector: "initWithCause:"
+    MethodKind: "Instance"
+    SwiftName: "init(cause:)"
+    Parameters:
+    - Position: 0
+      Type: "SASKotlinThrowable * _Nullable"
+- Name: "SASSkieColdFlowIterator"
+  SwiftName: "SkieColdFlowIterator"
+  SwiftPrivate: true
+  Methods:
+  - Selector: "initWithFlow:"
+    MethodKind: "Instance"
+    SwiftName: "init(flow:)"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlow> _Nonnull"
+  - Selector: "cancel"
+    MethodKind: "Instance"
+    SwiftName: "cancel()"
+    ResultType: "void"
+  - Selector: "hasNextWithCompletionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__hasNext(completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "void (^ _Nonnull)(SASBoolean * _Nullable, NSError * _Nullable)"
+  - Selector: "next"
+    MethodKind: "Instance"
+    SwiftName: "next()"
+    ResultType: "E _Nullable"
+- Name: "SASSkieKotlinFlow"
+  SwiftBridge: "SkieSwiftFlow"
+  SwiftName: "SkieKotlinFlow"
+  SwiftPrivate: true
+  Methods:
+  - Selector: "initWithDelegate:"
+    MethodKind: "Instance"
+    SwiftName: "init(_:)"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlow> _Nonnull"
+  - Selector: "collectCollector:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__collect(collector:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlowCollector> _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+- Name: "SASSkieKotlinMutableSharedFlow"
+  SwiftBridge: "SkieSwiftMutableSharedFlow"
+  SwiftName: "SkieKotlinMutableSharedFlow"
+  SwiftPrivate: true
+  Properties:
+  - Name: "replayCache"
+    PropertyKind: "Instance"
+    SwiftName: "replayCache"
+    Type: "NSArray<T> * _Nonnull"
+  - Name: "subscriptionCount"
+    PropertyKind: "Instance"
+    SwiftName: "subscriptionCount"
+    Type: "SASSkieKotlinStateFlow<SASInt *> * _Nonnull"
+  Methods:
+  - Selector: "initWithDelegate:"
+    MethodKind: "Instance"
+    SwiftName: "init(_:)"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreMutableSharedFlow> _Nonnull"
+  - Selector: "collectCollector:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__collect(collector:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlowCollector> _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+  - Selector: "emitValue:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__emit(value:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "T _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+  - Selector: "resetReplayCache"
+    MethodKind: "Instance"
+    SwiftName: "resetReplayCache()"
+    ResultType: "void"
+  - Selector: "tryEmitValue:"
+    MethodKind: "Instance"
+    SwiftName: "tryEmit(value:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "T _Nonnull"
+- Name: "SASSkieKotlinMutableStateFlow"
+  SwiftBridge: "SkieSwiftMutableStateFlow"
+  SwiftName: "SkieKotlinMutableStateFlow"
+  SwiftPrivate: true
+  Properties:
+  - Name: "replayCache"
+    PropertyKind: "Instance"
+    SwiftName: "replayCache"
+    Type: "NSArray<T> * _Nonnull"
+  - Name: "subscriptionCount"
+    PropertyKind: "Instance"
+    SwiftName: "subscriptionCount"
+    Type: "SASSkieKotlinStateFlow<SASInt *> * _Nonnull"
+  - Name: "value"
+    PropertyKind: "Instance"
+    SwiftName: "value"
+    Type: "T _Nonnull"
+  Methods:
+  - Selector: "initWithDelegate:"
+    MethodKind: "Instance"
+    SwiftName: "init(_:)"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreMutableStateFlow> _Nonnull"
+  - Selector: "collectCollector:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__collect(collector:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlowCollector> _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+  - Selector: "compareAndSetExpect:update:"
+    MethodKind: "Instance"
+    SwiftName: "compareAndSet(expect:update:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "T _Nonnull"
+    - Position: 1
+      Type: "T _Nonnull"
+  - Selector: "emitValue:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__emit(value:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "T _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+  - Selector: "resetReplayCache"
+    MethodKind: "Instance"
+    SwiftName: "resetReplayCache()"
+    ResultType: "void"
+  - Selector: "tryEmitValue:"
+    MethodKind: "Instance"
+    SwiftName: "tryEmit(value:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "T _Nonnull"
+- Name: "SASSkieKotlinOptionalFlow"
+  SwiftBridge: "SkieSwiftOptionalFlow"
+  SwiftName: "SkieKotlinOptionalFlow"
+  SwiftPrivate: true
+  Methods:
+  - Selector: "initWithDelegate:"
+    MethodKind: "Instance"
+    SwiftName: "init(_:)"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlow> _Nonnull"
+  - Selector: "collectCollector:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__collect(collector:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlowCollector> _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+- Name: "SASSkieKotlinOptionalMutableSharedFlow"
+  SwiftBridge: "SkieSwiftOptionalMutableSharedFlow"
+  SwiftName: "SkieKotlinOptionalMutableSharedFlow"
+  SwiftPrivate: true
+  Properties:
+  - Name: "replayCache"
+    PropertyKind: "Instance"
+    SwiftName: "replayCache"
+    Type: "NSArray<id> * _Nonnull"
+  - Name: "subscriptionCount"
+    PropertyKind: "Instance"
+    SwiftName: "subscriptionCount"
+    Type: "SASSkieKotlinStateFlow<SASInt *> * _Nonnull"
+  Methods:
+  - Selector: "initWithDelegate:"
+    MethodKind: "Instance"
+    SwiftName: "init(_:)"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreMutableSharedFlow> _Nonnull"
+  - Selector: "collectCollector:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__collect(collector:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlowCollector> _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+  - Selector: "emitValue:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__emit(value:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "T _Nullable"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+  - Selector: "resetReplayCache"
+    MethodKind: "Instance"
+    SwiftName: "resetReplayCache()"
+    ResultType: "void"
+  - Selector: "tryEmitValue:"
+    MethodKind: "Instance"
+    SwiftName: "tryEmit(value:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "T _Nullable"
+- Name: "SASSkieKotlinOptionalMutableStateFlow"
+  SwiftBridge: "SkieSwiftOptionalMutableStateFlow"
+  SwiftName: "SkieKotlinOptionalMutableStateFlow"
+  SwiftPrivate: true
+  Properties:
+  - Name: "replayCache"
+    PropertyKind: "Instance"
+    SwiftName: "replayCache"
+    Type: "NSArray<id> * _Nonnull"
+  - Name: "subscriptionCount"
+    PropertyKind: "Instance"
+    SwiftName: "subscriptionCount"
+    Type: "SASSkieKotlinStateFlow<SASInt *> * _Nonnull"
+  - Name: "value"
+    PropertyKind: "Instance"
+    SwiftName: "value"
+    Type: "T _Nullable"
+  Methods:
+  - Selector: "initWithDelegate:"
+    MethodKind: "Instance"
+    SwiftName: "init(_:)"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreMutableStateFlow> _Nonnull"
+  - Selector: "collectCollector:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__collect(collector:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlowCollector> _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+  - Selector: "compareAndSetExpect:update:"
+    MethodKind: "Instance"
+    SwiftName: "compareAndSet(expect:update:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "T _Nullable"
+    - Position: 1
+      Type: "T _Nullable"
+  - Selector: "emitValue:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__emit(value:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "T _Nullable"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+  - Selector: "resetReplayCache"
+    MethodKind: "Instance"
+    SwiftName: "resetReplayCache()"
+    ResultType: "void"
+  - Selector: "tryEmitValue:"
+    MethodKind: "Instance"
+    SwiftName: "tryEmit(value:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "T _Nullable"
+- Name: "SASSkieKotlinOptionalSharedFlow"
+  SwiftBridge: "SkieSwiftOptionalSharedFlow"
+  SwiftName: "SkieKotlinOptionalSharedFlow"
+  SwiftPrivate: true
+  Properties:
+  - Name: "replayCache"
+    PropertyKind: "Instance"
+    SwiftName: "replayCache"
+    Type: "NSArray<id> * _Nonnull"
+  Methods:
+  - Selector: "initWithDelegate:"
+    MethodKind: "Instance"
+    SwiftName: "init(_:)"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreSharedFlow> _Nonnull"
+  - Selector: "collectCollector:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__collect(collector:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlowCollector> _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+- Name: "SASSkieKotlinOptionalStateFlow"
+  SwiftBridge: "SkieSwiftOptionalStateFlow"
+  SwiftName: "SkieKotlinOptionalStateFlow"
+  SwiftPrivate: true
+  Properties:
+  - Name: "replayCache"
+    PropertyKind: "Instance"
+    SwiftName: "replayCache"
+    Type: "NSArray<id> * _Nonnull"
+  - Name: "value"
+    PropertyKind: "Instance"
+    SwiftName: "value"
+    Type: "T _Nullable"
+  Methods:
+  - Selector: "initWithDelegate:"
+    MethodKind: "Instance"
+    SwiftName: "init(_:)"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreStateFlow> _Nonnull"
+  - Selector: "collectCollector:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__collect(collector:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlowCollector> _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+- Name: "SASSkieKotlinSharedFlow"
+  SwiftBridge: "SkieSwiftSharedFlow"
+  SwiftName: "SkieKotlinSharedFlow"
+  SwiftPrivate: true
+  Properties:
+  - Name: "replayCache"
+    PropertyKind: "Instance"
+    SwiftName: "replayCache"
+    Type: "NSArray<T> * _Nonnull"
+  Methods:
+  - Selector: "initWithDelegate:"
+    MethodKind: "Instance"
+    SwiftName: "init(_:)"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreSharedFlow> _Nonnull"
+  - Selector: "collectCollector:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__collect(collector:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlowCollector> _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+- Name: "SASSkieKotlinStateFlow"
+  SwiftBridge: "SkieSwiftStateFlow"
+  SwiftName: "SkieKotlinStateFlow"
+  SwiftPrivate: true
+  Properties:
+  - Name: "replayCache"
+    PropertyKind: "Instance"
+    SwiftName: "replayCache"
+    Type: "NSArray<T> * _Nonnull"
+  - Name: "value"
+    PropertyKind: "Instance"
+    SwiftName: "value"
+    Type: "T _Nonnull"
+  Methods:
+  - Selector: "initWithDelegate:"
+    MethodKind: "Instance"
+    SwiftName: "init(_:)"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreStateFlow> _Nonnull"
+  - Selector: "collectCollector:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__collect(collector:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlowCollector> _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+- Name: "SASSkie_CancellationHandler"
+  SwiftName: "Skie_CancellationHandler"
+  SwiftPrivate: true
+  Methods:
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+  - Selector: "cancel"
+    MethodKind: "Instance"
+    SwiftName: "cancel()"
+    ResultType: "void"
+- Name: "SASSkie_SuspendHandler"
+  SwiftName: "Skie_SuspendHandler"
+  SwiftPrivate: true
+  Methods:
+  - Selector: "initWithCancellationHandler:dispatcherDelegate:onResult:"
+    MethodKind: "Instance"
+    SwiftName: "init(cancellationHandler:dispatcherDelegate:onResult:)"
+    Parameters:
+    - Position: 0
+      Type: "SASSkie_CancellationHandler * _Nonnull"
+    - Position: 1
+      Type: "id<SASSkie_DispatcherDelegate> _Nonnull"
+    - Position: 2
+      Type: "void (^ _Nonnull)(SASSkie_SuspendResult * _Nonnull)"
+- Name: "SASSkie_SuspendResult"
+  SwiftName: "Skie_SuspendResult"
+  SwiftPrivate: true
+- Name: "SASSkie_SuspendResultSuccess"
+  SwiftName: "Skie_SuspendResult.Success"
+  SwiftPrivate: true
+  Properties:
+  - Name: "value"
+    PropertyKind: "Instance"
+    SwiftName: "value"
+    Type: "id _Nullable"
+  Methods:
+  - Selector: "initWithValue:"
+    MethodKind: "Instance"
+    SwiftName: "init(value:)"
+    Parameters:
+    - Position: 0
+      Type: "id _Nullable"
+  - Selector: "doCopyValue:"
+    MethodKind: "Instance"
+    SwiftName: "doCopy(value:)"
+    ResultType: "SASSkie_SuspendResultSuccess * _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "id _Nullable"
+  - Selector: "isEqual:"
+    MethodKind: "Instance"
+    SwiftName: "isEqual(_:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "id _Nullable"
+  - Selector: "hash"
+    MethodKind: "Instance"
+    SwiftName: "hash()"
+    ResultType: "NSUInteger"
+  - Selector: "description"
+    MethodKind: "Instance"
+    SwiftName: "description()"
+    ResultType: "NSString * _Nonnull"
+- Name: "SASSkie_SuspendResultError"
+  SwiftName: "Skie_SuspendResult.Error"
+  SwiftPrivate: true
+  Properties:
+  - Name: "error"
+    PropertyKind: "Instance"
+    SwiftName: "error"
+    Type: "NSError * _Nonnull"
+  Methods:
+  - Selector: "initWithError:"
+    MethodKind: "Instance"
+    SwiftName: "init(error:)"
+    Parameters:
+    - Position: 0
+      Type: "NSError * _Nonnull"
+  - Selector: "doCopyError:"
+    MethodKind: "Instance"
+    SwiftName: "doCopy(error:)"
+    ResultType: "SASSkie_SuspendResultError * _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "NSError * _Nonnull"
+  - Selector: "isEqual:"
+    MethodKind: "Instance"
+    SwiftName: "isEqual(_:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "id _Nullable"
+  - Selector: "hash"
+    MethodKind: "Instance"
+    SwiftName: "hash()"
+    ResultType: "NSUInteger"
+  - Selector: "description"
+    MethodKind: "Instance"
+    SwiftName: "description()"
+    ResultType: "NSString * _Nonnull"
+- Name: "SASSkie_SuspendResultCanceled"
+  SwiftName: "Skie_SuspendResult.Canceled"
+  SwiftPrivate: true
+- Name: "SASPlatformContext"
+  SwiftName: "PlatformContext"
+  Methods:
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+- Name: "SASPlatformContextInstance"
+  SwiftName: "PlatformContext.Instance"
+  Methods:
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+    Availability: "nonswift"
+- Name: "SASEntry"
+  SwiftName: "Entry"
+  Properties:
+  - Name: "key"
+    PropertyKind: "Instance"
+    SwiftName: "key"
+    Type: "NSString * _Nonnull"
+  - Name: "value"
+    PropertyKind: "Instance"
+    SwiftName: "value"
+    Type: "NSString * _Nullable"
+  Methods:
+  - Selector: "initWithKey:value:"
+    MethodKind: "Instance"
+    SwiftName: "init(key:value:)"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nonnull"
+    - Position: 1
+      Type: "NSString * _Nullable"
+  - Selector: "doCopyKey:value:"
+    MethodKind: "Instance"
+    SwiftName: "doCopy(key:value:)"
+    ResultType: "SASEntry * _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nonnull"
+    - Position: 1
+      Type: "NSString * _Nullable"
+  - Selector: "isEqual:"
+    MethodKind: "Instance"
+    SwiftName: "isEqual(_:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "id _Nullable"
+  - Selector: "hash"
+    MethodKind: "Instance"
+    SwiftName: "hash()"
+    ResultType: "NSUInteger"
+  - Selector: "description"
+    MethodKind: "Instance"
+    SwiftName: "description()"
+    ResultType: "NSString * _Nonnull"
+- Name: "SASStorageException"
+  SwiftName: "StorageException"
+  Methods:
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+    Availability: "nonswift"
+  - Selector: "initWithMessage:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:)"
+    Availability: "nonswift"
+  - Selector: "initWithMessage:cause:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:cause:)"
+    Availability: "nonswift"
+  - Selector: "initWithCause:"
+    MethodKind: "Instance"
+    SwiftName: "init(cause:)"
+    Availability: "nonswift"
+- Name: "SASStorageExceptionSqliteException"
+  SwiftName: "StorageException.SqliteException"
+  Methods:
+  - Selector: "initWithMessage:cause:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:cause:)"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nonnull"
+    - Position: 1
+      Type: "SASKotlinThrowable * _Nullable"
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+    Availability: "nonswift"
+  - Selector: "initWithMessage:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:)"
+    Availability: "nonswift"
+  - Selector: "initWithCause:"
+    MethodKind: "Instance"
+    SwiftName: "init(cause:)"
+    Availability: "nonswift"
+- Name: "SASStorageExceptionOtherException"
+  SwiftName: "StorageException.OtherException"
+  Methods:
+  - Selector: "initWithMessage:cause:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:cause:)"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nonnull"
+    - Position: 1
+      Type: "SASKotlinThrowable * _Nullable"
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+    Availability: "nonswift"
+  - Selector: "initWithMessage:"
+    MethodKind: "Instance"
+    SwiftName: "init(message:)"
+    Availability: "nonswift"
+  - Selector: "initWithCause:"
+    MethodKind: "Instance"
+    SwiftName: "init(cause:)"
+    Availability: "nonswift"
+- Name: "SASStorageDatabaseConstructor"
+  SwiftName: "StorageDatabaseConstructor"
+  Methods:
+  - Selector: "initialize"
+    MethodKind: "Instance"
+    SwiftName: "initialize()"
+    ResultType: "SASStorageDatabase * _Nonnull"
+- Name: "SASStorageDatabase"
+  SwiftName: "StorageDatabase"
+  Methods:
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+- Name: "SASStorageDatabaseCompanion"
+  SwiftName: "StorageDatabase.Companion"
+- Name: "SASStorageDatabase_Impl"
+  SwiftName: "StorageDatabase_Impl"
+  Methods:
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+  - Selector: "createAutoMigrationsAutoMigrationSpecs:"
+    MethodKind: "Instance"
+    SwiftName: "createAutoMigrations(autoMigrationSpecs:)"
+    ResultType: "NSArray<SASRoom_runtimeMigration *> * _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "NSDictionary<id<SASKotlinKClass>, id<SASRoom_runtimeAutoMigrationSpec>> * _Nonnull"
+  - Selector: "createInvalidationTracker"
+    MethodKind: "Instance"
+    SwiftName: "createInvalidationTracker()"
+    ResultType: "SASRoom_runtimeInvalidationTracker * _Nonnull"
+  - Selector: "createOpenDelegate"
+    MethodKind: "Instance"
+    SwiftName: "createOpenDelegate()"
+    ResultType: "SASRoom_runtimeRoomOpenDelegate * _Nonnull"
+  - Selector: "getRequiredAutoMigrationSpecClasses"
+    MethodKind: "Instance"
+    SwiftName: "getRequiredAutoMigrationSpecClasses()"
+    ResultType: "NSSet<id<SASKotlinKClass>> * _Nonnull"
+  - Selector: "getRequiredTypeConverterClasses"
+    MethodKind: "Instance"
+    SwiftName: "getRequiredTypeConverterClasses()"
+    ResultType: "NSDictionary<id<SASKotlinKClass>, NSArray<id<SASKotlinKClass>> *> * _Nonnull"
+- Name: "SASDatabaseFiles"
+  SwiftName: "DatabaseFiles"
+  Properties:
+  - Name: "databaseFileName"
+    PropertyKind: "Instance"
+    SwiftName: "databaseFileName"
+    Type: "NSString * _Nonnull"
+  - Name: "databaseName"
+    PropertyKind: "Instance"
+    SwiftName: "databaseName"
+    Type: "NSString * _Nonnull"
+  - Name: "directoryAbsolutePath"
+    PropertyKind: "Instance"
+    SwiftName: "directoryAbsolutePath"
+    Type: "NSString * _Nonnull"
+  - Name: "fileAbsolutePath"
+    PropertyKind: "Instance"
+    SwiftName: "fileAbsolutePath"
+    Type: "NSString * _Nonnull"
+  Methods:
+  - Selector: "isEqual:"
+    MethodKind: "Instance"
+    SwiftName: "isEqual(_:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "id _Nullable"
+  - Selector: "hash"
+    MethodKind: "Instance"
+    SwiftName: "hash()"
+    ResultType: "NSUInteger"
+  - Selector: "description"
+    MethodKind: "Instance"
+    SwiftName: "description()"
+    ResultType: "NSString * _Nonnull"
+- Name: "SASDatabaseFilesCompanion"
+  SwiftName: "DatabaseFiles.Companion"
+  Methods:
+  - Selector: "ofContext:databaseName:error:"
+    MethodKind: "Instance"
+    SwiftName: "of(context:databaseName:)"
+    ResultType: "SASDatabaseFiles * _Nullable"
+    Parameters:
+    - Position: 0
+      Type: "SASPlatformContext * _Nonnull"
+    - Position: 1
+      Type: "NSString * _Nonnull"
+- Name: "SASSharedStorage_appleKt"
+  SwiftName: "SharedStorage_appleKt"
+  Methods:
+  - Selector: "SharedStorageContext:databaseName:"
+    MethodKind: "Class"
+    SwiftName: "SharedStorage(context:databaseName:)"
+    ResultType: "id<SASSharedStorage> _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "SASPlatformContext * _Nonnull"
+    - Position: 1
+      Type: "NSString * _Nonnull"
+- Name: "SASRoom_runtimeRoomDatabase"
+  SwiftName: "Room_runtimeRoomDatabase"
+  Properties:
+  - Name: "invalidationTracker"
+    PropertyKind: "Instance"
+    SwiftName: "invalidationTracker"
+    Type: "SASRoom_runtimeInvalidationTracker * _Nonnull"
+  Methods:
+  - Selector: "init"
+    MethodKind: "Instance"
+    SwiftName: "init()"
+  - Selector: "close"
+    MethodKind: "Instance"
+    SwiftName: "close()"
+    ResultType: "void"
+  - Selector: "createAutoMigrationsAutoMigrationSpecs:"
+    MethodKind: "Instance"
+    SwiftName: "createAutoMigrations(autoMigrationSpecs:)"
+    ResultType: "NSArray<SASRoom_runtimeMigration *> * _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "NSDictionary<id<SASKotlinKClass>, id<SASRoom_runtimeAutoMigrationSpec>> * _Nonnull"
+  - Selector: "createInvalidationTracker"
+    MethodKind: "Instance"
+    SwiftName: "createInvalidationTracker()"
+    ResultType: "SASRoom_runtimeInvalidationTracker * _Nonnull"
+  - Selector: "createOpenDelegate"
+    MethodKind: "Instance"
+    SwiftName: "createOpenDelegate()"
+    ResultType: "id<SASRoom_runtimeRoomOpenDelegateMarker> _Nonnull"
+  - Selector: "getCoroutineScope"
+    MethodKind: "Instance"
+    SwiftName: "getCoroutineScope()"
+    ResultType: "id<SASKotlinx_coroutines_coreCoroutineScope> _Nonnull"
+  - Selector: "getRequiredAutoMigrationSpecClasses"
+    MethodKind: "Instance"
+    SwiftName: "getRequiredAutoMigrationSpecClasses()"
+    ResultType: "NSSet<id<SASKotlinKClass>> * _Nonnull"
+  - Selector: "getRequiredTypeConverterClasses"
+    MethodKind: "Instance"
+    SwiftName: "getRequiredTypeConverterClasses()"
+    ResultType: "NSDictionary<id<SASKotlinKClass>, NSArray<id<SASKotlinKClass>> *> * _Nonnull"
+  - Selector: "getTypeConverterKlass:"
+    MethodKind: "Instance"
+    SwiftName: "getTypeConverter(klass:)"
+    ResultType: "id _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinKClass> _Nonnull"
+  - Selector: "internalInitInvalidationTrackerConnection:"
+    MethodKind: "Instance"
+    SwiftName: "internalInitInvalidationTracker(connection:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASSqliteSQLiteConnection> _Nonnull"
+  - Selector: "useConnectionIsReadOnly:block:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__useConnection(isReadOnly:block:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "BOOL"
+    - Position: 1
+      Type: "id<SASKotlinSuspendFunction1> _Nonnull"
+    - Position: 2
+      Type: "void (^ _Nonnull)(id _Nullable_result, NSError * _Nullable)"
+- Name: "SASRoom_runtimeInvalidationTracker"
+  SwiftName: "Room_runtimeInvalidationTracker"
+  Methods:
+  - Selector: "initWithDatabase:shadowTablesMap:viewTables:tableNames:"
+    MethodKind: "Instance"
+    SwiftName: "init(database:shadowTablesMap:viewTables:tableNames:)"
+    Parameters:
+    - Position: 0
+      Type: "SASRoom_runtimeRoomDatabase * _Nonnull"
+    - Position: 1
+      Type: "NSDictionary<NSString *, NSString *> * _Nonnull"
+    - Position: 2
+      Type: "NSDictionary<NSString *, NSSet<NSString *> *> * _Nonnull"
+    - Position: 3
+      Type: "SASKotlinArray<NSString *> * _Nonnull"
+  - Selector: "createFlowTables:emitInitialState:"
+    MethodKind: "Instance"
+    SwiftName: "createFlow(tables:emitInitialState:)"
+    ResultType: "SASSkieKotlinFlow<NSSet<NSString *> *> * _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "SASKotlinArray<NSString *> * _Nonnull"
+    - Position: 1
+      Type: "BOOL"
+  - Selector: "refreshTables:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__refresh(tables:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "SASKotlinArray<NSString *> * _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(SASBoolean * _Nullable, NSError * _Nullable)"
+  - Selector: "refreshAsync"
+    MethodKind: "Instance"
+    SwiftName: "refreshAsync()"
+    ResultType: "void"
+- Name: "SASRoom_runtimeMigration"
+  SwiftName: "Room_runtimeMigration"
+  Properties:
+  - Name: "endVersion"
+    PropertyKind: "Instance"
+    SwiftName: "endVersion"
+    Type: "int32_t"
+  - Name: "startVersion"
+    PropertyKind: "Instance"
+    SwiftName: "startVersion"
+    Type: "int32_t"
+  Methods:
+  - Selector: "initWithStartVersion:endVersion:"
+    MethodKind: "Instance"
+    SwiftName: "init(startVersion:endVersion:)"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+    - Position: 1
+      Type: "int32_t"
+  - Selector: "migrateConnection:"
+    MethodKind: "Instance"
+    SwiftName: "migrate(connection:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASSqliteSQLiteConnection> _Nonnull"
+- Name: "SASRoom_runtimeRoomOpenDelegate"
+  SwiftName: "Room_runtimeRoomOpenDelegate"
+  Properties:
+  - Name: "identityHash"
+    PropertyKind: "Instance"
+    SwiftName: "identityHash"
+    Type: "NSString * _Nonnull"
+  - Name: "legacyIdentityHash"
+    PropertyKind: "Instance"
+    SwiftName: "legacyIdentityHash"
+    Type: "NSString * _Nonnull"
+  - Name: "version"
+    PropertyKind: "Instance"
+    SwiftName: "version"
+    Type: "int32_t"
+  Methods:
+  - Selector: "initWithVersion:identityHash:legacyIdentityHash:"
+    MethodKind: "Instance"
+    SwiftName: "init(version:identityHash:legacyIdentityHash:)"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+    - Position: 1
+      Type: "NSString * _Nonnull"
+    - Position: 2
+      Type: "NSString * _Nonnull"
+  - Selector: "createAllTablesConnection:"
+    MethodKind: "Instance"
+    SwiftName: "createAllTables(connection:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASSqliteSQLiteConnection> _Nonnull"
+  - Selector: "dropAllTablesConnection:"
+    MethodKind: "Instance"
+    SwiftName: "dropAllTables(connection:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASSqliteSQLiteConnection> _Nonnull"
+  - Selector: "onCreateConnection:"
+    MethodKind: "Instance"
+    SwiftName: "onCreate(connection:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASSqliteSQLiteConnection> _Nonnull"
+  - Selector: "onOpenConnection:"
+    MethodKind: "Instance"
+    SwiftName: "onOpen(connection:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASSqliteSQLiteConnection> _Nonnull"
+  - Selector: "onPostMigrateConnection:"
+    MethodKind: "Instance"
+    SwiftName: "onPostMigrate(connection:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASSqliteSQLiteConnection> _Nonnull"
+  - Selector: "onPreMigrateConnection:"
+    MethodKind: "Instance"
+    SwiftName: "onPreMigrate(connection:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASSqliteSQLiteConnection> _Nonnull"
+  - Selector: "onValidateSchemaConnection:"
+    MethodKind: "Instance"
+    SwiftName: "onValidateSchema(connection:)"
+    ResultType: "SASRoom_runtimeRoomOpenDelegateValidationResult * _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "id<SASSqliteSQLiteConnection> _Nonnull"
+- Name: "SASRoom_runtimeRoomOpenDelegateValidationResult"
+  SwiftName: "Room_runtimeRoomOpenDelegate.ValidationResult"
+  Properties:
+  - Name: "expectedFoundMsg"
+    PropertyKind: "Instance"
+    SwiftName: "expectedFoundMsg"
+    Type: "NSString * _Nullable"
+  - Name: "isValid"
+    PropertyKind: "Instance"
+    SwiftName: "isValid"
+    Type: "BOOL"
+  Methods:
+  - Selector: "initWithIsValid:expectedFoundMsg:"
+    MethodKind: "Instance"
+    SwiftName: "init(isValid:expectedFoundMsg:)"
+    Parameters:
+    - Position: 0
+      Type: "BOOL"
+    - Position: 1
+      Type: "NSString * _Nullable"
+- Name: "SAS__SkieSuspendWrappersKt"
+  SwiftName: "__SkieSuspendWrappersKt"
+  Availability: "nonswift"
+  Methods:
+  - Selector: "Skie_Suspend__0__hasNextDispatchReceiver:suspendHandler:"
+    MethodKind: "Class"
+    SwiftName: "Skie_Suspend__0__hasNext(dispatchReceiver:suspendHandler:)"
+    Availability: "nonswift"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "SASSkieColdFlowIterator<id> * _Nonnull"
+    - Position: 1
+      Type: "SASSkie_SuspendHandler * _Nonnull"
+  - Selector: "Skie_Suspend__1__collectDispatchReceiver:collector:suspendHandler:"
+    MethodKind: "Class"
+    SwiftName: "Skie_Suspend__1__collect(dispatchReceiver:collector:suspendHandler:)"
+    Availability: "nonswift"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlow> _Nonnull"
+    - Position: 1
+      Type: "id<SASKotlinx_coroutines_coreFlowCollector> _Nonnull"
+    - Position: 2
+      Type: "SASSkie_SuspendHandler * _Nonnull"
+  - Selector: "Skie_Suspend__2__emitDispatchReceiver:value:suspendHandler:"
+    MethodKind: "Class"
+    SwiftName: "Skie_Suspend__2__emit(dispatchReceiver:value:suspendHandler:)"
+    Availability: "nonswift"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlowCollector> _Nonnull"
+    - Position: 1
+      Type: "id _Nullable"
+    - Position: 2
+      Type: "SASSkie_SuspendHandler * _Nonnull"
+  - Selector: "Skie_Suspend__3__clearDispatchReceiver:suspendHandler:"
+    MethodKind: "Class"
+    SwiftName: "Skie_Suspend__3__clear(dispatchReceiver:suspendHandler:)"
+    Availability: "nonswift"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASSharedStorage> _Nonnull"
+    - Position: 1
+      Type: "SASSkie_SuspendHandler * _Nonnull"
+  - Selector: "Skie_Suspend__4__getKeysDispatchReceiver:suspendHandler:"
+    MethodKind: "Class"
+    SwiftName: "Skie_Suspend__4__getKeys(dispatchReceiver:suspendHandler:)"
+    Availability: "nonswift"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASSharedStorage> _Nonnull"
+    - Position: 1
+      Type: "SASSkie_SuspendHandler * _Nonnull"
+  - Selector: "Skie_Suspend__5__getValuesDispatchReceiver:keys:suspendHandler:"
+    MethodKind: "Class"
+    SwiftName: "Skie_Suspend__5__getValues(dispatchReceiver:keys:suspendHandler:)"
+    Availability: "nonswift"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASSharedStorage> _Nonnull"
+    - Position: 1
+      Type: "NSArray<NSString *> * _Nonnull"
+    - Position: 2
+      Type: "SASSkie_SuspendHandler * _Nonnull"
+  - Selector: "Skie_Suspend__6__removeValuesDispatchReceiver:keys:suspendHandler:"
+    MethodKind: "Class"
+    SwiftName: "Skie_Suspend__6__removeValues(dispatchReceiver:keys:suspendHandler:)"
+    Availability: "nonswift"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASSharedStorage> _Nonnull"
+    - Position: 1
+      Type: "NSArray<NSString *> * _Nonnull"
+    - Position: 2
+      Type: "SASSkie_SuspendHandler * _Nonnull"
+  - Selector: "Skie_Suspend__7__setValuesDispatchReceiver:entries:suspendHandler:"
+    MethodKind: "Class"
+    SwiftName: "Skie_Suspend__7__setValues(dispatchReceiver:entries:suspendHandler:)"
+    Availability: "nonswift"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASSharedStorage> _Nonnull"
+    - Position: 1
+      Type: "NSArray<SASEntry *> * _Nonnull"
+    - Position: 2
+      Type: "SASSkie_SuspendHandler * _Nonnull"
+  - Selector: "Skie_Suspend__8__useConnectionDispatchReceiver:isReadOnly:block:suspendHandler:"
+    MethodKind: "Class"
+    SwiftName: "Skie_Suspend__8__useConnection(dispatchReceiver:isReadOnly:block:suspendHandler:)"
+    Availability: "nonswift"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "SASRoom_runtimeRoomDatabase * _Nonnull"
+    - Position: 1
+      Type: "BOOL"
+    - Position: 2
+      Type: "id<SASKotlinSuspendFunction1> _Nonnull"
+    - Position: 3
+      Type: "SASSkie_SuspendHandler * _Nonnull"
+  - Selector: "Skie_Suspend__9__invokeDispatchReceiver:p1:suspendHandler:"
+    MethodKind: "Class"
+    SwiftName: "Skie_Suspend__9__invoke(dispatchReceiver:p1:suspendHandler:)"
+    Availability: "nonswift"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinSuspendFunction1> _Nonnull"
+    - Position: 1
+      Type: "id _Nullable"
+    - Position: 2
+      Type: "SASSkie_SuspendHandler * _Nonnull"
+  - Selector: "Skie_Suspend__10__refreshDispatchReceiver:tables:suspendHandler:"
+    MethodKind: "Class"
+    SwiftName: "Skie_Suspend__10__refresh(dispatchReceiver:tables:suspendHandler:)"
+    Availability: "nonswift"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "SASRoom_runtimeInvalidationTracker * _Nonnull"
+    - Position: 1
+      Type: "SASKotlinArray<NSString *> * _Nonnull"
+    - Position: 2
+      Type: "SASSkie_SuspendHandler * _Nonnull"
+Protocols:
+- Name: "SASKotlinIterator"
+  SwiftName: "KotlinIterator"
+  Methods:
+  - Selector: "hasNext"
+    MethodKind: "Instance"
+    SwiftName: "hasNext()"
+    ResultType: "BOOL"
+  - Selector: "next"
+    MethodKind: "Instance"
+    SwiftName: "next()"
+    ResultType: "id _Nullable"
+- Name: "SASKotlinSuspendFunction1"
+  SwiftName: "KotlinSuspendFunction1"
+  Methods:
+  - Selector: "invokeP1:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__invoke(p1:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id _Nullable"
+    - Position: 1
+      Type: "void (^ _Nonnull)(id _Nullable_result, NSError * _Nullable)"
+- Name: "SASKotlinFunction"
+  SwiftName: "KotlinFunction"
+- Name: "SASKotlinAutoCloseable"
+  SwiftName: "KotlinAutoCloseable"
+  Methods:
+  - Selector: "close"
+    MethodKind: "Instance"
+    SwiftName: "close()"
+    ResultType: "void"
+- Name: "SASKotlinKClass"
+  SwiftName: "KotlinKClass"
+  Properties:
+  - Name: "qualifiedName"
+    PropertyKind: "Instance"
+    SwiftName: "qualifiedName"
+    Type: "NSString * _Nullable"
+  - Name: "simpleName"
+    PropertyKind: "Instance"
+    SwiftName: "simpleName"
+    Type: "NSString * _Nullable"
+  Methods:
+  - Selector: "isEqual:"
+    MethodKind: "Instance"
+    SwiftName: "isEqual(_:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "id _Nullable"
+  - Selector: "hash"
+    MethodKind: "Instance"
+    SwiftName: "hash()"
+    ResultType: "NSUInteger"
+  - Selector: "isInstanceValue:"
+    MethodKind: "Instance"
+    SwiftName: "isInstance(value:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "id _Nullable"
+- Name: "SASKotlinKClassifier"
+  SwiftName: "KotlinKClassifier"
+- Name: "SASKotlinKAnnotatedElement"
+  SwiftName: "KotlinKAnnotatedElement"
+- Name: "SASKotlinKDeclarationContainer"
+  SwiftName: "KotlinKDeclarationContainer"
+- Name: "SASKotlinCoroutineContext"
+  SwiftName: "KotlinCoroutineContext"
+  Methods:
+  - Selector: "foldInitial:operation:"
+    MethodKind: "Instance"
+    SwiftName: "fold(initial:operation:)"
+    ResultType: "id _Nullable"
+    Parameters:
+    - Position: 0
+      Type: "id _Nullable"
+    - Position: 1
+      Type: "id _Nullable (^ _Nonnull)(id _Nullable, id<SASKotlinCoroutineContextElement> _Nonnull)"
+  - Selector: "getKey:"
+    MethodKind: "Instance"
+    SwiftName: "get(key:)"
+    ResultType: "id<SASKotlinCoroutineContextElement> _Nullable"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinCoroutineContextKey> _Nonnull"
+  - Selector: "minusKeyKey:"
+    MethodKind: "Instance"
+    SwiftName: "minusKey(key:)"
+    ResultType: "id<SASKotlinCoroutineContext> _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinCoroutineContextKey> _Nonnull"
+  - Selector: "plusContext:"
+    MethodKind: "Instance"
+    SwiftName: "plus(context:)"
+    ResultType: "id<SASKotlinCoroutineContext> _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinCoroutineContext> _Nonnull"
+- Name: "SASKotlinCoroutineContextKey"
+  SwiftName: "KotlinCoroutineContextKey"
+- Name: "SASKotlinCoroutineContextElement"
+  SwiftName: "KotlinCoroutineContextElement"
+  Properties:
+  - Name: "key"
+    PropertyKind: "Instance"
+    SwiftName: "key"
+    Type: "id<SASKotlinCoroutineContextKey> _Nonnull"
+  Methods:
+  - Selector: "foldInitial:operation:"
+    MethodKind: "Instance"
+    SwiftName: "fold(initial:operation:)"
+    ResultType: "id _Nullable"
+    Parameters:
+    - Position: 0
+      Type: "id _Nullable"
+    - Position: 1
+      Type: "id _Nullable (^ _Nonnull)(id _Nullable, id<SASKotlinCoroutineContextElement> _Nonnull)"
+  - Selector: "getKey:"
+    MethodKind: "Instance"
+    SwiftName: "get(key:)"
+    ResultType: "id<SASKotlinCoroutineContextElement> _Nullable"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinCoroutineContextKey> _Nonnull"
+  - Selector: "minusKeyKey:"
+    MethodKind: "Instance"
+    SwiftName: "minusKey(key:)"
+    ResultType: "id<SASKotlinCoroutineContext> _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinCoroutineContextKey> _Nonnull"
+- Name: "SASSkie_DispatcherDelegate"
+  SwiftName: "Skie_DispatcherDelegate"
+  SwiftPrivate: true
+  Methods:
+  - Selector: "dispatchBlock:"
+    MethodKind: "Instance"
+    SwiftName: "dispatch(block:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreRunnable> _Nonnull"
+- Name: "SASKotlinx_coroutines_coreFlow"
+  SwiftName: "Kotlinx_coroutines_coreFlow"
+  Methods:
+  - Selector: "collectCollector:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__collect(collector:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlowCollector> _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+- Name: "SASKotlinx_coroutines_coreFlowCollector"
+  SwiftName: "Kotlinx_coroutines_coreFlowCollector"
+  Methods:
+  - Selector: "emitValue:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__emit(value:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id _Nullable"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+- Name: "SASKotlinx_coroutines_coreStateFlow"
+  SwiftName: "Kotlinx_coroutines_coreStateFlow"
+  Properties:
+  - Name: "value"
+    PropertyKind: "Instance"
+    SwiftName: "value"
+    Type: "id _Nullable"
+- Name: "SASKotlinx_coroutines_coreSharedFlow"
+  SwiftName: "Kotlinx_coroutines_coreSharedFlow"
+  Properties:
+  - Name: "replayCache"
+    PropertyKind: "Instance"
+    SwiftName: "replayCache"
+    Type: "NSArray<id> * _Nonnull"
+  Methods:
+  - Selector: "collectCollector:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__collect(collector:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASKotlinx_coroutines_coreFlowCollector> _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+- Name: "SASKotlinx_coroutines_coreMutableSharedFlow"
+  SwiftName: "Kotlinx_coroutines_coreMutableSharedFlow"
+  Properties:
+  - Name: "subscriptionCount"
+    PropertyKind: "Instance"
+    SwiftName: "subscriptionCount"
+    Type: "SASSkieKotlinStateFlow<SASInt *> * _Nonnull"
+  Methods:
+  - Selector: "emitValue:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__emit(value:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id _Nullable"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+  - Selector: "resetReplayCache"
+    MethodKind: "Instance"
+    SwiftName: "resetReplayCache()"
+    ResultType: "void"
+  - Selector: "tryEmitValue:"
+    MethodKind: "Instance"
+    SwiftName: "tryEmit(value:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "id _Nullable"
+- Name: "SASKotlinx_coroutines_coreMutableStateFlow"
+  SwiftName: "Kotlinx_coroutines_coreMutableStateFlow"
+  Properties:
+  - Name: "value"
+    PropertyKind: "Instance"
+    SwiftName: "value"
+    Type: "id _Nullable"
+  Methods:
+  - Selector: "compareAndSetExpect:update:"
+    MethodKind: "Instance"
+    SwiftName: "compareAndSet(expect:update:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "id _Nullable"
+    - Position: 1
+      Type: "id _Nullable"
+- Name: "SASKotlinx_coroutines_coreRunnable"
+  SwiftName: "Kotlinx_coroutines_coreRunnable"
+  Methods:
+  - Selector: "run"
+    MethodKind: "Instance"
+    SwiftName: "run()"
+    ResultType: "void"
+- Name: "SASKotlinx_coroutines_coreCoroutineScope"
+  SwiftName: "Kotlinx_coroutines_coreCoroutineScope"
+  Properties:
+  - Name: "coroutineContext"
+    PropertyKind: "Instance"
+    SwiftName: "coroutineContext"
+    Type: "id<SASKotlinCoroutineContext> _Nonnull"
+- Name: "SASSharedStorage"
+  SwiftName: "SharedStorage"
+  Methods:
+  - Selector: "clearWithCompletionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__clear(completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+  - Selector: "getKeysWithCompletionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__getKeys(completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "void (^ _Nonnull)(NSArray<NSString *> * _Nullable, NSError * _Nullable)"
+  - Selector: "getKeysFlowAndReturnError:"
+    MethodKind: "Instance"
+    SwiftName: "getKeysFlow()"
+    ResultType: "SASSkieKotlinFlow<NSArray<NSString *> *> * _Nullable"
+  - Selector: "getValuesKeys:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__getValues(keys:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "NSArray<NSString *> * _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSArray<SASEntry *> * _Nullable, NSError * _Nullable)"
+  - Selector: "getValuesFlowKeys:error:"
+    MethodKind: "Instance"
+    SwiftName: "getValuesFlow(keys:)"
+    ResultType: "SASSkieKotlinFlow<NSArray<SASEntry *> *> * _Nullable"
+    Parameters:
+    - Position: 0
+      Type: "NSArray<NSString *> * _Nonnull"
+  - Selector: "removeValuesKeys:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__removeValues(keys:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "NSArray<NSString *> * _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSError * _Nullable)"
+  - Selector: "setValuesEntries:completionHandler:"
+    MethodKind: "Instance"
+    SwiftName: "__setValues(entries:completionHandler:)"
+    SwiftPrivate: true
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "NSArray<SASEntry *> * _Nonnull"
+    - Position: 1
+      Type: "void (^ _Nonnull)(NSArray<SASEntry *> * _Nullable, NSError * _Nullable)"
+- Name: "SASRoom_runtimeRoomOpenDelegateMarker"
+  SwiftName: "Room_runtimeRoomOpenDelegateMarker"
+- Name: "SASRoom_runtimeAutoMigrationSpec"
+  SwiftName: "Room_runtimeAutoMigrationSpec"
+  Methods:
+  - Selector: "onPostMigrateConnection:"
+    MethodKind: "Instance"
+    SwiftName: "onPostMigrate(connection:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "id<SASSqliteSQLiteConnection> _Nonnull"
+- Name: "SASRoom_runtimeRoomDatabaseConstructor"
+  SwiftName: "Room_runtimeRoomDatabaseConstructor"
+  Methods:
+  - Selector: "initialize"
+    MethodKind: "Instance"
+    SwiftName: "initialize()"
+    ResultType: "SASRoom_runtimeRoomDatabase * _Nonnull"
+- Name: "SASSqliteSQLiteConnection"
+  SwiftName: "SqliteSQLiteConnection"
+  Methods:
+  - Selector: "close"
+    MethodKind: "Instance"
+    SwiftName: "close()"
+    ResultType: "void"
+  - Selector: "inTransaction"
+    MethodKind: "Instance"
+    SwiftName: "inTransaction()"
+    ResultType: "BOOL"
+  - Selector: "prepareSql:"
+    MethodKind: "Instance"
+    SwiftName: "prepare(sql:)"
+    ResultType: "id<SASSqliteSQLiteStatement> _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "NSString * _Nonnull"
+- Name: "SASSqliteSQLiteStatement"
+  SwiftName: "SqliteSQLiteStatement"
+  Methods:
+  - Selector: "bindBlobIndex:value:"
+    MethodKind: "Instance"
+    SwiftName: "bindBlob(index:value:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+    - Position: 1
+      Type: "SASKotlinByteArray * _Nonnull"
+  - Selector: "bindBooleanIndex:value:"
+    MethodKind: "Instance"
+    SwiftName: "bindBoolean(index:value:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+    - Position: 1
+      Type: "BOOL"
+  - Selector: "bindDoubleIndex:value:"
+    MethodKind: "Instance"
+    SwiftName: "bindDouble(index:value:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+    - Position: 1
+      Type: "double"
+  - Selector: "bindFloatIndex:value:"
+    MethodKind: "Instance"
+    SwiftName: "bindFloat(index:value:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+    - Position: 1
+      Type: "float"
+  - Selector: "bindIntIndex:value:"
+    MethodKind: "Instance"
+    SwiftName: "bindInt(index:value:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+    - Position: 1
+      Type: "int32_t"
+  - Selector: "bindLongIndex:value:"
+    MethodKind: "Instance"
+    SwiftName: "bindLong(index:value:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+    - Position: 1
+      Type: "int64_t"
+  - Selector: "bindNullIndex:"
+    MethodKind: "Instance"
+    SwiftName: "bindNull(index:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+  - Selector: "bindTextIndex:value:"
+    MethodKind: "Instance"
+    SwiftName: "bindText(index:value:)"
+    ResultType: "void"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+    - Position: 1
+      Type: "NSString * _Nonnull"
+  - Selector: "clearBindings"
+    MethodKind: "Instance"
+    SwiftName: "clearBindings()"
+    ResultType: "void"
+  - Selector: "close"
+    MethodKind: "Instance"
+    SwiftName: "close()"
+    ResultType: "void"
+  - Selector: "getBlobIndex:"
+    MethodKind: "Instance"
+    SwiftName: "getBlob(index:)"
+    ResultType: "SASKotlinByteArray * _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+  - Selector: "getBooleanIndex:"
+    MethodKind: "Instance"
+    SwiftName: "getBoolean(index:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+  - Selector: "getColumnCount"
+    MethodKind: "Instance"
+    SwiftName: "getColumnCount()"
+    ResultType: "int32_t"
+  - Selector: "getColumnNameIndex:"
+    MethodKind: "Instance"
+    SwiftName: "getColumnName(index:)"
+    ResultType: "NSString * _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+  - Selector: "getColumnNames"
+    MethodKind: "Instance"
+    SwiftName: "getColumnNames()"
+    ResultType: "NSArray<NSString *> * _Nonnull"
+  - Selector: "getColumnTypeIndex:"
+    MethodKind: "Instance"
+    SwiftName: "getColumnType(index:)"
+    ResultType: "int32_t"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+  - Selector: "getDoubleIndex:"
+    MethodKind: "Instance"
+    SwiftName: "getDouble(index:)"
+    ResultType: "double"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+  - Selector: "getFloatIndex:"
+    MethodKind: "Instance"
+    SwiftName: "getFloat(index:)"
+    ResultType: "float"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+  - Selector: "getIntIndex:"
+    MethodKind: "Instance"
+    SwiftName: "getInt(index:)"
+    ResultType: "int32_t"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+  - Selector: "getLongIndex:"
+    MethodKind: "Instance"
+    SwiftName: "getLong(index:)"
+    ResultType: "int64_t"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+  - Selector: "getTextIndex:"
+    MethodKind: "Instance"
+    SwiftName: "getText(index:)"
+    ResultType: "NSString * _Nonnull"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+  - Selector: "isNullIndex:"
+    MethodKind: "Instance"
+    SwiftName: "isNull(index:)"
+    ResultType: "BOOL"
+    Parameters:
+    - Position: 0
+      Type: "int32_t"
+  - Selector: "reset"
+    MethodKind: "Instance"
+    SwiftName: "reset()"
+    ResultType: "void"
+  - Selector: "step"
+    MethodKind: "Instance"
+    SwiftName: "step()"
+    ResultType: "BOOL"

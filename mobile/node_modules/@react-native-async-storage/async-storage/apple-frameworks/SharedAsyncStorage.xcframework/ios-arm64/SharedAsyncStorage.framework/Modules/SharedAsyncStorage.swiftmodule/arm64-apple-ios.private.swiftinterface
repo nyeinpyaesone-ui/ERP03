@@ -1,0 +1,710 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.1.2 effective-5.10 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)
+// swift-module-flags: -target arm64-apple-ios13.0 -enable-objc-interop -enable-library-evolution -swift-version 5 -O -module-name SharedAsyncStorage
+// swift-module-flags-ignorable:  -interface-compiler-version 6.1.2
+import Foundation
+@_exported import SharedAsyncStorage
+import Swift
+import _Concurrency
+import _StringProcessing
+import _SwiftConcurrencyShims
+public enum Skie {
+  public enum RuntimeKotlin {
+    public enum SkieColdFlowIterator {
+      public typealias __Kotlin = SharedAsyncStorage.SkieColdFlowIterator
+    }
+    public enum SkieKotlinFlow {
+      public typealias __Kotlin = SharedAsyncStorage.SkieKotlinFlow
+    }
+    public enum SkieKotlinMutableSharedFlow {
+      public typealias __Kotlin = SharedAsyncStorage.SkieKotlinMutableSharedFlow
+    }
+    public enum SkieKotlinMutableStateFlow {
+      public typealias __Kotlin = SharedAsyncStorage.SkieKotlinMutableStateFlow
+    }
+    public enum SkieKotlinOptionalFlow {
+      public typealias __Kotlin = SharedAsyncStorage.SkieKotlinOptionalFlow
+    }
+    public enum SkieKotlinOptionalMutableSharedFlow {
+      public typealias __Kotlin = SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow
+    }
+    public enum SkieKotlinOptionalMutableStateFlow {
+      public typealias __Kotlin = SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow
+    }
+    public enum SkieKotlinOptionalSharedFlow {
+      public typealias __Kotlin = SharedAsyncStorage.SkieKotlinOptionalSharedFlow
+    }
+    public enum SkieKotlinOptionalStateFlow {
+      public typealias __Kotlin = SharedAsyncStorage.SkieKotlinOptionalStateFlow
+    }
+    public enum SkieKotlinSharedFlow {
+      public typealias __Kotlin = SharedAsyncStorage.SkieKotlinSharedFlow
+    }
+    public enum SkieKotlinStateFlow {
+      public typealias __Kotlin = SharedAsyncStorage.SkieKotlinStateFlow
+    }
+    public enum Skie_CancellationHandler {
+      public typealias __Kotlin = SharedAsyncStorage.Skie_CancellationHandler
+    }
+    public enum Skie_DispatcherDelegate {
+      public typealias __Kotlin = SharedAsyncStorage.Skie_DispatcherDelegate
+    }
+    public enum Skie_SuspendHandler {
+      public typealias __Kotlin = SharedAsyncStorage.Skie_SuspendHandler
+    }
+    public enum Skie_SuspendResult {
+      public typealias __Kotlin = SharedAsyncStorage.Skie_SuspendResult
+      public enum Success {
+        public typealias __Kotlin = SharedAsyncStorage.Skie_SuspendResult.Success
+      }
+      public enum Error {
+        public typealias __Kotlin = SharedAsyncStorage.Skie_SuspendResult.Error
+      }
+      public enum Canceled {
+        public typealias __Kotlin = SharedAsyncStorage.Skie_SuspendResult.Canceled
+      }
+    }
+  }
+  public typealias co_touchlab_skie__runtime_kotlin = SharedAsyncStorage.Skie.RuntimeKotlin
+  public enum KotlinxCoroutinesCore {
+    public enum Flow {
+      public typealias __Kotlin = SharedAsyncStorage.Kotlinx_coroutines_coreFlow
+    }
+    public enum StateFlow {
+      public typealias __Kotlin = SharedAsyncStorage.Kotlinx_coroutines_coreStateFlow
+    }
+    public enum SharedFlow {
+      public typealias __Kotlin = SharedAsyncStorage.Kotlinx_coroutines_coreSharedFlow
+    }
+    public enum MutableSharedFlow {
+      public typealias __Kotlin = SharedAsyncStorage.Kotlinx_coroutines_coreMutableSharedFlow
+    }
+    public enum MutableStateFlow {
+      public typealias __Kotlin = SharedAsyncStorage.Kotlinx_coroutines_coreMutableStateFlow
+    }
+    public enum Runnable {
+      public typealias __Kotlin = SharedAsyncStorage.Kotlinx_coroutines_coreRunnable
+    }
+  }
+  public typealias org_jetbrains_kotlinx__kotlinx_coroutines_core = SharedAsyncStorage.Skie.KotlinxCoroutinesCore
+  public enum SharedStorage {
+    public enum StorageException {
+    }
+  }
+  public typealias RNAsyncStorage__shared_storage = SharedAsyncStorage.Skie.SharedStorage
+}
+@_hasMissingDesignatedInitializers public class SkieSwiftFlowIterator<T> : _Concurrency.AsyncIteratorProtocol {
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  public func next() async -> T?
+  @objc deinit
+  public typealias Element = T
+  @available(iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, macOS 15.0, *)
+  @_implements(_Concurrency.AsyncIteratorProtocol, Failure) public typealias __AsyncIteratorProtocol_Failure = Swift.Never
+}
+public protocol SkieSwiftFlowProtocol<Element> : _Concurrency.AsyncSequence {
+  associatedtype Element
+  associatedtype Delegate : SharedAsyncStorage.Kotlinx_coroutines_coreFlow
+  @_spi(SKIE) var delegate: Self.Delegate { get }
+}
+@_hasMissingDesignatedInitializers final public class SkieSwiftFlow<T> : SharedAsyncStorage.SkieSwiftFlowProtocol, Swift._ObjectiveCBridgeable {
+  @_spi(SKIE) final public let delegate: any SharedAsyncStorage.Kotlinx_coroutines_coreFlow
+  public static func _forceBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftFlow<T>?)
+  public static func _conditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftFlow<T>?) -> Swift.Bool
+  public static func _unconditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinFlow<Swift.AnyObject>?) -> Self
+  final public func _bridgeToObjectiveC() -> SharedAsyncStorage.SkieKotlinFlow<Swift.AnyObject>
+  final public func makeAsyncIterator() -> SharedAsyncStorage.SkieSwiftFlowIterator<T>
+  public typealias AsyncIterator = SharedAsyncStorage.SkieSwiftFlowIterator<T>
+  public typealias Element = T
+  public typealias _ObjectiveCType = SharedAsyncStorage.SkieKotlinFlow<Swift.AnyObject>
+  public typealias Delegate = any SharedAsyncStorage.Kotlinx_coroutines_coreFlow
+  @available(iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, macOS 15.0, *)
+  @_implements(_Concurrency.AsyncSequence, Failure) public typealias __AsyncSequence_Failure = Swift.Never
+  @objc deinit
+}
+@_hasMissingDesignatedInitializers final public class SkieSwiftOptionalFlow<T> : SharedAsyncStorage.SkieSwiftFlowProtocol, Swift._ObjectiveCBridgeable {
+  @_spi(SKIE) final public let delegate: any SharedAsyncStorage.Kotlinx_coroutines_coreFlow
+  public static func _forceBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinOptionalFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftOptionalFlow<T>?)
+  public static func _conditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinOptionalFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftOptionalFlow<T>?) -> Swift.Bool
+  public static func _unconditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinOptionalFlow<Swift.AnyObject>?) -> Self
+  final public func _bridgeToObjectiveC() -> SharedAsyncStorage.SkieKotlinOptionalFlow<Swift.AnyObject>
+  final public func makeAsyncIterator() -> SharedAsyncStorage.SkieSwiftFlowIterator<T?>
+  public typealias AsyncIterator = SharedAsyncStorage.SkieSwiftFlowIterator<T?>
+  public typealias Element = T?
+  public typealias _ObjectiveCType = SharedAsyncStorage.SkieKotlinOptionalFlow<Swift.AnyObject>
+  public typealias Delegate = any SharedAsyncStorage.Kotlinx_coroutines_coreFlow
+  @available(iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, macOS 15.0, *)
+  @_implements(_Concurrency.AsyncSequence, Failure) public typealias __AsyncSequence_Failure = Swift.Never
+  @objc deinit
+}
+@_hasMissingDesignatedInitializers final public class SkieSwiftSharedFlow<T> : SharedAsyncStorage.SkieSwiftFlowProtocol, Swift._ObjectiveCBridgeable {
+  @_spi(SKIE) final public let delegate: any SharedAsyncStorage.Kotlinx_coroutines_coreSharedFlow
+  final public var replayCache: [T] {
+    get
+  }
+  public static func _forceBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinSharedFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftSharedFlow<T>?)
+  public static func _conditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinSharedFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftSharedFlow<T>?) -> Swift.Bool
+  public static func _unconditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinSharedFlow<Swift.AnyObject>?) -> Self
+  final public func _bridgeToObjectiveC() -> SharedAsyncStorage.SkieKotlinSharedFlow<Swift.AnyObject>
+  final public func makeAsyncIterator() -> SharedAsyncStorage.SkieSwiftFlowIterator<T>
+  public typealias AsyncIterator = SharedAsyncStorage.SkieSwiftFlowIterator<T>
+  public typealias Element = T
+  public typealias _ObjectiveCType = SharedAsyncStorage.SkieKotlinSharedFlow<Swift.AnyObject>
+  public typealias Delegate = any SharedAsyncStorage.Kotlinx_coroutines_coreSharedFlow
+  @available(iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, macOS 15.0, *)
+  @_implements(_Concurrency.AsyncSequence, Failure) public typealias __AsyncSequence_Failure = Swift.Never
+  @objc deinit
+}
+@_hasMissingDesignatedInitializers final public class SkieSwiftOptionalSharedFlow<T> : SharedAsyncStorage.SkieSwiftFlowProtocol, Swift._ObjectiveCBridgeable {
+  @_spi(SKIE) final public let delegate: any SharedAsyncStorage.Kotlinx_coroutines_coreSharedFlow
+  final public var replayCache: [T?] {
+    get
+  }
+  public static func _forceBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinOptionalSharedFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftOptionalSharedFlow<T>?)
+  public static func _conditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinOptionalSharedFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftOptionalSharedFlow<T>?) -> Swift.Bool
+  public static func _unconditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinOptionalSharedFlow<Swift.AnyObject>?) -> Self
+  final public func _bridgeToObjectiveC() -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<Swift.AnyObject>
+  final public func makeAsyncIterator() -> SharedAsyncStorage.SkieSwiftFlowIterator<T?>
+  public typealias AsyncIterator = SharedAsyncStorage.SkieSwiftFlowIterator<T?>
+  public typealias Element = T?
+  public typealias _ObjectiveCType = SharedAsyncStorage.SkieKotlinOptionalSharedFlow<Swift.AnyObject>
+  public typealias Delegate = any SharedAsyncStorage.Kotlinx_coroutines_coreSharedFlow
+  @available(iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, macOS 15.0, *)
+  @_implements(_Concurrency.AsyncSequence, Failure) public typealias __AsyncSequence_Failure = Swift.Never
+  @objc deinit
+}
+@_hasMissingDesignatedInitializers final public class SkieSwiftMutableSharedFlow<T> : SharedAsyncStorage.SkieSwiftFlowProtocol, Swift._ObjectiveCBridgeable {
+  @_spi(SKIE) final public let delegate: any SharedAsyncStorage.Kotlinx_coroutines_coreMutableSharedFlow
+  final public var subscriptionCount: SharedAsyncStorage.SkieSwiftStateFlow<SharedAsyncStorage.KotlinInt> {
+    get
+  }
+  final public var replayCache: [T] {
+    get
+  }
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  final public func emit(value: T) async throws
+  final public func tryEmit(value: T) -> Swift.Bool
+  final public func resetReplayCache()
+  public static func _forceBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinMutableSharedFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>?)
+  public static func _conditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinMutableSharedFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>?) -> Swift.Bool
+  public static func _unconditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinMutableSharedFlow<Swift.AnyObject>?) -> Self
+  final public func _bridgeToObjectiveC() -> SharedAsyncStorage.SkieKotlinMutableSharedFlow<Swift.AnyObject>
+  final public func makeAsyncIterator() -> SharedAsyncStorage.SkieSwiftFlowIterator<T>
+  public typealias AsyncIterator = SharedAsyncStorage.SkieSwiftFlowIterator<T>
+  public typealias Element = T
+  public typealias _ObjectiveCType = SharedAsyncStorage.SkieKotlinMutableSharedFlow<Swift.AnyObject>
+  public typealias Delegate = any SharedAsyncStorage.Kotlinx_coroutines_coreMutableSharedFlow
+  @available(iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, macOS 15.0, *)
+  @_implements(_Concurrency.AsyncSequence, Failure) public typealias __AsyncSequence_Failure = Swift.Never
+  @objc deinit
+}
+@_hasMissingDesignatedInitializers final public class SkieSwiftOptionalMutableSharedFlow<T> : SharedAsyncStorage.SkieSwiftFlowProtocol, Swift._ObjectiveCBridgeable {
+  @_spi(SKIE) final public let delegate: any SharedAsyncStorage.Kotlinx_coroutines_coreMutableSharedFlow
+  final public var subscriptionCount: SharedAsyncStorage.SkieSwiftStateFlow<SharedAsyncStorage.KotlinInt> {
+    get
+  }
+  final public var replayCache: [T?] {
+    get
+  }
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  final public func emit(value: T?) async throws
+  final public func tryEmit(value: T?) -> Swift.Bool
+  final public func resetReplayCache()
+  public static func _forceBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T>?)
+  public static func _conditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T>?) -> Swift.Bool
+  public static func _unconditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow<Swift.AnyObject>?) -> Self
+  final public func _bridgeToObjectiveC() -> SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow<Swift.AnyObject>
+  final public func makeAsyncIterator() -> SharedAsyncStorage.SkieSwiftFlowIterator<T?>
+  public typealias AsyncIterator = SharedAsyncStorage.SkieSwiftFlowIterator<T?>
+  public typealias Element = T?
+  public typealias _ObjectiveCType = SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow<Swift.AnyObject>
+  public typealias Delegate = any SharedAsyncStorage.Kotlinx_coroutines_coreMutableSharedFlow
+  @available(iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, macOS 15.0, *)
+  @_implements(_Concurrency.AsyncSequence, Failure) public typealias __AsyncSequence_Failure = Swift.Never
+  @objc deinit
+}
+@_hasMissingDesignatedInitializers final public class SkieSwiftStateFlow<T> : SharedAsyncStorage.SkieSwiftFlowProtocol, Swift._ObjectiveCBridgeable {
+  @_spi(SKIE) final public let delegate: any SharedAsyncStorage.Kotlinx_coroutines_coreStateFlow
+  final public var value: T {
+    get
+  }
+  final public var replayCache: [T] {
+    get
+  }
+  public static func _forceBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinStateFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftStateFlow<T>?)
+  public static func _conditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinStateFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftStateFlow<T>?) -> Swift.Bool
+  public static func _unconditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinStateFlow<Swift.AnyObject>?) -> Self
+  final public func _bridgeToObjectiveC() -> SharedAsyncStorage.SkieKotlinStateFlow<Swift.AnyObject>
+  final public func makeAsyncIterator() -> SharedAsyncStorage.SkieSwiftFlowIterator<T>
+  public typealias AsyncIterator = SharedAsyncStorage.SkieSwiftFlowIterator<T>
+  public typealias Element = T
+  public typealias _ObjectiveCType = SharedAsyncStorage.SkieKotlinStateFlow<Swift.AnyObject>
+  public typealias Delegate = any SharedAsyncStorage.Kotlinx_coroutines_coreStateFlow
+  @available(iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, macOS 15.0, *)
+  @_implements(_Concurrency.AsyncSequence, Failure) public typealias __AsyncSequence_Failure = Swift.Never
+  @objc deinit
+}
+@_hasMissingDesignatedInitializers final public class SkieSwiftOptionalStateFlow<T> : SharedAsyncStorage.SkieSwiftFlowProtocol, Swift._ObjectiveCBridgeable {
+  @_spi(SKIE) final public let delegate: any SharedAsyncStorage.Kotlinx_coroutines_coreStateFlow
+  final public var value: T? {
+    get
+  }
+  final public var replayCache: [T?] {
+    get
+  }
+  public static func _forceBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinOptionalStateFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftOptionalStateFlow<T>?)
+  public static func _conditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinOptionalStateFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftOptionalStateFlow<T>?) -> Swift.Bool
+  public static func _unconditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinOptionalStateFlow<Swift.AnyObject>?) -> Self
+  final public func _bridgeToObjectiveC() -> SharedAsyncStorage.SkieKotlinOptionalStateFlow<Swift.AnyObject>
+  final public func makeAsyncIterator() -> SharedAsyncStorage.SkieSwiftFlowIterator<T?>
+  public typealias AsyncIterator = SharedAsyncStorage.SkieSwiftFlowIterator<T?>
+  public typealias Element = T?
+  public typealias _ObjectiveCType = SharedAsyncStorage.SkieKotlinOptionalStateFlow<Swift.AnyObject>
+  public typealias Delegate = any SharedAsyncStorage.Kotlinx_coroutines_coreStateFlow
+  @available(iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, macOS 15.0, *)
+  @_implements(_Concurrency.AsyncSequence, Failure) public typealias __AsyncSequence_Failure = Swift.Never
+  @objc deinit
+}
+@_hasMissingDesignatedInitializers final public class SkieSwiftMutableStateFlow<T> : SharedAsyncStorage.SkieSwiftFlowProtocol, Swift._ObjectiveCBridgeable {
+  @_spi(SKIE) final public let delegate: any SharedAsyncStorage.Kotlinx_coroutines_coreMutableStateFlow
+  final public var value: T {
+    get
+    set(value)
+  }
+  final public var replayCache: [T] {
+    get
+  }
+  final public var subscriptionCount: SharedAsyncStorage.SkieSwiftStateFlow<SharedAsyncStorage.KotlinInt> {
+    get
+  }
+  final public func compareAndSet(expect: T, update: T) -> Swift.Bool
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  final public func emit(value: T) async throws
+  final public func tryEmit(value: T) -> Swift.Bool
+  final public func resetReplayCache()
+  public static func _forceBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinMutableStateFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftMutableStateFlow<T>?)
+  public static func _conditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinMutableStateFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftMutableStateFlow<T>?) -> Swift.Bool
+  public static func _unconditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinMutableStateFlow<Swift.AnyObject>?) -> Self
+  final public func _bridgeToObjectiveC() -> SharedAsyncStorage.SkieKotlinMutableStateFlow<Swift.AnyObject>
+  final public func makeAsyncIterator() -> SharedAsyncStorage.SkieSwiftFlowIterator<T>
+  public typealias AsyncIterator = SharedAsyncStorage.SkieSwiftFlowIterator<T>
+  public typealias Element = T
+  public typealias _ObjectiveCType = SharedAsyncStorage.SkieKotlinMutableStateFlow<Swift.AnyObject>
+  public typealias Delegate = any SharedAsyncStorage.Kotlinx_coroutines_coreMutableStateFlow
+  @available(iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, macOS 15.0, *)
+  @_implements(_Concurrency.AsyncSequence, Failure) public typealias __AsyncSequence_Failure = Swift.Never
+  @objc deinit
+}
+@_hasMissingDesignatedInitializers final public class SkieSwiftOptionalMutableStateFlow<T> : SharedAsyncStorage.SkieSwiftFlowProtocol, Swift._ObjectiveCBridgeable {
+  @_spi(SKIE) final public let delegate: any SharedAsyncStorage.Kotlinx_coroutines_coreMutableStateFlow
+  final public var value: T? {
+    get
+    set(value)
+  }
+  final public var replayCache: [T?] {
+    get
+  }
+  final public var subscriptionCount: SharedAsyncStorage.SkieSwiftStateFlow<SharedAsyncStorage.KotlinInt> {
+    get
+  }
+  final public func compareAndSet(expect: T?, update: T?) -> Swift.Bool
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  final public func emit(value: T?) async throws
+  final public func tryEmit(value: T?) -> Swift.Bool
+  final public func resetReplayCache()
+  public static func _forceBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>?)
+  public static func _conditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<Swift.AnyObject>, result: inout SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>?) -> Swift.Bool
+  public static func _unconditionallyBridgeFromObjectiveC(_ source: SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<Swift.AnyObject>?) -> Self
+  final public func _bridgeToObjectiveC() -> SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<Swift.AnyObject>
+  final public func makeAsyncIterator() -> SharedAsyncStorage.SkieSwiftFlowIterator<T?>
+  public typealias AsyncIterator = SharedAsyncStorage.SkieSwiftFlowIterator<T?>
+  public typealias Element = T?
+  public typealias _ObjectiveCType = SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<Swift.AnyObject>
+  public typealias Delegate = any SharedAsyncStorage.Kotlinx_coroutines_coreMutableStateFlow
+  @available(iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, macOS 15.0, *)
+  @_implements(_Concurrency.AsyncSequence, Failure) public typealias __AsyncSequence_Failure = Swift.Never
+  @objc deinit
+}
+extension SharedAsyncStorage.Skie.RuntimeKotlin.SkieColdFlowIterator {
+  public struct __Suspend<E> where E : AnyObject {
+    public let __kotlinObject: SharedAsyncStorage.SkieColdFlowIterator<E>
+    public init(_ __kotlinObject: SharedAsyncStorage.SkieColdFlowIterator<E>)
+  }
+}
+public func skie<E>(_ kotlinObject: SharedAsyncStorage.SkieColdFlowIterator<E>) -> SharedAsyncStorage.Skie.RuntimeKotlin.SkieColdFlowIterator.__Suspend<E> where E : AnyObject
+extension SharedAsyncStorage.Skie.RuntimeKotlin.SkieColdFlowIterator.__Suspend {
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  public func hasNext() async throws -> SharedAsyncStorage.KotlinBoolean
+}
+extension SharedAsyncStorage.Kotlinx_coroutines_coreFlow {
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  public func collect(collector: any SharedAsyncStorage.Kotlinx_coroutines_coreFlowCollector) async throws
+}
+extension SharedAsyncStorage.Kotlinx_coroutines_coreFlowCollector {
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  public func emit(value: Any?) async throws
+}
+extension SharedAsyncStorage.SharedStorage {
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  public func clear() async throws
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  public func getKeys() async throws -> [Swift.String]
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  public func getValues(keys: [Swift.String]) async throws -> [SharedAsyncStorage.Entry]
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  public func removeValues(keys: [Swift.String]) async throws
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  public func setValues(entries: [SharedAsyncStorage.Entry]) async throws -> [SharedAsyncStorage.Entry]
+}
+extension SharedAsyncStorage.Room_runtimeRoomDatabase {
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  public func useConnection(isReadOnly: Swift.Bool, block: any SharedAsyncStorage.KotlinSuspendFunction1) async throws -> Any?
+}
+extension SharedAsyncStorage.KotlinSuspendFunction1 {
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  public func invoke(p1: Any?) async throws -> Any?
+}
+extension SharedAsyncStorage.Room_runtimeInvalidationTracker {
+  @available(iOS 13, macOS 10.15, watchOS 6, tvOS 13, *)
+  public func refresh(tables: SharedAsyncStorage.KotlinArray<Foundation.NSString>) async throws -> SharedAsyncStorage.KotlinBoolean
+}
+public func SkieKotlinFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftFlow<T>) -> SharedAsyncStorage.SkieKotlinFlow<T> where T : AnyObject
+public func SkieKotlinFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinFlow<T> where T : AnyObject
+public func SkieKotlinFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinFlow<T> where T : AnyObject
+public func SkieKotlinFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>) -> SharedAsyncStorage.SkieKotlinFlow<T> where T : AnyObject
+public func SkieKotlinFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinFlow<T> where T : AnyObject
+public func SkieKotlinFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftFlow<T>) -> SharedAsyncStorage.SkieKotlinFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>) -> SharedAsyncStorage.SkieKotlinFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+extension SharedAsyncStorage.SkieSwiftFlow where T : AnyObject {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+}
+extension SharedAsyncStorage.SkieSwiftFlow where T : Swift._ObjectiveCBridgeable {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+}
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T> where T : AnyObject
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T> where T : AnyObject
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T> where T : AnyObject
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T> where T : AnyObject
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T> where T : AnyObject
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T> where T : AnyObject
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T> where T : AnyObject
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T> where T : AnyObject
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T> where T : AnyObject
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T> where T : AnyObject
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+extension SharedAsyncStorage.SkieSwiftOptionalFlow where T : AnyObject {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>)
+}
+extension SharedAsyncStorage.SkieSwiftOptionalFlow where T : Swift._ObjectiveCBridgeable {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>)
+}
+public func SkieKotlinSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinSharedFlow<T> where T : AnyObject
+public func SkieKotlinSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinSharedFlow<T> where T : AnyObject
+public func SkieKotlinSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>) -> SharedAsyncStorage.SkieKotlinSharedFlow<T> where T : AnyObject
+public func SkieKotlinSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinSharedFlow<T> where T : AnyObject
+public func SkieKotlinSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinSharedFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinSharedFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>) -> SharedAsyncStorage.SkieKotlinSharedFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinSharedFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+extension SharedAsyncStorage.SkieSwiftSharedFlow where T : AnyObject {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+}
+extension SharedAsyncStorage.SkieSwiftSharedFlow where T : Swift._ObjectiveCBridgeable {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+}
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T> where T : AnyObject
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T> where T : AnyObject
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T> where T : AnyObject
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T> where T : AnyObject
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T> where T : AnyObject
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T> where T : AnyObject
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T> where T : AnyObject
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T> where T : AnyObject
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+extension SharedAsyncStorage.SkieSwiftOptionalSharedFlow where T : AnyObject {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>)
+}
+extension SharedAsyncStorage.SkieSwiftOptionalSharedFlow where T : Swift._ObjectiveCBridgeable {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>)
+}
+public func SkieKotlinMutableSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinMutableSharedFlow<T> where T : AnyObject
+public func SkieKotlinMutableSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinMutableSharedFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+extension SharedAsyncStorage.SkieSwiftMutableSharedFlow where T : AnyObject {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>)
+}
+extension SharedAsyncStorage.SkieSwiftMutableSharedFlow where T : Swift._ObjectiveCBridgeable {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>)
+}
+public func SkieKotlinOptionalMutableSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow<T> where T : AnyObject
+public func SkieKotlinOptionalMutableSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow<T> where T : AnyObject
+public func SkieKotlinOptionalMutableSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalMutableSharedFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+extension SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow where T : AnyObject {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T>)
+}
+extension SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow where T : Swift._ObjectiveCBridgeable {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableSharedFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableSharedFlow<T>)
+}
+public func SkieKotlinStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>) -> SharedAsyncStorage.SkieKotlinStateFlow<T> where T : AnyObject
+public func SkieKotlinStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinStateFlow<T> where T : AnyObject
+public func SkieKotlinStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>) -> SharedAsyncStorage.SkieKotlinStateFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinStateFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+extension SharedAsyncStorage.SkieSwiftStateFlow where T : AnyObject {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+}
+extension SharedAsyncStorage.SkieSwiftStateFlow where T : Swift._ObjectiveCBridgeable {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+}
+public func SkieKotlinOptionalStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalStateFlow<T> where T : AnyObject
+public func SkieKotlinOptionalStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalStateFlow<T> where T : AnyObject
+public func SkieKotlinOptionalStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalStateFlow<T> where T : AnyObject
+public func SkieKotlinOptionalStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalStateFlow<T> where T : AnyObject
+public func SkieKotlinOptionalStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalStateFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalStateFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalStateFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalStateFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+extension SharedAsyncStorage.SkieSwiftOptionalStateFlow where T : AnyObject {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>)
+}
+extension SharedAsyncStorage.SkieSwiftOptionalStateFlow where T : Swift._ObjectiveCBridgeable {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>)
+}
+public func SkieKotlinMutableStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinMutableStateFlow<T> where T : AnyObject
+public func SkieKotlinMutableStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinMutableStateFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+extension SharedAsyncStorage.SkieSwiftMutableStateFlow where T : AnyObject {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+}
+extension SharedAsyncStorage.SkieSwiftMutableStateFlow where T : Swift._ObjectiveCBridgeable {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+}
+public func SkieKotlinOptionalMutableStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<T> where T : AnyObject
+public func SkieKotlinOptionalMutableStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<T> where T : AnyObject
+public func SkieKotlinOptionalMutableStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+public func SkieKotlinOptionalMutableStateFlow<T>(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>) -> SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<T._ObjectiveCType> where T : Swift._ObjectiveCBridgeable
+extension SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow where T : AnyObject {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>)
+}
+extension SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow where T : Swift._ObjectiveCBridgeable {
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieKotlinOptionalMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T._ObjectiveCType>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftMutableStateFlow<T>)
+  convenience public init(_ flow: SharedAsyncStorage.SkieSwiftOptionalMutableStateFlow<T>)
+}
+extension SharedAsyncStorage.Skie.RuntimeKotlin.Skie_SuspendResult {
+  @frozen public enum __Sealed : Swift.Hashable {
+    case canceled(SharedAsyncStorage.Skie_SuspendResult.Canceled)
+    case error(SharedAsyncStorage.Skie_SuspendResult.Error)
+    case success(SharedAsyncStorage.Skie_SuspendResult.Success)
+    public static func == (a: SharedAsyncStorage.Skie.RuntimeKotlin.Skie_SuspendResult.__Sealed, b: SharedAsyncStorage.Skie.RuntimeKotlin.Skie_SuspendResult.__Sealed) -> Swift.Bool
+    public func hash(into hasher: inout Swift.Hasher)
+    public var hashValue: Swift.Int {
+      get
+    }
+  }
+}
+public func onEnum<__Sealed>(of sealed: __Sealed) -> SharedAsyncStorage.Skie.RuntimeKotlin.Skie_SuspendResult.__Sealed where __Sealed : SharedAsyncStorage.Skie_SuspendResult
+@_disfavoredOverload public func onEnum<__Sealed>(of sealed: __Sealed?) -> SharedAsyncStorage.Skie.RuntimeKotlin.Skie_SuspendResult.__Sealed? where __Sealed : SharedAsyncStorage.Skie_SuspendResult
+extension SharedAsyncStorage.Skie.SharedStorage.StorageException {
+  @frozen public enum __Sealed : Swift.Hashable {
+    case otherException(SharedAsyncStorage.StorageException.OtherException)
+    case sqliteException(SharedAsyncStorage.StorageException.SqliteException)
+    public static func == (a: SharedAsyncStorage.Skie.SharedStorage.StorageException.__Sealed, b: SharedAsyncStorage.Skie.SharedStorage.StorageException.__Sealed) -> Swift.Bool
+    public func hash(into hasher: inout Swift.Hasher)
+    public var hashValue: Swift.Int {
+      get
+    }
+  }
+}
+public func onEnum<__Sealed>(of sealed: __Sealed) -> SharedAsyncStorage.Skie.SharedStorage.StorageException.__Sealed where __Sealed : SharedAsyncStorage.StorageException
+@_disfavoredOverload public func onEnum<__Sealed>(of sealed: __Sealed?) -> SharedAsyncStorage.Skie.SharedStorage.StorageException.__Sealed? where __Sealed : SharedAsyncStorage.StorageException
+public func SharedStorage(context: SharedAsyncStorage.PlatformContext, databaseName: Swift.String) -> any SharedAsyncStorage.SharedStorage

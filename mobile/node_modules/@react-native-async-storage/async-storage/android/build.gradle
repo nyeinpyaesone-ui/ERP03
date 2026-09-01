@@ -1,0 +1,97 @@
+buildscript {
+    apply from: "config.gradle"
+    def kotlinVersion = ext.AsyncStorage.kotlinVersion
+    def kspVersion = ext.AsyncStorage.kspVersion
+
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath "com.android.tools.build:gradle:8.7.2"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlinVersion}"
+        classpath "com.google.devtools.ksp:symbol-processing-gradle-plugin:${kspVersion}"
+    }
+}
+
+
+apply from: "config.gradle"
+apply plugin: "com.android.library"
+apply plugin: "kotlin-android"
+apply plugin: "com.facebook.react"
+
+// ksp/room is required to support legacy storage
+apply plugin: 'com.google.devtools.ksp'
+
+
+android {
+    namespace "org.asyncstorage"
+
+    compileSdkVersion project.ext.AsyncStorage.compileSdk
+
+    defaultConfig {
+        minSdkVersion project.ext.AsyncStorage.minSdk
+        targetSdkVersion project.ext.AsyncStorage.targetSdk
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    lintOptions {
+        disable "GradleCompatible"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    sourceSets {
+        main {
+            java.srcDirs += [
+                    "generated/java",
+                    "generated/jni"
+            ]
+
+            kotlin.srcDirs += [
+                    "generated/java",
+                    "generated/jni"
+            ]
+
+            if (project.ext.AsyncStorage.isNewArch) {
+                kotlin.srcDirs += ['src/newarch']
+                java.srcDirs += ['src/newarch']
+            } else {
+                kotlin.srcDirs += ['src/oldarch']
+                java.srcDirs += ['src/oldarch']
+            }
+        }
+    }
+}
+
+repositories {
+    mavenLocal() // used for local development of AsyncStorage
+    mavenCentral()
+    google()
+}
+
+dependencies {
+    def shared_storage_version = project.ext.AsyncStorage.sharedStorageVersion
+    implementation "com.facebook.react:react-android"
+    api "io.github.react-native-async-storage:shared-storage-android:$shared_storage_version"
+
+
+    // ksp/room is required to support legacy storage
+    def room_version = project.ext.AsyncStorage.roomVersion
+    implementation "androidx.room:room-runtime:$room_version"
+    implementation "androidx.room:room-ktx:$room_version"
+    ksp "androidx.room:room-compiler:$room_version"
+}
