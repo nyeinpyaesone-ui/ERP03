@@ -30,8 +30,8 @@ spec:
         runAsUser: 1000
       containers:
       - name: worker
-        image: ghcr.io/nyeinpyaesone-ui/erp_solution-worker:latest
-        imagePullPolicy: Always
+        image: ghcr.io/nyeinpyaesone-ui/erp_solution-worker:v3.0.0
+        imagePullPolicy: IfNotPresent
         env:
         - name: NODE_ENV
           value: "production"

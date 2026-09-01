@@ -12,6 +12,7 @@ resources:
   - pvc.yaml
   - postgres.yaml
   - redis.yaml
+  - ollama.yaml
   - api-deployment.yaml
   - web-deployment.yaml
   - worker-deployment.yaml
@@ -24,9 +25,17 @@ commonLabels:
 
 images:
   - name: ghcr.io/nyeinpyaesone-ui/erp_solution-api
-    newTag: latest
+    newTag: v3.0.0
   - name: ghcr.io/nyeinpyaesone-ui/erp_solution-web
-    newTag: latest
+    newTag: v3.0.0
   - name: ghcr.io/nyeinpyaesone-ui/erp_solution-worker
-    newTag: latest
+    newTag: v3.0.0
+  - name: postgres
+    newTag: 15.8-alpine
+  - name: redis
+    newTag: 7.2.4-alpine
+  - name: ollama/ollama
+    newTag: 0.3.9
+  - name: nginx
+    newTag: 1.29-alpine
 

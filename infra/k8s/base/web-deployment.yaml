@@ -29,8 +29,8 @@ spec:
         runAsUser: 1000
       containers:
       - name: web
-        image: ghcr.io/nyeinpyaesone-ui/erp_solution-web:latest
-        imagePullPolicy: Always
+        image: ghcr.io/nyeinpyaesone-ui/erp_solution-web:v3.0.0
+        imagePullPolicy: IfNotPresent
         ports:
         - name: http
           containerPort: 80

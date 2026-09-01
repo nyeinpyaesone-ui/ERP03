@@ -63,7 +63,7 @@ services:
     networks: [erp-network]
 
   ollama:
-    image: ollama/ollama:0.3.9
+    image: ollama/ollama:0.3.9@sha256:e3c5f8a6e8a7b3d4c5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8
     container_name: erp-ollama
     restart: unless-stopped
     volumes:
