@@ -1,19 +1,21 @@
-# ERPNext Production Deployment
+# ERPNext Production & Development Environment
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![ERPNext v15](https://img.shields.io/badge/ERPNext-v15.120.0-blue.svg)](https://erpnext.com)
 [![Docker](https://img.shields.io/badge/Docker-Ready-green.svg)](https://www.docker.com/)
+[![DevContainer](https://img.shields.io/badge/DevContainer-Supported-blue.svg)](.devcontainer)
 
 ## Overview
 
-Production-ready ERPNext deployment with OIDC authentication support and automated GHCR image publishing. This repository provides a streamlined, containerized ERPNext setup optimized for enterprise deployments.
+Production-ready ERPNext deployment with OIDC authentication support, automated GHCR image publishing, and development container setup. This repository provides a complete, containerized ERPNext ecosystem optimized for enterprise deployments and developer productivity.
 
 ### Key Features
 
 - **🔐 OIDC Authentication**: Optional SSO support (Keycloak, Google, Auth0, Azure AD, Okta)
 - **🐳 Docker-Native**: Optimized builds with layer caching
 - **🚀 CI/CD Pipeline**: Automated build, push, and setup via GitHub Actions
-- **📦 GHCR Registry**: Images published to `ghcr.io/<owner>/erpnext` and `ghcr.io/<owner>/erpnext-nginx`
+- **📦 GHCR Registry**: Images published to `ghcr.io/<owner>/erpnext`, `erpnext-nginx`, and `erpnext-devcontainer`
+- **💻 DevContainer Ready**: Pre-configured VS Code and Codespaces environment
 - **🛡️ Security**: Non-root containers, pinned actions, secret management
 - **⚙️ Configuration**: Flexible environment-based configuration
 
@@ -26,15 +28,18 @@ Production-ready ERPNext deployment with OIDC authentication support and automat
 - Docker & Docker Compose v2+
 - Git
 - Access to GitHub Container Registry (GHCR)
+- VS Code with Dev Containers extension (for development)
 
-### 1. Clone Repository
+### Option A: Production Deployment
+
+#### 1. Clone Repository
 
 ```bash
 git clone https://github.com/<owner>/ERP03.git
 cd ERP03
 ```
 
-### 2. Configure Environment
+#### 2. Configure Environment
 
 ```bash
 cp .env.production.example .env
@@ -54,19 +59,68 @@ OIDC_ENABLED=false
 # OIDC_REDIRECT_URI=https://erp.yourdomain.com/auth/login
 ```
 
-### 3. Deploy with Docker Compose
+#### 3. Deploy with Docker Compose
 
 ```bash
 docker compose -f docker-compose.erpnext.prod.yml up -d
 ```
 
-### 4. Access ERPNext
+#### 4. Access ERPNext
 
 Open your browser and navigate to `http://localhost:8080`
 
 Default admin credentials:
 - **Username**: Administrator
 - **Password**: Set via `ADMIN_PASSWORD` in `.env`
+
+### Option B: Development with DevContainer
+
+#### 1. Clone Repository
+
+```bash
+git clone https://github.com/<owner>/ERP03.git
+cd ERP03
+```
+
+#### 2. Open in DevContainer
+
+**VS Code:**
+- Install [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension
+- Press `Ctrl+Shift+P` (or `Cmd+Shift+P`)
+- Select "Dev Containers: Reopen in Container"
+
+**GitHub Codespaces:**
+- Click "Code" → "Codespaces" → "Create codespace on main"
+
+#### 3. Configure Environment
+
+Create `.env` file in workspace root:
+
+```bash
+# Required
+SECRET_KEY=$(openssl rand -hex 32)
+
+# Optional
+OIDC_ENABLED=false
+```
+
+#### 4. Start Development
+
+```bash
+# Verify ERPNext installation
+bench --version
+
+# Create new site
+bench new-site dev.localhost
+
+# Install apps
+bench --site dev.localhost install-app erpnext
+
+# Start server
+bench serve --port 8000
+```
+
+Access at `http://localhost:8000`
 
 ---
 
@@ -78,12 +132,14 @@ Default admin credentials:
 |-------|-------------|------|
 | `ghcr.io/<owner>/erpnext` | ERPNext backend with OIDC support | `latest`, `v15`, `sha-<commit>` |
 | `ghcr.io/<owner>/erpnext-nginx` | Nginx reverse proxy | `latest`, `v15`, `sha-<commit>` |
+| `ghcr.io/<owner>/erpnext-devcontainer` | Development container | `latest`, `sha-<commit>` |
 
 ### Pull Images
 
 ```bash
 docker pull ghcr.io/<owner>/erpnext:latest
 docker pull ghcr.io/<owner>/erpnext-nginx:latest
+docker pull ghcr.io/<owner>/erpnext-devcontainer:latest
 ```
 
 ---
@@ -138,12 +194,12 @@ See `docker/erpnext/README.md` for detailed OIDC configuration.
 
 ## CI/CD Pipeline
 
-The repository includes a GitHub Actions workflow (`.github/workflows/build-push-setup.yml`) that:
+The repository includes GitHub Actions workflows for automated builds:
 
-1. **Validates** Docker Compose configuration and required files
-2. **Builds** ERPNext and Nginx images with metadata tagging
-3. **Pushes** images to GHCR on main branch or version tags
-4. **Sets up** deployment instructions
+### Workflows
+
+1. **build-push-setup.yml** - Production images (ERPNext + Nginx)
+2. **devcontainer-build.yml** - Development container image
 
 ### Workflow Triggers
 
@@ -166,6 +222,14 @@ Configure these in your GitHub repository settings:
 |----------|-------------|---------|
 | `OIDC_ENABLED` | Enable OIDC authentication | `false` |
 
+### Published Images
+
+On successful build and push:
+
+- `ghcr.io/<owner>/erpnext:latest` - Production backend
+- `ghcr.io/<owner>/erpnext-nginx:latest` - Production proxy
+- `ghcr.io/<owner>/erpnext-devcontainer:latest` - Development environment
+
 ---
 
 ## Directory Structure
@@ -176,7 +240,13 @@ Configure these in your GitHub repository settings:
 ├── .env.production.example         # Production environment template
 ├── .github/
 │   └── workflows/
-│       └── build-push-setup.yml    # CI/CD pipeline
+│       ├── build-push-setup.yml    # CI/CD pipeline for production images
+│       └── devcontainer-build.yml  # CI/CD pipeline for devcontainer image
+├── .devcontainer/
+│   ├── Dockerfile                  # Development container definition
+│   ├── devcontainer.json           # VS Code/Codespaces configuration
+│   ├── .gitignore                  # DevContainer gitignore rules
+│   └── README.md                   # DevContainer documentation
 ├── docker/
 │   ├── erpnext/
 │   │   ├── Dockerfile              # ERPNext image definition
