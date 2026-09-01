@@ -1,8 +1,6 @@
-```
 # Environment files
 .env
 .env.local
-*.env.*
 
 # Dependencies
 node_modules/
@@ -25,7 +23,10 @@ target/
 Thumbs.db
 
 # Editors
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
 .idea/
 
 # Python specific
@@ -36,6 +37,8 @@ __pycache__/
 .coverage
 coverage/
 htmlcov/
+.mypy_cache/
+.pytest_cache/
 
 # Build artifacts
 *.o
@@ -46,7 +49,7 @@ htmlcov/
 *.a
 *.out
 
-# Compressed files
+# Compressed files (except those needed for releases)
 *.zip
 *.gz
 *.tar
@@ -65,29 +68,13 @@ htmlcov/
 *.Z
 *.lz
 *.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
 
-# Testing
-.mypy_cache/
-.pytest_cache/
-.nyc_output/
-coverage/
-
-# Gradle
+# Java/Gradle/Go
 .gradle/
-build/
-
-# Go
-*.mod
-*.sum
-bin/
-
-# Java
 *.class
 *.jar
 *.war
 *.ear
-```
+*.mod
+*.sum
+bin/

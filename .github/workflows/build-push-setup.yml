@@ -186,10 +186,12 @@ jobs:
           cache-to: type=gha,mode=max,scope=nginx
 
       - name: Image digest ERPNext
-        run: echo "ERPNext image pushed with digest: ${{ steps.meta_erpnext.outputs.digest }}"
+        run: |
+          echo "ERPNext image pushed with digest"
 
       - name: Image digest Nginx
-        run: echo "Nginx image pushed with digest: ${{ steps.meta_nginx.outputs.digest }}"
+        run: |
+          echo "Nginx image pushed with digest"
 
   setup:
     name: Setup ERPNext Instance

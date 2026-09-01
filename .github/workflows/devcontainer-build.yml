@@ -123,7 +123,8 @@ jobs:
             OIDC_ENABLED=${{ vars.OIDC_ENABLED || 'false' }}
 
       - name: Image digest DevContainer
-        run: echo "DevContainer image pushed with digest: ${{ steps.meta.outputs.digest }}"
+        run: |
+          echo "DevContainer image pushed with digest"
 
       - name: Output usage instructions
         run: |
