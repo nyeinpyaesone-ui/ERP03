@@ -64,7 +64,7 @@ jobs:
 
       - name: Extract metadata for ERPNext
         id: meta_erpnext
-        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_ERPNEXT }}
           tags: |
@@ -75,7 +75,7 @@ jobs:
 
       - name: Extract metadata for Nginx
         id: meta_nginx
-        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NGINX }}
           tags: |
@@ -141,7 +141,7 @@ jobs:
 
       - name: Extract metadata for ERPNext
         id: meta_erpnext
-        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_ERPNEXT }}
           tags: |
@@ -152,7 +152,7 @@ jobs:
 
       - name: Extract metadata for Nginx
         id: meta_nginx
-        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NGINX }}
           tags: |
