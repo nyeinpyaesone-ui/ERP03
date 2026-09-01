@@ -85,7 +85,7 @@ jobs:
             type=sha,prefix=sha-
 
       - name: Build ERPNext image
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
           file: docker/erpnext/Dockerfile
@@ -100,7 +100,7 @@ jobs:
             SECRET_KEY=${{ secrets.SECRET_KEY || '' }}
 
       - name: Build Nginx image
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
           file: docker/nginx/Dockerfile
@@ -162,7 +162,7 @@ jobs:
             type=sha,prefix=sha-
 
       - name: Build and push ERPNext image
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
           file: docker/erpnext/Dockerfile
@@ -175,7 +175,7 @@ jobs:
             OIDC_ENABLED=${{ vars.OIDC_ENABLED || 'false' }}
 
       - name: Build and push Nginx image
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
           file: docker/nginx/Dockerfile
