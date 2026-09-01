@@ -1,58 +1,79 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
+```
+# Dependencies
+node_modules/
+
+# Build outputs
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual environments
-venv/
-env/
-ENV/
-.venv/
-.env/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Logs
-*.log
+build/
+*.js
+*.css
 
 # Environment
 .env
 .env.local
 *.env.*
 
-# Coverage
-.coverage
-htmlcov/
-.coverage.*
+# Editors
+.vscode/
+.idea/
 
-# Testing
-.pytest_cache/
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# MyPy
 .mypy_cache/
 
-# Distribution / packaging
-.pybuild/
-.tox/
-.coverage
-.nox/
+# Pytest
+.pytest_cache/
+
+# Gradle
+.gradle/
+build/
+
+# Maven
+target/
+
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
 ```
