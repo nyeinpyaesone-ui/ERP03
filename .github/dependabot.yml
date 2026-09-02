@@ -1,0 +1,69 @@
+version: 2
+updates:
+  # Maintain dependencies for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "nyeinpyaesone-ui"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # Maintain Docker base images
+  - package-ecosystem: "docker"
+    directory: "/docker/erpnext"
+    schedule:
+      interval: "daily"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "nyeinpyaesone-ui"
+    commit-message:
+      prefix: "chore(docker)"
+      include: "scope"
+    ignore:
+      # Only update patch versions automatically
+      - dependency-name: "frappe/erpnext"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+
+  # Maintain Docker nginx image
+  - package-ecosystem: "docker"
+    directory: "/docker/nginx"
+    schedule:
+      interval: "daily"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "nyeinpyaesone-ui"
+    commit-message:
+      prefix: "chore(docker)"
+      include: "scope"
+
+  # Maintain Python dependencies in DevContainer
+  - package-ecosystem: "pip"
+    directory: "/.devcontainer"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "nyeinpyaesone-ui"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    groups:
+      python-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"

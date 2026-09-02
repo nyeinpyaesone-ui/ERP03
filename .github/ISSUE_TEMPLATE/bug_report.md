@@ -23,11 +23,16 @@ A clear and concise description of what you expected to happen.
 **Screenshots**
 If applicable, add screenshots to help explain your problem.
 
-**Environment (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
- - Module: [e.g. backend, frontend, mobile]
+**Environment:**
+ - ERPNext Version: [e.g. v15.120.0]
+ - Docker Version: [e.g. 24.0.7]
+ - OS: [e.g. Ubuntu 22.04]
+ - Browser: [e.g. Chrome, Safari]
 
 **Additional context**
 Add any other context about the problem here.
+
+**Logs**
+```
+Paste relevant logs from docker-compose or browser console
+```
