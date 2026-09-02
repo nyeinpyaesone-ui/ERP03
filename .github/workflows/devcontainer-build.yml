@@ -1,0 +1,143 @@
+name: DevContainer Pre-Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  DEVCONTAINER_IMAGE: erpnext-devcontainer
+
+jobs:
+  validate:
+    name: Validate DevContainer Configuration
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Validate devcontainer.json
+        run: |
+          set -euo pipefail
+          test -f .devcontainer/devcontainer.json
+          python3 -c "import json; json.load(open('.devcontainer/devcontainer.json'))"
+
+      - name: Validate Dockerfile.devcontainer
+        run: |
+          set -euo pipefail
+          test -f .devcontainer/Dockerfile
+
+  build-devcontainer:
+    name: Build DevContainer Image
+    needs: validate
+    runs-on: ubuntu-22.04
+    outputs:
+      image_tags: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Extract metadata for DevContainer
+        id: meta
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.DEVCONTAINER_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+
+      - name: Build DevContainer image
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: .
+          file: .devcontainer/Dockerfile
+          push: false
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=devcontainer
+          cache-to: type=gha,mode=max,scope=devcontainer
+          build-args: |
+            SECRET_KEY=${{ secrets.SECRET_KEY || '' }}
+            OIDC_ENABLED=${{ vars.OIDC_ENABLED || 'false' }}
+
+      - name: Test DevContainer image
+        run: |
+          docker image inspect "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.DEVCONTAINER_IMAGE }}:latest" >/dev/null
+
+  push-devcontainer:
+    name: Push DevContainer Image to GHCR
+    needs: build-devcontainer
+    runs-on: ubuntu-22.04
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Log in to GHCR
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for DevContainer
+        id: meta
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.DEVCONTAINER_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+
+      - name: Build and push DevContainer image
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: .
+          file: .devcontainer/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=devcontainer
+          cache-to: type=gha,mode=max,scope=devcontainer
+          build-args: |
+            SECRET_KEY=${{ secrets.SECRET_KEY || '' }}
+            OIDC_ENABLED=${{ vars.OIDC_ENABLED || 'false' }}
+
+      - name: Image digest DevContainer
+        run: |
+          echo "DevContainer image pushed with digest"
+
+      - name: Output usage instructions
+        run: |
+          echo "✅ DevContainer image built and pushed successfully"
+          echo ""
+          echo "📦 Image available:"
+          echo "   - ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.DEVCONTAINER_IMAGE }}:latest"
+          echo ""
+          echo "🔧 Usage in VS Code:"
+          echo "   1. Install 'Dev Containers' extension"
+          echo "   2. Open command palette (Ctrl+Shift+P)"
+          echo "   3. Select 'Dev Containers: Reopen in Container'"
+          echo ""
+          echo "🔐 Environment variables configured:"
+          echo "   - SECRET_KEY (from GitHub Secrets)"
+          echo "   - OIDC_ENABLED (from GitHub Variables)"
