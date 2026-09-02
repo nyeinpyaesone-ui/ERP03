@@ -1,1 +1,0 @@
-"""Manufacturing Plugin Package"""\n

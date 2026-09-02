@@ -1,1 +1,0 @@
-"""Quality Plugin Package"""\n
