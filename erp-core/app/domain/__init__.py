@@ -1,1 +1,0 @@
-# ERP Core Domains Package
