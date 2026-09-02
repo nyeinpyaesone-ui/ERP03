@@ -1,0 +1,78 @@
+{
+  "name": "ERPNext Development",
+  "description": "Development container for ERPNext with OIDC support",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "..",
+    "args": {
+      "SECRET_KEY": "${localEnv:SECRET_KEY}",
+      "OIDC_ENABLED": "${localEnv:OIDC_ENABLED}"
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "moby": true
+    },
+    "ghcr.io/devcontainers/features/git:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11"
+    }
+  },
+  "forwardPorts": [
+    8000,
+    9000
+  ],
+  "portsAttributes": {
+    "8000": {
+      "label": "ERPNext Web",
+      "onAutoForward": "notify"
+    },
+    "9000": {
+      "label": "Bench Process Manager",
+      "onAutoForward": "silent"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.black-formatter",
+        "ms-python.flake8",
+        "esbenp.prettier-vscode",
+        "redhat.vscode-yaml",
+        "ms-azuretools.vscode-docker",
+        "GitHub.copilot",
+        "GitHub.vscode-pull-request-github"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/home/devuser/.local/bin/python",
+        "python.linting.enabled": true,
+        "python.linting.flake8Enabled": true,
+        "python.formatting.provider": "black",
+        "editor.formatOnSave": true,
+        "editor.tabSize": 2,
+        "files.trimTrailingWhitespace": true,
+        "yaml.schemas": {
+          "https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json": "docker-compose*.yml"
+        }
+      }
+    }
+  },
+  "remoteUser": "devuser",
+  "workspaceFolder": "/workspace",
+  "mounts": [
+    "source=${localEnv:HOME}/.ssh,target=/home/devuser/.ssh,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.gitconfig,target=/home/devuser/.gitconfig,type=bind,consistency=cached"
+  ],
+  "postCreateCommand": "echo '✅ DevContainer ready for ERPNext development'",
+  "postStartCommand": "git config --global --add safe.directory /workspace",
+  "remoteEnv": {
+    "SECRET_KEY": "${localEnv:SECRET_KEY}",
+    "OIDC_ENABLED": "${localEnv:OIDC_ENABLED}",
+    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
+  }
+}
