@@ -1,44 +1,55 @@
-```
-# Dependencies
-node_modules/
-
-# Build outputs
-dist/
-build/
-*.js
-*.ts
-*.tsx
-*.css
-
-# Logs and temp files
-*.log
-*.tmp
-
-# Environment variables
+# Environment files
 .env
 .env.local
-*.env.*
 
-# Editors
-.vscode/
-.idea/
-
-# Python
+# Dependencies
+node_modules/
+.venv/
+venv/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.egg-info/
+dist/
+build/
+target/
 
-# Coverage
-coverage/
-htmlcov/
-.coverage
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
 
 # OS generated files
 .DS_Store
 Thumbs.db
 
-# Compressed files
+# Editors
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+
+# Python specific
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+.coverage
+coverage/
+htmlcov/
+.mypy_cache/
+.pytest_cache/
+
+# Build artifacts
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.out
+
+# Compressed files (except those needed for releases)
 *.zip
 *.gz
 *.tar
@@ -57,4 +68,13 @@ Thumbs.db
 *.Z
 *.lz
 *.lzo
-```
+
+# Java/Gradle/Go
+.gradle/
+*.class
+*.jar
+*.war
+*.ear
+*.mod
+*.sum
+bin/

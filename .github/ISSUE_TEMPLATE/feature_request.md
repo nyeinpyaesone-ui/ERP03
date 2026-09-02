@@ -16,13 +16,13 @@ A clear and concise description of what you want to happen.
 **Describe alternatives you've considered**
 A clear and concise description of any alternative solutions or features you've considered.
 
-**Which module**
-- [ ] Backend (API)
-- [ ] Frontend (Web)
-- [ ] Mobile App
-- [ ] DevOps/CI-CD
-- [ ] Documentation
-- [ ] AI/ML Features
-
 **Additional context**
 Add any other context or screenshots about the feature request here.
+
+**Use Cases**
+- Who will use this feature?
+- What problem does it solve?
+- How should it work?
+
+**Technical Notes**
+Any technical considerations or implementation suggestions:

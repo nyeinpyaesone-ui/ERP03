@@ -10,7 +10,7 @@
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability within ERP SOLUTION, please send an email
-to nyeinpyaesone273@gmail.com. All security vulnerabilities will be promptly addressed.
+to gg@gmail.com. All security vulnerabilities will be promptly addressed.
 
 Please do NOT open public issues for security vulnerabilities.
 
