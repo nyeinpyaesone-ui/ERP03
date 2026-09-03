@@ -116,7 +116,7 @@ For production, configure remote state storage:
 ```hcl
 terraform {
   backend "s3" {
-    bucket         = "erp-solution-terraform-state"
+    bucket         = "erpo3-terraform-state"
     key            = "production/terraform.tfstate"
     region         = "us-east-1"
     encrypt        = true
@@ -127,7 +127,7 @@ terraform {
 
 Create the state bucket first:
 ```bash
-aws s3api create-bucket --bucket erp-solution-terraform-state --region us-east-1
+aws s3api create-bucket --bucket erpo3-terraform-state --region us-east-1
 aws dynamodb create-table --table-name terraform-state-lock ...
 ```
 

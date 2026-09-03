@@ -9,7 +9,7 @@ Base: `main` at `a95a8db828d02c3a7d37e5f649478a1865fe3b13`
 - Repository visibility: public
 - Primary application directories include `backend/`, `frontend/`, `mobile/`, `infra/`, and `docker/`.
 - Multiple historical application trees are present: `backend-v1.8/` and `backend-v2.1/` in addition to `backend/`.
-- Root `backend/README.md` identifies the active backend as ERP SOLUTION System v2.2 and describes FastAPI + SQLAlchemy + PostgreSQL, Alembic migrations, Redis, Ollama, WebSockets, workflows, integrations, and RBAC.
+- Root `backend/README.md` identifies the active backend as ERP erpo3 System v2.2 and describes FastAPI + SQLAlchemy + PostgreSQL, Alembic migrations, Redis, Ollama, WebSockets, workflows, integrations, and RBAC.
 - Docker assets exist for API, worker, web, and compose-based deployments.
 - Kubernetes assets exist under `infra/k8s/`.
 - No Terraform/OpenTofu structure was identified during this baseline inspection.

@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: erp_solution-redis
-  namespace: erp_solution
+  name: erpo3-redis
+  namespace: erpo3
   labels:
-    app.kubernetes.io/name: erp_solution-redis
+    app.kubernetes.io/name: erpo3-redis
     app.kubernetes.io/component: cache
-    app.kubernetes.io/part-of: erp_solution
+    app.kubernetes.io/part-of: erpo3
 spec:
-  serviceName: erp_solution-redis
+  serviceName: erpo3-redis
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: erp_solution-redis
+      app.kubernetes.io/name: erpo3-redis
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: erp_solution-redis
+        app.kubernetes.io/name: erpo3-redis
         app.kubernetes.io/component: cache
-        app.kubernetes.io/part-of: erp_solution
+        app.kubernetes.io/part-of: erpo3
     spec:
       securityContext:
         runAsUser: 999
@@ -41,7 +41,7 @@ spec:
         - name: REDIS_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: erp_solution-secrets
+              name: erpo3-secrets
               key: REDIS_PASSWORD
         resources:
           requests:
@@ -72,12 +72,12 @@ spec:
       volumes:
       - name: config
         configMap:
-          name: erp_solution-redis-config
+          name: erpo3-redis-config
   volumeClaimTemplates:
   - metadata:
       name: data
       labels:
-        app.kubernetes.io/name: erp_solution-redis
+        app.kubernetes.io/name: erpo3-redis
     spec:
       accessModes: ["ReadWriteOnce"]
       storageClassName: fast-ssd
@@ -88,10 +88,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: erp_solution-redis
-  namespace: erp_solution
+  name: erpo3-redis
+  namespace: erpo3
   labels:
-    app.kubernetes.io/name: erp_solution-redis
+    app.kubernetes.io/name: erpo3-redis
     app.kubernetes.io/component: cache
 spec:
   type: ClusterIP
@@ -101,13 +101,13 @@ spec:
     targetPort: 6379
     protocol: TCP
   selector:
-    app.kubernetes.io/name: erp_solution-redis
+    app.kubernetes.io/name: erpo3-redis
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: erp_solution-redis-config
-  namespace: erp_solution
+  name: erpo3-redis-config
+  namespace: erpo3
 data:
   redis.conf: |
     bind 0.0.0.0

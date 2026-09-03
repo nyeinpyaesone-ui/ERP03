@@ -1,6 +1,6 @@
-# ERP SOLUTION Mobile App v2.5
+# ERP erpo3 Mobile App v2.5
 
-**React Native Mobile App** for ERP SOLUTION System
+**React Native Mobile App** for ERP erpo3 System
 
 ---
 
@@ -83,7 +83,7 @@ All API endpoints from v2.4 are supported:
 ## File Structure
 
 ```
-erp_solution-mobile-app/
+erpo3-mobile-app/
 ├── App.tsx                          # Root component
 ├── package.json                     # Dependencies
 ├── tsconfig.json                    # TypeScript config

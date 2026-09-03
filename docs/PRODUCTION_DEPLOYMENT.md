@@ -62,8 +62,8 @@ kubectl apply -f infra/k8s/frontend.yaml
 kubectl apply -f infra/k8s/ingress.yaml
 
 # 2. Verify
-kubectl get pods -n erp_solution
-kubectl get svc -n erp_solution
+kubectl get pods -n erpo3
+kubectl get svc -n erpo3
 ```
 
 ### Option 3: GitHub Actions Auto-Deploy
@@ -77,7 +77,7 @@ The `.github/workflows/release.yml` automatically:
 
 ### Backend (.env)
 ```env
-DATABASE_URL=postgresql://erp:password@postgres:5432/erp_solution
+DATABASE_URL=postgresql://erp:password@postgres:5432/erpo3
 REDIS_URL=redis://redis:6379/0
 SECRET_KEY=your-256-bit-secret-key
 ENVIRONMENT=production
@@ -130,7 +130,7 @@ logger.info("user_login", user_id=123, ip="192.168.1.1")
 ### Database
 ```bash
 # Automated daily backup
-pg_dump -h postgres -U erp erp_solution > backup_$(date +%Y%m%d).sql
+pg_dump -h postgres -U erp erpo3 > backup_$(date +%Y%m%d).sql
 
 # Upload to S3
 aws s3 cp backup_*.sql s3://your-bucket/backups/

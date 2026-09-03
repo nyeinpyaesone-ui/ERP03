@@ -1,12 +1,12 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: erp_solution-api
-  namespace: erp_solution
+  name: erpo3-api
+  namespace: erpo3
   labels:
-    app.kubernetes.io/name: erp_solution-api
+    app.kubernetes.io/name: erpo3-api
     app.kubernetes.io/component: api
-    app.kubernetes.io/part-of: erp_solution
+    app.kubernetes.io/part-of: erpo3
 spec:
   replicas: 3
   strategy:
@@ -16,26 +16,26 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app.kubernetes.io/name: erp_solution-api
+      app.kubernetes.io/name: erpo3-api
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: erp_solution-api
+        app.kubernetes.io/name: erpo3-api
         app.kubernetes.io/component: api
-        app.kubernetes.io/part-of: erp_solution
+        app.kubernetes.io/part-of: erpo3
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8000"
         prometheus.io/path: "/metrics"
     spec:
-      serviceAccountName: erp_solution
+      serviceAccountName: erpo3
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
       containers:
       - name: api
-        image: ghcr.io/nyeinpyaesone-ui/erp_solution-api:latest
+        image: ghcr.io/nyeinpyaesone-ui/erpo3-api:latest
         imagePullPolicy: Always
         ports:
         - name: http
@@ -46,9 +46,9 @@ spec:
           value: "production"
         envFrom:
         - configMapRef:
-            name: erp_solution-config
+            name: erpo3-config
         - secretRef:
-            name: erp_solution-secrets
+            name: erpo3-secrets
         resources:
           requests:
             memory: "512Mi"
@@ -89,7 +89,7 @@ spec:
         emptyDir: {}
       - name: uploads
         persistentVolumeClaim:
-          claimName: erp_solution-uploads
+          claimName: erpo3-uploads
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -100,7 +100,7 @@ spec:
                 - key: app.kubernetes.io/name
                   operator: In
                   values:
-                  - erp_solution-api
+                  - erpo3-api
               topologyKey: kubernetes.io/hostname
       topologySpreadConstraints:
       - maxSkew: 1
@@ -108,15 +108,15 @@ spec:
         whenUnsatisfiable: ScheduleAnyway
         labelSelector:
           matchLabels:
-            app.kubernetes.io/name: erp_solution-api
+            app.kubernetes.io/name: erpo3-api
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: erp_solution-api
-  namespace: erp_solution
+  name: erpo3-api
+  namespace: erpo3
   labels:
-    app.kubernetes.io/name: erp_solution-api
+    app.kubernetes.io/name: erpo3-api
     app.kubernetes.io/component: api
 spec:
   type: ClusterIP
@@ -126,20 +126,20 @@ spec:
     targetPort: 8000
     protocol: TCP
   selector:
-    app.kubernetes.io/name: erp_solution-api
+    app.kubernetes.io/name: erpo3-api
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: erp_solution-api-hpa
-  namespace: erp_solution
+  name: erpo3-api-hpa
+  namespace: erpo3
   labels:
-    app.kubernetes.io/name: erp_solution-api
+    app.kubernetes.io/name: erpo3-api
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: erp_solution-api
+    name: erpo3-api
   minReplicas: 3
   maxReplicas: 20
   metrics:

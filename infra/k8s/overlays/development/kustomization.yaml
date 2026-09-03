@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: erp_solution-dev
+namespace: erpo3-dev
 
 resources:
   - ../base
@@ -13,24 +13,24 @@ commonLabels:
   environment: development
 
 replicas:
-  - name: erp_solution-api
+  - name: erpo3-api
     count: 1
-  - name: erp_solution-web
+  - name: erpo3-web
     count: 1
-  - name: erp_solution-worker
+  - name: erpo3-worker
     count: 1
 
 patches:
   - target:
       kind: ConfigMap
-      name: erp_solution-config
+      name: erpo3-config
     patch: |-
       - op: replace
         path: /data/APP_ENV
         value: development
       - op: replace
         path: /data/DB_NAME
-        value: erp_solution_development
+        value: erpo3_development
       - op: replace
         path: /data/API_BASE_URL
         value: https://dev-api.erp-domain.com
@@ -40,7 +40,7 @@ patches:
 
   - target:
       kind: Ingress
-      name: erp_solution-ingress
+      name: erpo3-ingress
     patch: |-
       - op: replace
         path: /spec/rules/0/host
@@ -59,11 +59,11 @@ patches:
           - dev-store.erp-domain.com
       - op: replace
         path: /spec/tls/0/secretName
-        value: dev-erp_solution-tls
+        value: dev-erpo3-tls
 
   - target:
       kind: HorizontalPodAutoscaler
-      name: erp_solution-api-hpa
+      name: erpo3-api-hpa
     patch: |-
       - op: replace
         path: /spec/minReplicas
@@ -73,10 +73,10 @@ patches:
         value: 3
 
 images:
-  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-api
+  - name: ghcr.io/nyeinpyaesone-ui/erpo3-api
     newTag: develop
-  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-web
+  - name: ghcr.io/nyeinpyaesone-ui/erpo3-web
     newTag: develop
-  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-worker
+  - name: ghcr.io/nyeinpyaesone-ui/erpo3-worker
     newTag: develop
 

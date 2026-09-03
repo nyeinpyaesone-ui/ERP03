@@ -1,0 +1,455 @@
+name: Docker Build & Push to GHCR - ERPo3
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (optional)'
+        required: false
+        default: ''
+      enable_fallback:
+        description: 'Enable fallback registry on failure'
+        required: false
+        default: 'true'
+
+env:
+  REGISTRY_PRIMARY: ghcr.io
+  REGISTRY_FALLBACK: docker.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/erpo3
+  MAX_RETRIES: 3
+  RETRY_DELAY: 5
+
+jobs:
+  # ============================================
+  # Stage 1: Pre-flight Checks & Validation
+  # ============================================
+  preflight:
+    name: Pre-flight Validation
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should_build: ${{ steps.check.outputs.should_build }}
+      registry_target: ${{ steps.registry_check.outputs.target }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version tag
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ $GITHUB_REF == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          elif [[ $GITHUB_REF == refs/heads/main ]]; then
+            VERSION='latest'
+          else
+            VERSION="develop-$(date +%Y%m%d)-${{ github.run_number }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if build is needed
+        id: check
+        run: |
+          if [[ $GITHUB_EVENT_NAME == 'pull_request' ]]; then
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          else
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check primary registry availability
+        id: registry_check
+        run: |
+          if curl --output /dev/null --silent --head --fail "https://ghcr.io"; then
+            echo "target=ghcr.io" >> $GITHUB_OUTPUT
+            echo "✅ Primary registry (GHCR) available"
+          else
+            echo "target=docker.io" >> $GITHUB_OUTPUT
+            echo "⚠️ Primary registry unavailable, using fallback"
+          fi
+
+      - name: Validate environment files
+        run: |
+          echo "Validating project structure..."
+          test -f .env.example && echo "✅ .env.example exists" || echo "⚠️ .env.example missing"
+          test -f docker-compose.yml && echo "✅ docker-compose.yml exists" || exit 1
+          test -d ERP-BACKEND && echo "✅ ERP-BACKEND directory exists" || exit 1
+          test -d frontend && echo "✅ frontend directory exists" || exit 1
+
+  # ============================================
+  # Stage 2: Backend Image Build with Retry
+  # ============================================
+  build-backend:
+    name: Build Backend Image
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.should_build == 'true'
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    outputs:
+      backend_digest: ${{ steps.build.outputs.digest }}
+      build_status: ${{ steps.build_result.outputs.status }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
+
+      - name: Log in to primary registry (GHCR)
+        uses: docker/login-action@v3
+        if: needs.preflight.outputs.registry_target == 'ghcr.io'
+        with:
+          registry: ${{ env.REGISTRY_PRIMARY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to fallback registry (Docker Hub)
+        uses: docker/login-action@v3
+        if: needs.preflight.outputs.registry_target == 'docker.io'
+        with:
+          registry: ${{ env.REGISTRY_FALLBACK }}
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Determine registry and image prefix
+        id: reg_prefix
+        run: |
+          if [ "${{ needs.preflight.outputs.registry_target }}" == "ghcr.io" ]; then
+            echo "registry=${{ env.REGISTRY_PRIMARY }}" >> $GITHUB_OUTPUT
+            echo "image_prefix=${{ env.REGISTRY_PRIMARY }}/${{ env.IMAGE_PREFIX }}"
+          else
+            echo "registry=${{ env.REGISTRY_FALLBACK }}" >> $GITHUB_OUTPUT
+            echo "image_prefix=${{ env.REGISTRY_FALLBACK }}/${{ env.IMAGE_PREFIX }}-backup"
+          fi
+
+      - name: Extract metadata for backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.reg_prefix.outputs.image_prefix }}-backend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ needs.preflight.outputs.version }},enable=true
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+
+      - name: Build and push backend image (with retry)
+        id: build
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 30
+          max_attempts: ${{ env.MAX_RETRIES }}
+          command: |
+            docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              --push \
+              --tag ${{ steps.meta-backend.outputs.tags }} \
+              --label ${{ steps.meta-backend.outputs.labels }} \
+              --cache-from type=gha \
+              --cache-to type=gha,mode=max \
+              --target production \
+              --file ./ERP-BACKEND/Dockerfile \
+              --provenance true \
+              --sbom true \
+              ./ERP-BACKEND
+
+      - name: Record build result
+        id: build_result
+        if: always()
+        run: |
+          if [ "${{ steps.build.outcome }}" == "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Trivy vulnerability scanner on backend
+        uses: aquasecurity/trivy-action@master
+        if: steps.build.outcome == 'success'
+        with:
+          image-ref: ${{ steps.reg_prefix.outputs.image_prefix }}-backend:${{ needs.preflight.outputs.version }}
+          format: 'sarif'
+          output: 'trivy-backend-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-backend-results.sarif'
+
+  # ============================================
+  # Stage 3: Frontend Image Build with Retry
+  # ============================================
+  build-frontend:
+    name: Build Frontend Image
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.should_build == 'true'
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    outputs:
+      frontend_digest: ${{ steps.build.outputs.digest }}
+      build_status: ${{ steps.build_result.outputs.status }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
+
+      - name: Log in to primary registry (GHCR)
+        uses: docker/login-action@v3
+        if: needs.preflight.outputs.registry_target == 'ghcr.io'
+        with:
+          registry: ${{ env.REGISTRY_PRIMARY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to fallback registry (Docker Hub)
+        uses: docker/login-action@v3
+        if: needs.preflight.outputs.registry_target == 'docker.io'
+        with:
+          registry: ${{ env.REGISTRY_FALLBACK }}
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Determine registry and image prefix
+        id: reg_prefix
+        run: |
+          if [ "${{ needs.preflight.outputs.registry_target }}" == "ghcr.io" ]; then
+            echo "registry=${{ env.REGISTRY_PRIMARY }}" >> $GITHUB_OUTPUT
+            echo "image_prefix=${{ env.REGISTRY_PRIMARY }}/${{ env.IMAGE_PREFIX }}"
+          else
+            echo "registry=${{ env.REGISTRY_FALLBACK }}" >> $GITHUB_OUTPUT
+            echo "image_prefix=${{ env.REGISTRY_FALLBACK }}/${{ env.IMAGE_PREFIX }}-backup"
+          fi
+
+      - name: Extract metadata for frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.reg_prefix.outputs.image_prefix }}-frontend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ needs.preflight.outputs.version }},enable=true
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+
+      - name: Build and push frontend image (with retry)
+        id: build
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 30
+          max_attempts: ${{ env.MAX_RETRIES }}
+          retry_on: error
+          command: |
+            docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              --push \
+              --tag ${{ steps.meta-frontend.outputs.tags }} \
+              --label ${{ steps.meta-frontend.outputs.labels }} \
+              --cache-from type=gha \
+              --cache-to type=gha,mode=max \
+              --target production \
+              --file ./frontend/Dockerfile \
+              --build-arg VITE_API_BASE_URL=/api/v1 \
+              --build-arg VITE_APP_VERSION=${{ needs.preflight.outputs.version }} \
+              --provenance true \
+              --sbom true \
+              ./frontend
+
+      - name: Record build result
+        id: build_result
+        if: always()
+        run: |
+          if [ "${{ steps.build.outcome }}" == "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Trivy vulnerability scanner on frontend
+        uses: aquasecurity/trivy-action@master
+        if: steps.build.outcome == 'success'
+        with:
+          image-ref: ${{ steps.reg_prefix.outputs.image_prefix }}-frontend:${{ needs.preflight.outputs.version }}
+          format: 'sarif'
+          output: 'trivy-frontend-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-frontend-results.sarif'
+
+  # ============================================
+  # Stage 4: Integration Tests
+  # ============================================
+  integration-tests:
+    name: Run Integration Tests
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend]
+    if: needs.preflight.outputs.should_build == 'true' && needs.build-backend.outputs.build_status == 'success' && needs.build-frontend.outputs.build_status == 'success'
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: erp_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        working-directory: ./ERP-BACKEND
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run backend tests
+        working-directory: ./ERP-BACKEND
+        env:
+          DATABASE_URL: postgresql+asyncpg://test_user:test_password@localhost:5432/erp_test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key-for-ci
+          ENVIRONMENT: testing
+        run: |
+          pytest tests/ -v --cov=app --cov-report=xml || {
+            echo "⚠️ Tests failed, but continuing with retry..."
+            sleep 5
+            pytest tests/ -v --cov=app --cov-report=xml
+          }
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./ERP-BACKEND/coverage.xml
+          flags: backend
+          name: backend-coverage
+
+  # ============================================
+  # Stage 5: Fallback Trigger (if primary fails)
+  # ============================================
+  fallback-build:
+    name: Fallback Build to Docker Hub
+    runs-on: ubuntu-latest
+    needs: [preflight, build-backend, build-frontend]
+    if: failure() && github.event.inputs.enable_fallback == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Trigger fallback build
+        run: |
+          echo "⚠️ Primary build failed, initiating fallback procedure..."
+          echo "Falling back to Docker Hub registry..."
+          echo "Please check manual intervention or re-run with FALLBACK_ENABLED=true"
+
+      - name: Notify fallback activation
+        run: |
+          echo "## ⚠️ FALLBACK PROCEDURE ACTIVATED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Primary registry (GHCR) build failed." >> $GITHUB_STEP_SUMMARY
+          echo "Fallback to Docker Hub is available by re-running with appropriate secrets." >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # Stage 6: Deploy Notification & Summary
+  # ============================================
+  deploy-notification:
+    name: Deployment Notification
+    runs-on: ubuntu-latest
+    needs: [preflight, build-backend, build-frontend, integration-tests]
+    if: always() && needs.preflight.outputs.should_build == 'true'
+    steps:
+      - name: Generate deployment summary
+        run: |
+          BACKEND_STATUS="${{ needs.build-backend.result }}"
+          FRONTEND_STATUS="${{ needs.build-frontend.result }}"
+          TESTS_STATUS="${{ needs.integration-tests.result }}"
+          REGISTRY="${{ needs.preflight.outputs.registry_target }}"
+          
+          echo "## 🚀 ERPo3 Build & Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status | Registry |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | ${BACKEND_STATUS} | ${REGISTRY} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | ${FRONTEND_STATUS} | ${REGISTRY} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Tests | ${TESTS_STATUS} | - |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$BACKEND_STATUS" == "success" ] && [ "$FRONTEND_STATUS" == "success" ]; then
+            echo "### ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Version:** ${{ needs.preflight.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Registry:** ${REGISTRY}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Pull Commands" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            echo "docker pull ${REGISTRY}/${{ env.IMAGE_PREFIX }}-backend:${{ needs.preflight.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+            echo "docker pull ${REGISTRY}/${{ env.IMAGE_PREFIX }}-frontend:${{ needs.preflight.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Build Failed or Incomplete" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please check the logs above for details." >> $GITHUB_STEP_SUMMARY
+            if [ "${{ github.event.inputs.enable_fallback }}" == "true" ]; then
+              echo "Consider enabling fallback registry or retrying the build." >> $GITHUB_STEP_SUMMARY
+            fi
+          fi

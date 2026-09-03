@@ -23,7 +23,7 @@ class TestSettings:
                 # Create a new settings instance with no env file loading
                 settings = Settings(_env_file=None)
 
-                assert settings.APP_NAME == "ERP SOLUTION System"
+                assert settings.APP_NAME == "ERP erpo3 System"
                 assert settings.ALGORITHM == "HS256"
                 # Note: ACCESS_TOKEN_EXPIRE_MINUTES is now 15 minutes for security (changed from 24 hours)
                 assert settings.ACCESS_TOKEN_EXPIRE_MINUTES == 15

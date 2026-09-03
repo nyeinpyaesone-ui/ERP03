@@ -18,28 +18,28 @@ docker login -u powerrangeranikg
 # When asked for password, paste your ACCESS TOKEN (not your password)
 
 # 3. Build backend image (this takes 2-5 minutes)
-docker build -t powerrangeranikg/erp-solution-backend:v1.0.0 ./backend
+docker build -t powerrangeranikg/erpo3-backend:v1.0.0 ./backend
 
 # 4. Build frontend image (this takes 2-5 minutes)
-docker build -t powerrangeranikg/erp-solution-frontend:v1.0.0 ./frontend
+docker build -t powerrangeranikg/erpo3-frontend:v1.0.0 ./frontend
 
 # 5. Tag as latest
-docker tag powerrangeranikg/erp-solution-backend:v1.0.0 powerrangeranikg/erp-solution-backend:latest
-docker tag powerrangeranikg/erp-solution-frontend:v1.0.0 powerrangeranikg/erp-solution-frontend:latest
+docker tag powerrangeranikg/erpo3-backend:v1.0.0 powerrangeranikg/erpo3-backend:latest
+docker tag powerrangeranikg/erpo3-frontend:v1.0.0 powerrangeranikg/erpo3-frontend:latest
 
 # 6. Push to Docker Hub (this takes 5-10 minutes)
-docker push powerrangeranikg/erp-solution-backend:v1.0.0
-docker push powerrangeranikg/erp-solution-frontend:v1.0.0
-docker push powerrangeranikg/erp-solution-backend:latest
-docker push powerrangeranikg/erp-solution-frontend:latest
+docker push powerrangeranikg/erpo3-backend:v1.0.0
+docker push powerrangeranikg/erpo3-frontend:v1.0.0
+docker push powerrangeranikg/erpo3-backend:latest
+docker push powerrangeranikg/erpo3-frontend:latest
 ```
 
 ## Step 4: Check on Your Phone
 After pushing, open your browser and go to:
-https://hub.docker.com/r/powerrangeranikg/erp-solution-backend
+https://hub.docker.com/r/powerrangeranikg/erpo3-backend
 
 You should see:
-- ✅ Image name: erp-solution-backend
+- ✅ Image name: erpo3-backend
 - ✅ Tags: v1.0.0, latest
 - ✅ Size: ~500MB
 
@@ -65,8 +65,8 @@ You should see:
 ## ✅ Success Check
 
 After pushing, you should see on Docker Hub:
-- ⭐ 1 repository: erp-solution-backend
-- ⭐ 1 repository: erp-solution-frontend
+- ⭐ 1 repository: erpo3-backend
+- ⭐ 1 repository: erpo3-frontend
 - ⭐ Tags: v1.0.0 and latest for both
 
 ## 🚀 After Images Are Live

@@ -1,4 +1,4 @@
-# ERP SOLUTION Retail POS Module (v2.9)
+# ERP erpo3 Retail POS Module (v2.9)
 
 ## Overview
 Full-featured Point of Sale system integrated with Inventory, Invoices, and Accounting modules. Designed for fast checkout, barcode scanning, and multi-payment processing.
