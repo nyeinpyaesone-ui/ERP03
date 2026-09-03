@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/part-of: erp03
 spec:
   serviceName: erp03-postgres
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app.kubernetes.io/name: erp03-postgres
@@ -26,7 +26,7 @@ spec:
         fsGroup: 999
       containers:
       - name: postgres
-        image: postgres:15-alpine
+        image: postgres:15.4-alpine3.18
         ports:
         - name: postgres
           containerPort: 5432
@@ -49,6 +49,11 @@ spec:
               key: DB_PASSWORD
         - name: PGDATA
           value: "/var/lib/postgresql/data/pgdata"
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: erp03-secrets
+              key: DB_PASSWORD
         resources:
           requests:
             memory: "1Gi"
@@ -62,17 +67,23 @@ spec:
             - pg_isready
             - -U
             - $(POSTGRES_USER)
-          initialDelaySeconds: 30
+            - -d
+            - $(POSTGRES_DB)
+          initialDelaySeconds: 60
           periodSeconds: 10
           timeoutSeconds: 5
+          failureThreshold: 6
         readinessProbe:
           exec:
             command:
             - pg_isready
             - -U
             - $(POSTGRES_USER)
-          initialDelaySeconds: 5
+            - -d
+            - $(POSTGRES_DB)
+          initialDelaySeconds: 30
           periodSeconds: 5
+          failureThreshold: 3
         volumeMounts:
         - name: data
           mountPath: /var/lib/postgresql/data
@@ -81,6 +92,8 @@ spec:
         - name: postgres-config
           mountPath: /etc/postgresql/postgresql.conf
           subPath: postgresql.conf
+        - name: backups
+          mountPath: /backups
       volumes:
       - name: init-scripts
         configMap:
@@ -88,6 +101,9 @@ spec:
       - name: postgres-config
         configMap:
           name: erp03-postgres-config
+      - name: backups
+        emptyDir:
+          sizeLimit: 10Gi
   volumeClaimTemplates:
   - metadata:
       name: data
@@ -98,7 +114,66 @@ spec:
       storageClassName: fast-ssd
       resources:
         requests:
-          storage: 100Gi
+          storage: 50Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: erp03-postgres
+  namespace: erp03
+  labels:
+    app.kubernetes.io/name: erp03-postgres
+    app.kubernetes.io/component: database
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: erp03-postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: erp03-postgres-primary
+  namespace: erp03
+  labels:
+    app.kubernetes.io/name: erp03-postgres
+    app.kubernetes.io/component: database
+    role: primary
+spec:
+  type: ClusterIP
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: erp03-postgres
+    statefulset.kubernetes.io/pod-name: erp03-postgres-0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: erp03-postgres-replica
+  namespace: erp03
+  labels:
+    app.kubernetes.io/name: erp03-postgres
+    app.kubernetes.io/component: database
+    role: replica
+spec:
+  type: ClusterIP
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: erp03-postgres
+    statefulset.kubernetes.io/pod-name: erp03-postgres-1
 ---
 apiVersion: v1
 kind: Service
