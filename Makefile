@@ -1,5 +1,5 @@
 # =============================================================================
-# ERPo3 - Professional Build & Development Makefile
+# ERP03 - Professional Build & Development Makefile
 # Production-grade automation with retry logic, fallback mechanisms, and
 # comprehensive error handling for real-world deployment scenarios
 # =============================================================================
@@ -339,7 +339,7 @@ validate-env:
 # =============================================================================
 help:
 	@printf "\n$(GREEN)╔══════════════════════════════════════════════════════════╗$(NC)\n"
-	@printf "$(GREEN)║          ERPo3 Build System - Available Commands           ║$(NC)\n"
+	@printf "$(GREEN)║          ERP03 Build System - Available Commands           ║$(NC)\n"
 	@printf "$(GREEN)╚══════════════════════════════════════════════════════════╝$(NC)\n\n"
 	@printf "$(BLUE)Build Commands:$(NC)\n"
 	@printf "  make build         Build development images (default)\n"
