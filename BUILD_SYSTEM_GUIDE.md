@@ -1,8 +1,8 @@
-# ERPo3 Production Build System Documentation
+# ERP03 Production Build System Documentation
 
 ## Overview
 
-This document provides comprehensive guidance for the ERPo3 professional build system, featuring:
+This document provides comprehensive guidance for the ERP03 professional build system, featuring:
 - **Automated retry mechanisms** with exponential backoff
 - **Fallback registry support** (GHCR ↔ Docker Hub)
 - **Rate limiting** to prevent API throttling

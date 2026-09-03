@@ -1,4 +1,4 @@
-name: Docker Build & Push to GHCR - ERPo3
+name: Docker Build & Push to GHCR - ERP03
 
 on:
   push:
@@ -425,7 +425,7 @@ jobs:
           TESTS_STATUS="${{ needs.integration-tests.result }}"
           REGISTRY="${{ needs.preflight.outputs.registry_target }}"
           
-          echo "## 🚀 ERPo3 Build & Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 ERP03 Build & Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Component | Status | Registry |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|--------|----------|" >> $GITHUB_STEP_SUMMARY
