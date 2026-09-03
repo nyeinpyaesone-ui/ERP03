@@ -25,7 +25,7 @@ on:
 env:
   REGISTRY_PRIMARY: ghcr.io
   REGISTRY_FALLBACK: docker.io
-  IMAGE_PREFIX: ${{ github.repository_owner }}/erpo3
+  IMAGE_PREFIX: ${{ github.repository_owner }}/erp03
   MAX_RETRIES: 3
   RETRY_DELAY: 5
 

@@ -13,7 +13,7 @@ import {
   InventoryStats,
 } from '../types/dashboard';
 
-const API_BASE = 'https://api.erpo3.com/v1';
+const API_BASE = 'https://api.erp03.com/v1';
 
 const useApi = <T>(endpoint: string, params?: Record<string, string>) => {
   const [data, setData] = useState<T | null>(null);

@@ -1,17 +1,17 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: erpo3
+  name: erp03
   labels:
-    app.kubernetes.io/name: erpo3
-    app.kubernetes.io/part-of: erpo3-system
+    app.kubernetes.io/name: erp03
+    app.kubernetes.io/part-of: erp03-system
     environment: production
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: erpo3-monitoring
+  name: erp03-monitoring
   labels:
     app.kubernetes.io/name: monitoring
-    app.kubernetes.io/part-of: erpo3-system
+    app.kubernetes.io/part-of: erp03-system
 

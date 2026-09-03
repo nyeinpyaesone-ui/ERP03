@@ -2,7 +2,7 @@
 
 ## General
 
-### What is ERP erpo3?
+### What is ERP erp03?
 An enterprise-grade AI-powered ERP system with 12 modules covering inventory, orders, customers, manufacturing, POS, e-commerce, and AI features.
 
 ### Is it production-ready?

@@ -3,9 +3,9 @@ set -e
 
 ENVIRONMENT=${1:-development}
 VERSION=${2:-latest}
-NAMESPACE="erpo3-${ENVIRONMENT}"
+NAMESPACE="erp03-${ENVIRONMENT}"
 
-echo "=== ERP erpo3 Kubernetes Deployment ==="
+echo "=== ERP erp03 Kubernetes Deployment ==="
 echo "Environment: ${ENVIRONMENT}"
 echo "Version: ${VERSION}"
 echo "Namespace: ${NAMESPACE}"
@@ -28,14 +28,14 @@ fi
 
 # Build and push images
 echo "Building Docker images..."
-docker build -t ghcr.io/nyeinpyaesone-ui/erpo3-api:${VERSION} -f docker/Dockerfile.api ../
-docker build -t ghcr.io/nyeinpyaesone-ui/erpo3-web:${VERSION} -f docker/Dockerfile.web ../
-docker build -t ghcr.io/nyeinpyaesone-ui/erpo3-worker:${VERSION} -f docker/Dockerfile.worker ../
+docker build -t ghcr.io/nyeinpyaesone-ui/erp03-api:${VERSION} -f docker/Dockerfile.api ../
+docker build -t ghcr.io/nyeinpyaesone-ui/erp03-web:${VERSION} -f docker/Dockerfile.web ../
+docker build -t ghcr.io/nyeinpyaesone-ui/erp03-worker:${VERSION} -f docker/Dockerfile.worker ../
 
 echo "Pushing Docker images..."
-docker push ghcr.io/nyeinpyaesone-ui/erpo3-api:${VERSION}
-docker push ghcr.io/nyeinpyaesone-ui/erpo3-web:${VERSION}
-docker push ghcr.io/nyeinpyaesone-ui/erpo3-worker:${VERSION}
+docker push ghcr.io/nyeinpyaesone-ui/erp03-api:${VERSION}
+docker push ghcr.io/nyeinpyaesone-ui/erp03-web:${VERSION}
+docker push ghcr.io/nyeinpyaesone-ui/erp03-worker:${VERSION}
 
 # Update image tags in overlay
 if [ "$VERSION" != "latest" ]; then
@@ -48,9 +48,9 @@ kubectl apply -k overlays/${ENVIRONMENT}/
 
 # Wait for rollout
 echo "Waiting for deployment rollout..."
-kubectl rollout status deployment/${ENVIRONMENT}-erpo3-api -n ${NAMESPACE} --timeout=300s
-kubectl rollout status deployment/${ENVIRONMENT}-erpo3-web -n ${NAMESPACE} --timeout=300s
-kubectl rollout status deployment/${ENVIRONMENT}-erpo3-worker -n ${NAMESPACE} --timeout=300s
+kubectl rollout status deployment/${ENVIRONMENT}-erp03-api -n ${NAMESPACE} --timeout=300s
+kubectl rollout status deployment/${ENVIRONMENT}-erp03-web -n ${NAMESPACE} --timeout=300s
+kubectl rollout status deployment/${ENVIRONMENT}-erp03-worker -n ${NAMESPACE} --timeout=300s
 
 # Verify deployment
 echo ""

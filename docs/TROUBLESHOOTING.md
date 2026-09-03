@@ -31,7 +31,7 @@ npx react-native start --reset-cache
 ### Database connection errors
 ```bash
 # Check PostgreSQL is accessible
-psql -h localhost -U erp -d erpo3
+psql -h localhost -U erp -d erp03
 # Verify connection string in .env
 # Check firewall rules
 ```

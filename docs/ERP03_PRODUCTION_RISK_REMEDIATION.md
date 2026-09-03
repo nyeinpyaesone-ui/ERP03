@@ -227,7 +227,7 @@ cd ERP-BACKEND
 alembic upgrade head
 
 # Verify schema
-psql -h localhost -U erp -d erpo3_prod -c "\dt"
+psql -h localhost -U erp -d erp03_prod -c "\dt"
 
 # Expected: All tables created successfully
 ```
@@ -259,7 +259,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str | None = None
     POSTGRES_USER: str = ""
     POSTGRES_PASSWORD: str = ""
-    POSTGRES_DB: str = "erpo3_prod"
+    POSTGRES_DB: str = "erp03_prod"
     
     @property
     def get_database_url(self) -> str:
@@ -372,7 +372,7 @@ createdb erp_restore_test
 export DATABASE_URL=postgresql://user:pass@localhost/erp_restore_test
 
 # 3. Restore backup
-./scripts/verify-backup-restore.sh /backups/daily/erpo3_20260823_020000/database.sql
+./scripts/verify-backup-restore.sh /backups/daily/erp03_20260823_020000/database.sql
 
 # 4. Verify data integrity
 psql $DATABASE_URL -c "SELECT COUNT(*) FROM users;"

@@ -14,7 +14,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev-$(shell date +%Y%m%d%H%M%S)")
 REGISTRY_PRIMARY ?= ghcr.io
 REGISTRY_FALLBACK ?= docker.io
-IMAGE_PREFIX ?= $(REPO_OWNER)/erpo3
+IMAGE_PREFIX ?= $(REPO_OWNER)/erp03
 MAX_RETRIES ?= 3
 RETRY_DELAY ?= 5
 TIMEOUT_MINUTES ?= 30
@@ -118,7 +118,7 @@ build-prod: preflight
 		--push \
 		--tag $(REGISTRY)/$(IMAGE_PREFIX)-backend:$(VERSION)$(IMAGE_SUFFIX) \
 		--tag $(REGISTRY)/$(IMAGE_PREFIX)-backend:latest$(IMAGE_SUFFIX) \
-		--label "org.opencontainers.image.source=https://github.com/$(REPO_OWNER)/erpo3" \
+		--label "org.opencontainers.image.source=https://github.com/$(REPO_OWNER)/erp03" \
 		--label "org.opencontainers.image.version=$(VERSION)" \
 		--label "org.opencontainers.image.created=$$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
 		--cache-from type=gha \
@@ -131,7 +131,7 @@ build-prod: preflight
 		--push \
 		--tag $(REGISTRY)/$(IMAGE_PREFIX)-frontend:$(VERSION)$(IMAGE_SUFFIX) \
 		--tag $(REGISTRY)/$(IMAGE_PREFIX)-frontend:latest$(IMAGE_SUFFIX) \
-		--label "org.opencontainers.image.source=https://github.com/$(REPO_OWNER)/erpo3" \
+		--label "org.opencontainers.image.source=https://github.com/$(REPO_OWNER)/erp03" \
 		--label "org.opencontainers.image.version=$(VERSION)" \
 		--label "org.opencontainers.image.created=$$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
 		--cache-from type=gha \
@@ -171,7 +171,7 @@ integration-tests:
 	@if [ -f ./ERP-BACKEND/requirements.txt ]; then \
 		cd ./ERP-BACKEND && \
 		pip install -q pytest pytest-cov pytest-asyncio httpx 2>/dev/null && \
-		DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/erpo3_dev \
+		DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/erp03_dev \
 		REDIS_URL=redis://localhost:6379/0 \
 		pytest tests/ -v --cov=app --cov-report=xml || \
 		{ printf "$(YELLOW)[WARN]$(NC) Tests failed, retrying once...\n"; \
@@ -265,7 +265,7 @@ clean:
 
 clean-all: clean
 	@printf "$(BLUE)[INFO]$(NC) Removing all Docker images...\n"
-	-docker rmi $$(docker images | grep erpo3 | awk '{print $$3}') 2>/dev/null || true
+	-docker rmi $$(docker images | grep erp03 | awk '{print $$3}') 2>/dev/null || true
 	@printf "$(GREEN)[SUCCESS]$(NC) Full cleanup completed\n"
 
 # =============================================================================
@@ -274,7 +274,7 @@ clean-all: clean
 init-secrets:
 	@printf "$(BLUE)[INFO]$(NC) Initializing secrets...\n"
 	@mkdir -p ./secrets
-	@echo "erpo3_admin" > ./secrets/db_user.txt
+	@echo "erp03_admin" > ./secrets/db_user.txt
 	@openssl rand -base64 32 > ./secrets/db_password.txt
 	@openssl rand -base64 64 > ./secrets/jwt_secret.txt
 	@chmod 600 ./secrets/*.txt

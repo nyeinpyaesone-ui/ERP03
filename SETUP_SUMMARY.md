@@ -1,6 +1,6 @@
-# ERP erpo3 - Setup Summary
+# ERP erp03 - Setup Summary
 
-This document provides a quick overview of all configuration files and setup procedures created for the ERP erpo3 project.
+This document provides a quick overview of all configuration files and setup procedures created for the ERP erp03 project.
 
 ## 📁 File Structure Created
 
@@ -119,8 +119,8 @@ Create a Personal Access Token with:
 Images are published to GHCR:
 
 ```
-ghcr.io/YOUR_USERNAME/erpo3-backend:<tag>
-ghcr.io/YOUR_USERNAME/erpo3-frontend:<tag>
+ghcr.io/YOUR_USERNAME/erp03-backend:<tag>
+ghcr.io/YOUR_USERNAME/erp03-frontend:<tag>
 ```
 
 **Tag Convention:**

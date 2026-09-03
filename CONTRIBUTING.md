@@ -1,4 +1,4 @@
-# Contributing to ERP erpo3
+# Contributing to ERP erp03
 
 ## Getting Started
 

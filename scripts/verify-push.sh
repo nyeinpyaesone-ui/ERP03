@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "=== ERP erpo3 Verification ==="
+echo "=== ERP erp03 Verification ==="
 echo "Repository: https://github.com/nyeinpyaesone-ui/ERP"
 echo "Branch: $(git branch --show-current)"
 echo "Commits: $(git rev-list --count HEAD)"
