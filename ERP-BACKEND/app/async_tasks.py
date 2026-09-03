@@ -1,18 +1,3 @@
-"""
-ERP erpo3 Asynchronous Task Processing Framework
-================================================
-Professional-grade async task execution with prefix-wired routing,
-exponential backoff retries, circuit breakers, and fallback mechanisms.
-
-Features:
-- Prefix-based task routing (erpo3:<domain>:<action>)
-- Exponential backoff with jitter
-- Circuit breaker pattern
-- Dead letter queue for failed tasks
-- Rate limiting per task type
-- Resource pooling and memory management
-- Comprehensive logging and metrics
-"""
 import asyncio
 import gc
 import hashlib
@@ -34,7 +19,6 @@ logger = logging.getLogger("erp03.async.tasks")
 
 
 class TaskStatus(Enum):
-    """Task execution status."""
     PENDING = "pending"
     RUNNING = "running"
     SUCCESS = "success"
@@ -45,7 +29,6 @@ class TaskStatus(Enum):
 
 
 class PriorityLevel(Enum):
-    """Task priority levels."""
     CRITICAL = 0
     HIGH = 1
     NORMAL = 2
@@ -55,7 +38,6 @@ class PriorityLevel(Enum):
 
 @dataclass
 class TaskContext:
-    """Execution context for async tasks."""
     task_id: str
     prefix: str
     domain: str
@@ -73,7 +55,6 @@ class TaskContext:
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert context to dictionary."""
         return {
             "task_id": self.task_id,
             "prefix": self.prefix,
@@ -94,49 +75,42 @@ class TaskContext:
 
 @dataclass
 class RetryConfig:
-    """Configuration for retry behavior."""
     max_retries: int = 3
-    base_delay: float = 1.0  # seconds
-    max_delay: float = 60.0  # seconds
+    base_delay: float = 1.0
+    max_delay: float = 60.0
     exponential_base: float = 2.0
     jitter: bool = True
     jitter_factor: float = 0.1
     
     def get_delay(self, retry_count: int) -> float:
-        """Calculate delay with exponential backoff and optional jitter."""
         delay = min(
             self.base_delay * (self.exponential_base ** retry_count),
             self.max_delay
         )
-        
         if self.jitter:
             jitter_range = delay * self.jitter_factor
             delay += random.uniform(-jitter_range, jitter_range)
-        
         return max(0.1, delay)
 
 
 @dataclass
 class CircuitBreakerConfig:
-    """Circuit breaker configuration."""
     failure_threshold: int = 5
-    recovery_timeout: float = 30.0  # seconds
+    recovery_timeout: float = 30.0
     half_open_max_calls: int = 3
 
 
 class CircuitBreaker:
-    """Circuit breaker implementation for fault tolerance."""
     
     def __init__(self, config: CircuitBreakerConfig = None):
         self.config = config or CircuitBreakerConfig()
         self.failure_count = 0
         self.success_count = 0
         self.last_failure_time: Optional[datetime] = None
-        self.state = "closed"  # closed, open, half-open
+        self.state = "closed"
         self._lock = asyncio.Lock()
     
     async def call(self, func: Callable, *args, **kwargs) -> Any:
-        """Execute function with circuit breaker protection."""
         async with self._lock:
             if self.state == "open":
                 if self._should_attempt_reset():
@@ -154,14 +128,12 @@ class CircuitBreaker:
             raise
     
     def _should_attempt_reset(self) -> bool:
-        """Check if enough time has passed to attempt reset."""
         if not self.last_failure_time:
             return True
         elapsed = (datetime.utcnow() - self.last_failure_time).total_seconds()
         return elapsed >= self.config.recovery_timeout
     
     async def _on_success(self):
-        """Handle successful call."""
         async with self._lock:
             if self.state == "half-open":
                 self.success_count += 1
@@ -174,7 +146,6 @@ class CircuitBreaker:
                 self.failure_count = 0
     
     async def _on_failure(self):
-        """Handle failed call."""
         async with self._lock:
             self.failure_count += 1
             self.last_failure_time = datetime.utcnow()
@@ -188,16 +159,8 @@ class CircuitBreaker:
 
 
 class RateLimiter:
-    """Token bucket rate limiter for task execution."""
     
     def __init__(self, rate: float = 10.0, capacity: float = 20.0):
-        """
-        Initialize rate limiter.
-        
-        Args:
-            rate: Tokens added per second
-            capacity: Maximum token capacity
-        """
         self.rate = rate
         self.capacity = capacity
         self.tokens = capacity
@@ -205,7 +168,6 @@ class RateLimiter:
         self._lock = asyncio.Lock()
     
     async def acquire(self, tokens: float = 1.0) -> bool:
-        """Acquire tokens, returning False if insufficient."""
         async with self._lock:
             now = time.monotonic()
             elapsed = now - self.last_update
@@ -218,7 +180,6 @@ class RateLimiter:
             return False
     
     async def wait_for_token(self, tokens: float = 1.0, timeout: float = None):
-        """Wait until tokens are available or timeout."""
         start_time = time.monotonic()
         
         while True:
@@ -233,7 +194,6 @@ class RateLimiter:
 
 @dataclass
 class TaskMetrics:
-    """Metrics collection for task execution."""
     total_tasks: int = 0
     successful_tasks: int = 0
     failed_tasks: int = 0
@@ -243,28 +203,23 @@ class TaskMetrics:
     domain_stats: Dict[str, Dict[str, int]] = field(default_factory=lambda: defaultdict(lambda: {"success": 0, "failed": 0}))
     
     def record_success(self, domain: str, execution_time: float):
-        """Record successful task execution."""
         self.total_tasks += 1
         self.successful_tasks += 1
         self.total_execution_time += execution_time
         self.domain_stats[domain]["success"] += 1
     
     def record_failure(self, domain: str):
-        """Record failed task execution."""
         self.total_tasks += 1
         self.failed_tasks += 1
         self.domain_stats[domain]["failed"] += 1
     
     def record_retry(self):
-        """Record task retry."""
         self.retried_tasks += 1
     
     def record_dead_letter(self):
-        """Record task sent to dead letter queue."""
         self.dead_letter_tasks += 1
     
     def get_summary(self) -> Dict[str, Any]:
-        """Get metrics summary."""
         avg_time = (
             self.total_execution_time / self.successful_tasks
             if self.successful_tasks > 0 else 0
@@ -282,7 +237,6 @@ class TaskMetrics:
 
 
 class DeadLetterQueue:
-    """Queue for failed tasks that exceeded retry limits."""
     
     def __init__(self, max_size: int = 1000):
         self.max_size = max_size
@@ -290,25 +244,21 @@ class DeadLetterQueue:
         self._lock = asyncio.Lock()
     
     async def add(self, context: TaskContext):
-        """Add failed task to dead letter queue."""
         async with self._lock:
             if len(self.queue) >= self.max_size:
-                self.queue.pop(0)  # Remove oldest
+                self.queue.pop(0)
             self.queue.append(context)
             logger.warning(f"Task {context.task_id} added to dead letter queue")
     
     async def get_all(self) -> List[TaskContext]:
-        """Retrieve all tasks in dead letter queue."""
         async with self._lock:
             return self.queue.copy()
     
     async def clear(self):
-        """Clear the dead letter queue."""
         async with self._lock:
             self.queue.clear()
     
     async def size(self) -> int:
-        """Get current queue size."""
         async with self._lock:
             return len(self.queue)
 
@@ -325,27 +275,12 @@ def erpo3_task(
     rate_limit: Optional[float] = None,
     circuit_breaker: bool = True
 ):
-    """
-    Decorator for defining erpo3 async tasks with prefix wiring.
+    prefix = f"erpo3:{domain}:{action}"
     
-    Args:
-        domain: Business domain (e.g., 'inventory', 'crm', 'finance')
-        action: Action name (e.g., 'sync', 'process', 'validate')
-        priority: Task priority level
-        max_retries: Maximum retry attempts
-        retry_config: Custom retry configuration
-        rate_limit: Requests per second limit
-        circuit_breaker: Enable circuit breaker protection
-    
-    Returns:
-        Decorated async function with erpo3 task wrapper
-    """
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        prefix = f"erpo3:{domain}:{action}"
         
         @wraps(func)
         async def wrapper(*args, **kwargs) -> T:
-            # Create task context
             task_id = str(uuid.uuid4())
             payload = {"args": args, "kwargs": kwargs}
             
@@ -361,7 +296,6 @@ def erpo3_task(
             
             logger.info(f"[{task_id}] Starting task {prefix}")
             
-            # Execute with retry logic
             retry_cfg = retry_config or RetryConfig(max_retries=max_retries)
             last_error = None
             
@@ -370,7 +304,6 @@ def erpo3_task(
                     context.started_at = datetime.utcnow()
                     context.status = TaskStatus.RUNNING
                     
-                    # Execute the actual function
                     result = await func(*args, **kwargs)
                     
                     context.completed_at = datetime.utcnow()
@@ -403,7 +336,6 @@ def erpo3_task(
                         logger.error(f"[{task_id}] Task {prefix} failed after {max_retries + 1} attempts: {e}")
                         break
             
-            # All retries exhausted
             context.status = TaskStatus.DEAD_LETTER
             raise last_error
         
@@ -412,60 +344,37 @@ def erpo3_task(
 
 
 class AsyncTaskExecutor:
-    """
-    Professional async task executor with prefix-wired routing,
-    retry mechanisms, and comprehensive error handling.
-    """
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
-        """
-        Initialize task executor.
-        
-        Args:
-            config: Configuration dictionary with optional keys:
-                - default_max_retries: Default retry count (3)
-                - rate_limit_per_domain: Rate limit per domain (10 req/s)
-                - enable_circuit_breaker: Enable circuit breakers (True)
-                - dead_letter_queue_size: Max DLQ size (1000)
-                - max_concurrent_tasks: Max concurrent tasks (100)
-        """
         self.config = config or {}
         self.default_max_retries = self.config.get("default_max_retries", 3)
         self.rate_limit_per_domain = self.config.get("rate_limit_per_domain", 10.0)
         self.enable_circuit_breakers = self.config.get("enable_circuit_breaker", True)
         self.max_concurrent_tasks = self.config.get("max_concurrent_tasks", 100)
         
-        # Domain-specific rate limiters
         self._rate_limiters: Dict[str, RateLimiter] = defaultdict(
             lambda: RateLimiter(rate=self.rate_limit_per_domain)
         )
         
-        # Domain-specific circuit breakers
         self._circuit_breakers: Dict[str, CircuitBreaker] = defaultdict(
             lambda: CircuitBreaker()
         )
         
-        # Dead letter queue
         self.dead_letter_queue = DeadLetterQueue(
             max_size=self.config.get("dead_letter_queue_size", 1000)
         )
         
-        # Metrics
         self.metrics = TaskMetrics()
         
-        # Task registry
         self._task_handlers: Dict[str, Callable] = {}
         
-        # Semaphore for concurrency control
         self._semaphore = asyncio.Semaphore(self.max_concurrent_tasks)
         
-        # Background task set
         self._background_tasks: Set[asyncio.Task] = set()
         
         logger.info(f"AsyncTaskExecutor initialized with max_concurrency={self.max_concurrent_tasks}")
     
     def register_handler(self, domain: str, action: str, handler: Callable):
-        """Register a task handler for a specific domain and action."""
         key = f"erpo3:{domain}:{action}"
         self._task_handlers[key] = handler
         logger.info(f"Registered handler for {key}")
@@ -479,24 +388,6 @@ class AsyncTaskExecutor:
         max_retries: Optional[int] = None,
         timeout: Optional[float] = None
     ) -> Any:
-        """
-        Execute a task with full error handling and retry logic.
-        
-        Args:
-            domain: Business domain
-            action: Action to perform
-            payload: Task payload data
-            priority: Task priority
-            max_retries: Override default max retries
-            timeout: Execution timeout in seconds
-        
-        Returns:
-            Task result
-        
-        Raises:
-            TimeoutError: If task exceeds timeout
-            Exception: If task fails after all retries
-        """
         task_id = str(uuid.uuid4())
         prefix = f"erpo3:{domain}:{action}"
         retries = max_retries or self.default_max_retries
@@ -514,11 +405,9 @@ class AsyncTaskExecutor:
         logger.info(f"[{task_id}] Executing task {prefix}")
         
         async with self._semaphore:
-            # Apply rate limiting
             rate_limiter = self._rate_limiters[domain]
             await rate_limiter.wait_for_token(timeout=30.0)
             
-            # Get circuit breaker
             circuit_breaker = self._circuit_breakers[domain] if self.enable_circuit_breakers else None
             
             retry_config = RetryConfig(max_retries=retries)
@@ -530,7 +419,6 @@ class AsyncTaskExecutor:
                     context.status = TaskStatus.RUNNING
                     context.retry_count = attempt
                     
-                    # Execute through circuit breaker if enabled
                     if circuit_breaker:
                         result = await self._execute_with_circuit_breaker(
                             circuit_breaker, domain, action, payload, timeout
@@ -555,7 +443,7 @@ class AsyncTaskExecutor:
                 except asyncio.TimeoutError:
                     last_error = TimeoutError(f"Task {prefix} timed out after {timeout}s")
                     logger.error(f"[{task_id}] Task {prefix} timed out")
-                    break  # Don't retry timeouts
+                    break
                     
                 except Exception as e:
                     last_error = e
@@ -584,7 +472,6 @@ class AsyncTaskExecutor:
                         )
                         break
             
-            # All retries exhausted - send to dead letter queue
             context.status = TaskStatus.DEAD_LETTER
             await self.dead_letter_queue.add(context)
             self.metrics.record_dead_letter()
@@ -599,7 +486,6 @@ class AsyncTaskExecutor:
         payload: Dict[str, Any],
         timeout: Optional[float]
     ) -> Any:
-        """Execute task through circuit breaker."""
         async def task_func():
             return await self._execute_task(domain, action, payload, timeout)
         
@@ -612,19 +498,16 @@ class AsyncTaskExecutor:
         payload: Dict[str, Any],
         timeout: Optional[float]
     ) -> Any:
-        """Execute the actual task logic."""
         key = f"erpo3:{domain}:{action}"
         
-        # Check for registered handler
         if key in self._task_handlers:
             handler = self._task_handlers[key]
             if timeout:
                 return await asyncio.wait_for(handler(payload), timeout=timeout)
             return await handler(payload)
         
-        # Default execution - simulate task
         logger.debug(f"No handler registered for {key}, using default execution")
-        await asyncio.sleep(0.1)  # Simulate work
+        await asyncio.sleep(0.1)
         return {"status": "completed", "domain": domain, "action": action}
     
     async def execute_batch(
@@ -632,16 +515,6 @@ class AsyncTaskExecutor:
         tasks: List[Dict[str, Any]],
         max_concurrency: int = 10
     ) -> List[Dict[str, Any]]:
-        """
-        Execute multiple tasks concurrently with controlled parallelism.
-        
-        Args:
-            tasks: List of task definitions with domain, action, payload
-            max_concurrency: Maximum concurrent tasks
-        
-        Returns:
-            List of results with task_id, status, result/error
-        """
         semaphore = asyncio.Semaphore(max_concurrency)
         
         async def execute_single(task_def: Dict[str, Any]) -> Dict[str, Any]:
@@ -672,19 +545,15 @@ class AsyncTaskExecutor:
         return results
     
     def get_metrics(self) -> Dict[str, Any]:
-        """Get current metrics summary."""
         return self.metrics.get_summary()
     
     async def get_dead_letter_tasks(self) -> List[Dict[str, Any]]:
-        """Retrieve all tasks in dead letter queue."""
         tasks = await self.dead_letter_queue.get_all()
         return [task.to_dict() for task in tasks]
     
     async def shutdown(self):
-        """Gracefully shutdown the executor."""
         logger.info("Shutting down AsyncTaskExecutor...")
         
-        # Cancel background tasks
         for task in self._background_tasks:
             task.cancel()
         
@@ -694,34 +563,29 @@ class AsyncTaskExecutor:
         logger.info("AsyncTaskExecutor shutdown complete")
 
 
-# Pre-configured task handlers for common erpo3 operations
 class ERPo3TaskHandlers:
-    """Pre-built task handlers for common ERP operations."""
     
     @staticmethod
     async def sync_inventory(payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Sync inventory data across warehouses."""
         warehouse_ids = payload.get("warehouse_ids", [])
         logger.info(f"Syncing inventory for warehouses: {warehouse_ids}")
-        await asyncio.sleep(0.5)  # Simulate sync
+        await asyncio.sleep(0.5)
         return {"synced_warehouses": len(warehouse_ids), "status": "success"}
     
     @staticmethod
     async def process_payment(payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Process payment transaction."""
         amount = payload.get("amount", 0)
         currency = payload.get("currency", "USD")
         logger.info(f"Processing payment: {amount} {currency}")
-        await asyncio.sleep(0.3)  # Simulate processing
+        await asyncio.sleep(0.3)
         return {"transaction_id": str(uuid.uuid4()), "status": "completed"}
     
     @staticmethod
     async def generate_report(payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate analytics report."""
         report_type = payload.get("type", "summary")
         date_range = payload.get("date_range")
         logger.info(f"Generating {report_type} report for {date_range}")
-        await asyncio.sleep(1.0)  # Simulate report generation
+        await asyncio.sleep(1.0)
         return {
             "report_type": report_type,
             "file_url": f"/reports/{report_type}_{uuid.uuid4()}.pdf",
@@ -730,11 +594,10 @@ class ERPo3TaskHandlers:
     
     @staticmethod
     async def validate_data(payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate data integrity."""
         data_type = payload.get("data_type")
         records = payload.get("records", [])
         logger.info(f"Validating {len(records)} {data_type} records")
-        await asyncio.sleep(0.2)  # Simulate validation
+        await asyncio.sleep(0.2)
         return {
             "valid_count": len(records),
             "invalid_count": 0,
@@ -743,19 +606,16 @@ class ERPo3TaskHandlers:
     
     @staticmethod
     async def send_notification(payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Send notification to users."""
         notification_type = payload.get("type")
         recipients = payload.get("recipients", [])
         logger.info(f"Sending {notification_type} to {len(recipients)} recipients")
-        await asyncio.sleep(0.1)  # Simulate sending
+        await asyncio.sleep(0.1)
         return {"sent_count": len(recipients), "failed_count": 0}
 
 
 def create_default_executor(config: Optional[Dict[str, Any]] = None) -> AsyncTaskExecutor:
-    """Create and configure default executor with pre-registered handlers."""
     executor = AsyncTaskExecutor(config)
     
-    # Register common handlers
     executor.register_handler("inventory", "sync", ERPo3TaskHandlers.sync_inventory)
     executor.register_handler("payments", "process", ERPo3TaskHandlers.process_payment)
     executor.register_handler("reports", "generate", ERPo3TaskHandlers.generate_report)
@@ -765,10 +625,7 @@ def create_default_executor(config: Optional[Dict[str, Any]] = None) -> AsyncTas
     return executor
 
 
-# Example usage and testing
 async def main():
-    """Example usage of the async task framework."""
-    # Create executor with custom config
     config = {
         "default_max_retries": 3,
         "rate_limit_per_domain": 5.0,
@@ -780,7 +637,6 @@ async def main():
     executor = create_default_executor(config)
     
     try:
-        # Execute single task
         result = await executor.execute(
             domain="inventory",
             action="sync",
@@ -790,7 +646,6 @@ async def main():
         )
         print(f"Single task result: {result}")
         
-        # Execute batch tasks
         batch_tasks = [
             {"domain": "payments", "action": "process", "payload": {"amount": 100, "currency": "USD"}},
             {"domain": "reports", "action": "generate", "payload": {"type": "sales", "date_range": "2024-01"}},
@@ -800,7 +655,6 @@ async def main():
         batch_results = await executor.execute_batch(batch_tasks, max_concurrency=3)
         print(f"Batch results: {batch_results}")
         
-        # Get metrics
         metrics = executor.get_metrics()
         print(f"Metrics: {json.dumps(metrics, indent=2)}")
         
