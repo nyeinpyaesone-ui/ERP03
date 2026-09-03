@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 ###############################################################################
-# ERP erpo3 — GitHub Repository Manager
+# ERP erp03 — GitHub Repository Manager
 # Usage: ./scripts/gh-manager.sh [command]
 ###############################################################################
 
@@ -17,7 +17,7 @@ warn()  { echo -e "${Y}[!]${NC} $1"; }
 err()   { echo -e "${R}[✗]${NC} $1"; }
 
 cmd_help() {
-    echo "ERP erpo3 GitHub Manager"
+    echo "ERP erp03 GitHub Manager"
     echo ""
     echo "Commands:"
     echo "  status      Show repository status"

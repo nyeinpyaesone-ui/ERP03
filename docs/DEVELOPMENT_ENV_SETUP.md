@@ -1,13 +1,13 @@
-# ERP erpo3 - Development Environment Setup Guide
+# ERP erp03 - Development Environment Setup Guide
 
-Complete guide for setting up and running the ERP erpo3 development environment.
+Complete guide for setting up and running the ERP erp03 development environment.
 
 ## Quick Start
 
 ```bash
 # 1. Clone repository
 git clone <repository-url>
-cd erpo3
+cd erp03
 
 # 2. Copy environment files
 cp .env.example .env.dev
@@ -48,7 +48,7 @@ docker-compose -f docker-compose.dev.yml ps
 - **Backend API**: http://localhost:8000
 - **API Docs (Swagger)**: http://localhost:8000/docs
 - **Flower Dashboard**: http://localhost:5555 (admin/dev_flower_password)
-- **pgAdmin**: http://localhost:5050 (admin@erpo3.dev/admin)
+- **pgAdmin**: http://localhost:5050 (admin@erp03.dev/admin)
 
 ## Configuration Files
 
@@ -113,7 +113,7 @@ chmod +x scripts/build-push-ghcr.sh
 # Manual build
 docker buildx create --use
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -t ghcr.io/YOUR_USERNAME/erpo3-backend:latest \
+  -t ghcr.io/YOUR_USERNAME/erp03-backend:latest \
   --push ./ERP-BACKEND
 ```
 
@@ -164,7 +164,7 @@ docker-compose -f docker-compose.dev.yml logs --tail=100 api
 docker-compose -f docker-compose.dev.yml exec api bash
 
 # Database shell
-docker-compose -f docker-compose.dev.yml exec db psql -U erp_dev -d erpo3_dev
+docker-compose -f docker-compose.dev.yml exec db psql -U erp_dev -d erp03_dev
 
 # Run migrations manually
 docker-compose -f docker-compose.dev.yml exec api alembic upgrade head
@@ -177,14 +177,14 @@ docker-compose -f docker-compose.dev.yml exec api pytest tests/ -v
 
 ```bash
 # Backup database
-docker-compose -f docker-compose.dev.yml exec db pg_dump -U erp_dev erpo3_dev > backup.sql
+docker-compose -f docker-compose.dev.yml exec db pg_dump -U erp_dev erp03_dev > backup.sql
 
 # Restore database
-docker-compose -f docker-compose.dev.yml exec -T db psql -U erp_dev -d erpo3_dev < backup.sql
+docker-compose -f docker-compose.dev.yml exec -T db psql -U erp_dev -d erp03_dev < backup.sql
 
 # Reset database (⚠️ deletes all data)
 docker-compose -f docker-compose.dev.yml down -v
-docker volume rm erpo3_postgres_dev_data
+docker volume rm erp03_postgres_dev_data
 ```
 
 ## Troubleshooting

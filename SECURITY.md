@@ -9,7 +9,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability within ERP erpo3, please send an email
+If you discover a security vulnerability within ERP erp03, please send an email
 to nyeinpyaesone273@gmail.com. All security vulnerabilities will be promptly addressed.
 
 Please do NOT open public issues for security vulnerabilities.

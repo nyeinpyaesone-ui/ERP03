@@ -1,6 +1,6 @@
-# ERP erpo3 - GitHub Container Registry (GHCR) Setup Guide
+# ERP erp03 - GitHub Container Registry (GHCR) Setup Guide
 
-This guide explains how to configure and use GitHub Container Registry (GHCR) for the ERP erpo3 project.
+This guide explains how to configure and use GitHub Container Registry (GHCR) for the ERP erp03 project.
 
 ## Table of Contents
 
@@ -64,7 +64,7 @@ chmod +x scripts/build-push-ghcr.sh
 
 ### Step 3: Verify Images
 
-Visit: https://github.com/YOUR_USERNAME?tab=packages&repo_name=erpo3
+Visit: https://github.com/YOUR_USERNAME?tab=packages&repo_name=erp03
 
 ---
 
@@ -113,12 +113,12 @@ Even for public packages, you need to authenticate:
 echo "YOUR_GITHUB_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
 
 # Pull specific version
-docker pull ghcr.io/YOUR_USERNAME/erpo3-backend:v1.0.0
-docker pull ghcr.io/YOUR_USERNAME/erpo3-frontend:v1.0.0
+docker pull ghcr.io/YOUR_USERNAME/erp03-backend:v1.0.0
+docker pull ghcr.io/YOUR_USERNAME/erp03-frontend:v1.0.0
 
 # Pull latest
-docker pull ghcr.io/YOUR_USERNAME/erpo3-backend:latest
-docker pull ghcr.io/YOUR_USERNAME/erpo3-frontend:latest
+docker pull ghcr.io/YOUR_USERNAME/erp03-backend:latest
+docker pull ghcr.io/YOUR_USERNAME/erp03-frontend:latest
 ```
 
 ### Using in Docker Compose
@@ -126,11 +126,11 @@ docker pull ghcr.io/YOUR_USERNAME/erpo3-frontend:latest
 ```yaml
 services:
   api:
-    image: ghcr.io/YOUR_USERNAME/erpo3-backend:latest
+    image: ghcr.io/YOUR_USERNAME/erp03-backend:latest
     # ... configuration
   
   frontend:
-    image: ghcr.io/YOUR_USERNAME/erpo3-frontend:latest
+    image: ghcr.io/YOUR_USERNAME/erp03-frontend:latest
     # ... configuration
 ```
 
@@ -210,7 +210,7 @@ Excess usage: $0.25/GB storage, $0.50/GB bandwidth overage
 **Tip**: Clean up old images periodically:
 ```bash
 # Delete old development images
-ghcr delete YOUR_USERNAME/erpo3-backend --version dev-*
+ghcr delete YOUR_USERNAME/erp03-backend --version dev-*
 ```
 
 ---

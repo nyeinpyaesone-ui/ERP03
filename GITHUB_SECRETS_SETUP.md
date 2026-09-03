@@ -41,5 +41,5 @@ GitHub Actions will automatically:
 ## Verify
 
 Check your Docker Hub:
-- https://hub.docker.com/r/powerrangeranikg/erpo3-backend
-- https://hub.docker.com/r/powerrangeranikg/erpo3-frontend
+- https://hub.docker.com/r/powerrangeranikg/erp03-backend
+- https://hub.docker.com/r/powerrangeranikg/erp03-frontend

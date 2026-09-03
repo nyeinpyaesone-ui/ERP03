@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: erpo3-api
+    name: erp03-api
     runtime: python
     rootDir: ERP-BACKEND
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
@@ -12,12 +12,12 @@ services:
         value: 3.11.9
       - key: DATABASE_URL
         fromDatabase:
-          name: erpo3-db
+          name: erp03-db
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: redis
-          name: erpo3-redis
+          name: erp03-redis
           property: connectionString
       - key: SECRET_KEY
         generateValue: true
@@ -51,11 +51,11 @@ services:
         sync: false
 
 databases:
-  - name: erpo3-db
+  - name: erp03-db
     plan: free
     databaseName: erp_db
     user: erp_user
 
-  - name: erpo3-redis
+  - name: erp03-redis
     plan: free
     ipAllowList: []

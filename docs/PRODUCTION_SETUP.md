@@ -6,7 +6,7 @@
 - 4GB+ RAM
 - 2+ CPU cores
 - 50GB+ storage
-- Domain name (e.g., erpo3.com)
+- Domain name (e.g., erp03.com)
 
 ## Step-by-Step Setup
 
@@ -65,8 +65,8 @@ sudo cp /etc/letsencrypt/live/api.yourdomain.com/privkey.pem ./ssl/key.pem
 
 ```bash
 # Pull images
-docker pull powerrangeranikg/erpo3-backend:latest
-docker pull powerrangeranikg/erpo3-frontend:latest
+docker pull powerrangeranikg/erp03-backend:latest
+docker pull powerrangeranikg/erp03-frontend:latest
 
 # Start services
 docker-compose -f docker-compose.prod.yml up -d
@@ -110,10 +110,10 @@ sudo ufw enable
 
 ```bash
 # Database backup
-docker-compose exec postgres pg_dump -U erpo3 erpo3-database > backup_$(date +%Y%m%d).sql
+docker-compose exec postgres pg_dump -U erp03 erp03-database > backup_$(date +%Y%m%d).sql
 
 # Automated backup (add to crontab)
-0 2 * * * cd /opt/erpo3 && ./scripts/backup.sh /backups
+0 2 * * * cd /opt/erp03 && ./scripts/backup.sh /backups
 ```
 
 ## Monitoring

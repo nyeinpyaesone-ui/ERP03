@@ -9,9 +9,9 @@ set -Eeuo pipefail
 
 OUTPUT_DIR="${1:-./backups}"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-BACKUP_PATH="${OUTPUT_DIR}/erpo3_${TIMESTAMP}"
+BACKUP_PATH="${OUTPUT_DIR}/erp03_${TIMESTAMP}"
 DB_USER="${DB_USER:-erp}"
-DB_NAME="${DB_NAME:-erpo3}"
+DB_NAME="${DB_NAME:-erp03}"
 GPG_RECIPIENT="${GPG_RECIPIENT:-}"
 
 mkdir -p "${BACKUP_PATH}"

@@ -266,7 +266,7 @@ class DeadLetterQueue:
 T = TypeVar('T')
 
 
-def erpo3_task(
+def erp03_task(
     domain: str,
     action: str,
     priority: PriorityLevel = PriorityLevel.NORMAL,
@@ -275,7 +275,7 @@ def erpo3_task(
     rate_limit: Optional[float] = None,
     circuit_breaker: bool = True
 ):
-    prefix = f"erpo3:{domain}:{action}"
+    prefix = f"erp03:{domain}:{action}"
     
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         
@@ -375,7 +375,7 @@ class AsyncTaskExecutor:
         logger.info(f"AsyncTaskExecutor initialized with max_concurrency={self.max_concurrent_tasks}")
     
     def register_handler(self, domain: str, action: str, handler: Callable):
-        key = f"erpo3:{domain}:{action}"
+        key = f"erp03:{domain}:{action}"
         self._task_handlers[key] = handler
         logger.info(f"Registered handler for {key}")
     
@@ -389,7 +389,7 @@ class AsyncTaskExecutor:
         timeout: Optional[float] = None
     ) -> Any:
         task_id = str(uuid.uuid4())
-        prefix = f"erpo3:{domain}:{action}"
+        prefix = f"erp03:{domain}:{action}"
         retries = max_retries or self.default_max_retries
         
         context = TaskContext(
@@ -498,7 +498,7 @@ class AsyncTaskExecutor:
         payload: Dict[str, Any],
         timeout: Optional[float]
     ) -> Any:
-        key = f"erpo3:{domain}:{action}"
+        key = f"erp03:{domain}:{action}"
         
         if key in self._task_handlers:
             handler = self._task_handlers[key]

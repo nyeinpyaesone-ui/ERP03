@@ -1,7 +1,7 @@
 version: '3.8'
 
 # ============================================
-# ERP erpo3 - Development Docker Compose
+# ERP erp03 - Development Docker Compose
 # ============================================
 # This configuration is optimized for local development
 # with hot-reload, debug mode, and developer tools
@@ -16,7 +16,7 @@ x-backend-common: &backend-common
     - ENVIRONMENT=development
     - DEBUG=true
     - LOG_LEVEL=DEBUG
-    - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-erp_dev}:${POSTGRES_PASSWORD:-dev_password}@db:5432/${POSTGRES_DB:-erpo3_dev}
+    - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-erp_dev}:${POSTGRES_PASSWORD:-dev_password}@db:5432/${POSTGRES_DB:-erp03_dev}
     - REDIS_URL=redis://redis:6379/0
     - SECRET_KEY=${SECRET_KEY:-dev_secret_key_CHANGE_THIS_IN_PRODUCTION}
     - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_CHANGE_THIS_IN_PRODUCTION}
@@ -27,7 +27,7 @@ x-backend-common: &backend-common
     - ./ERP-BACKEND:/app/app
     - ./ERP-BACKEND/tests:/app/tests
   networks:
-    - erpo3_internal
+    - erp03_internal
   depends_on:
     db:
       condition: service_healthy
@@ -40,21 +40,21 @@ services:
   # --------------------------------------------
   db:
     image: postgres:15-alpine
-    container_name: erpo3-dev-db
+    container_name: erp03-dev-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-erp_dev}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password}
-      POSTGRES_DB: ${POSTGRES_DB:-erpo3_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-erp03_dev}
     ports:
       - "5432:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
       - ./scripts/init-dev-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
-      - erpo3_internal
+      - erp03_internal
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-erp_dev} -d ${POSTGRES_DB:-erpo3_dev}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-erp_dev} -d ${POSTGRES_DB:-erp03_dev}"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -70,7 +70,7 @@ services:
   # --------------------------------------------
   redis:
     image: redis:7-alpine
-    container_name: erpo3-dev-redis
+    container_name: erp03-dev-redis
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
     ports:
@@ -78,7 +78,7 @@ services:
     volumes:
       - redis_dev_data:/data
     networks:
-      - erpo3_internal
+      - erp03_internal
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -95,7 +95,7 @@ services:
   # --------------------------------------------
   api:
     <<: *backend-common
-    container_name: erpo3-dev-api
+    container_name: erp03-dev-api
     ports:
       - "8000:8000"
     command: >
@@ -122,10 +122,10 @@ services:
   # --------------------------------------------
   worker:
     <<: *backend-common
-    container_name: erpo3-dev-worker
+    container_name: erp03-dev-worker
     environment:
       - ENVIRONMENT=development
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-erp_dev}:${POSTGRES_PASSWORD:-dev_password}@db:5432/${POSTGRES_DB:-erpo3_dev}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-erp_dev}:${POSTGRES_PASSWORD:-dev_password}@db:5432/${POSTGRES_DB:-erp03_dev}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-2}
     command: >
@@ -155,7 +155,7 @@ services:
       context: ./ERP-BACKEND
       dockerfile: Dockerfile
       target: production
-    container_name: erpo3-dev-flower
+    container_name: erp03-dev-flower
     restart: unless-stopped
     environment:
       - REDIS_URL=redis://redis:6379/0
@@ -168,7 +168,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - erpo3_internal
+      - erp03_internal
     command: >
       sh -c "celery -A app.workers.celery_app flower
              --port=5555
@@ -190,7 +190,7 @@ services:
       args:
         - VITE_API_BASE_URL=http://localhost:8000/api/v1
         - VITE_APP_VERSION=dev
-    container_name: erpo3-dev-frontend
+    container_name: erp03-dev-frontend
     restart: unless-stopped
     ports:
       - "5173:5173"
@@ -207,8 +207,8 @@ services:
       api:
         condition: service_healthy
     networks:
-      - erpo3_internal
-      - erpo3_public
+      - erp03_internal
+      - erp03_public
     command: npm run dev -- --host 0.0.0.0 --port 5173
     deploy:
       resources:
@@ -221,10 +221,10 @@ services:
   # --------------------------------------------
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: erpo3-dev-pgadmin
+    container_name: erp03-dev-pgadmin
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@erpo3.dev}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@erp03.dev}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
@@ -233,7 +233,7 @@ services:
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     networks:
-      - erpo3_internal
+      - erp03_internal
     depends_on:
       db:
         condition: service_healthy
@@ -244,10 +244,10 @@ services:
           memory: 512M
 
 networks:
-  erpo3_internal:
+  erp03_internal:
     driver: bridge
     internal: true
-  erpo3_public:
+  erp03_public:
     driver: bridge
 
 volumes:

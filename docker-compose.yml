@@ -3,18 +3,18 @@ version: '3.8'
 services:
   db:
     image: postgres:15-alpine
-    container_name: erpo3-db
+    container_name: erp03-db
     restart: unless-stopped
     environment:
       POSTGRES_USER_FILE: /run/secrets/db_user
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
-      POSTGRES_DB: ${POSTGRES_DB:-erpo3_prod}
+      POSTGRES_DB: ${POSTGRES_DB:-erp03_prod}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - erpo3_internal
+      - erp03_internal
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$(cat /run/secrets/db_user) -d ${POSTGRES_DB:-erpo3_prod}"]
+      test: ["CMD-SHELL", "pg_isready -U $$(cat /run/secrets/db_user) -d ${POSTGRES_DB:-erp03_prod}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,13 +30,13 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: erpo3-redis
+    container_name: erp03-redis
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     networks:
-      - erpo3_internal
+      - erp03_internal
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -53,12 +53,12 @@ services:
       context: ./ERP-BACKEND
       dockerfile: Dockerfile.worker
       target: production
-    container_name: erpo3-worker
+    container_name: erp03-worker
     restart: unless-stopped
     env_file:
       - .env.production
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-erpo3_prod}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-erp03_prod}
       REDIS_URL: redis://redis:6379/0
       CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-4}
       ENVIRONMENT: production
@@ -74,7 +74,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - erpo3_internal
+      - erp03_internal
     command: >
       sh -c "celery -A app.workers.celery_app worker
              --loglevel=info
@@ -107,7 +107,7 @@ services:
       context: ./ERP-BACKEND
       dockerfile: Dockerfile.worker
       target: production
-    container_name: erpo3-flower
+    container_name: erp03-flower
     restart: unless-stopped
     env_file:
       - .env.production
@@ -120,7 +120,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - erpo3_internal
+      - erp03_internal
     command: >
       sh -c "celery -A app.workers.celery_app flower
              --port=5555
@@ -146,12 +146,12 @@ services:
       context: ./ERP-BACKEND
       dockerfile: Dockerfile
       target: production
-    container_name: erpo3-api
+    container_name: erp03-api
     restart: unless-stopped
     env_file:
       - .env.production
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-erpo3_prod}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-erp03_prod}
       REDIS_URL: redis://redis:6379/0
       ENVIRONMENT: production
       LOG_LEVEL: INFO
@@ -170,8 +170,8 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - erpo3_internal
-      - erpo3_public
+      - erp03_internal
+      - erp03_public
     command: >
       sh -c "alembic upgrade head &&
              uvicorn app.main:app
@@ -207,7 +207,7 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_API_BASE_URL=/api/v1
-    container_name: erpo3-frontend
+    container_name: erp03-frontend
     restart: unless-stopped
     ports:
       - "80:80"
@@ -215,8 +215,8 @@ services:
       api:
         condition: service_healthy
     networks:
-      - erpo3_public
-      - erpo3_internal
+      - erp03_public
+      - erp03_internal
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
       interval: 30s
@@ -234,10 +234,10 @@ services:
         max-file: "3"
 
 networks:
-  erpo3_internal:
+  erp03_internal:
     driver: bridge
     internal: true
-  erpo3_public:
+  erp03_public:
     driver: bridge
 
 volumes:

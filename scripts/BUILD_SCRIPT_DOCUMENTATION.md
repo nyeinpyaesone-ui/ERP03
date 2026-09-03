@@ -1,4 +1,4 @@
-# ERP erpo3 — Enhanced Build & Push Script Documentation
+# ERP erp03 — Enhanced Build & Push Script Documentation
 
 ## Overview
 
@@ -219,7 +219,7 @@ set -x
 ### Test Registry Access
 ```bash
 docker login ghcr.io
-docker pull ghcr.io/your-org/erpo3-backend:latest
+docker pull ghcr.io/your-org/erp03-backend:latest
 ```
 
 ### Manual Builder Cleanup
@@ -267,4 +267,4 @@ For issues or questions:
 
 **Version**: 2.0.0  
 **Last Updated**: 2024  
-**Maintainer**: ERP erpo3 DevOps Team
+**Maintainer**: ERP erp03 DevOps Team

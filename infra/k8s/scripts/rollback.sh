@@ -2,9 +2,9 @@
 set -e
 
 ENVIRONMENT=${1:-development}
-NAMESPACE="erpo3-${ENVIRONMENT}"
+NAMESPACE="erp03-${ENVIRONMENT}"
 
-echo "=== ERP erpo3 Kubernetes Rollback ==="
+echo "=== ERP erp03 Kubernetes Rollback ==="
 echo "Environment: ${ENVIRONMENT}"
 echo ""
 
@@ -25,15 +25,15 @@ fi
 
 # Rollback deployments
 echo "Rolling back deployments..."
-kubectl rollout undo deployment/${ENVIRONMENT}-erpo3-api -n ${NAMESPACE}
-kubectl rollout undo deployment/${ENVIRONMENT}-erpo3-web -n ${NAMESPACE}
-kubectl rollout undo deployment/${ENVIRONMENT}-erpo3-worker -n ${NAMESPACE}
+kubectl rollout undo deployment/${ENVIRONMENT}-erp03-api -n ${NAMESPACE}
+kubectl rollout undo deployment/${ENVIRONMENT}-erp03-web -n ${NAMESPACE}
+kubectl rollout undo deployment/${ENVIRONMENT}-erp03-worker -n ${NAMESPACE}
 
 # Wait for rollback
 echo "Waiting for rollback to complete..."
-kubectl rollout status deployment/${ENVIRONMENT}-erpo3-api -n ${NAMESPACE} --timeout=300s
-kubectl rollout status deployment/${ENVIRONMENT}-erpo3-web -n ${NAMESPACE} --timeout=300s
-kubectl rollout status deployment/${ENVIRONMENT}-erpo3-worker -n ${NAMESPACE} --timeout=300s
+kubectl rollout status deployment/${ENVIRONMENT}-erp03-api -n ${NAMESPACE} --timeout=300s
+kubectl rollout status deployment/${ENVIRONMENT}-erp03-web -n ${NAMESPACE} --timeout=300s
+kubectl rollout status deployment/${ENVIRONMENT}-erp03-worker -n ${NAMESPACE} --timeout=300s
 
 echo ""
 echo "Rollback completed successfully!"

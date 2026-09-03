@@ -244,8 +244,8 @@ When primary registry (GHCR) fails:
 
 ```yaml
 # Fallback image naming
-Primary: ghcr.io/owner/erpo3-backend:v1.0.0
-Fallback: docker.io/owner/erpo3-backup-backend:v1.0.0
+Primary: ghcr.io/owner/erp03-backend:v1.0.0
+Fallback: docker.io/owner/erp03-backup-backend:v1.0.0
 ```
 
 ---
@@ -326,7 +326,7 @@ if GHCR unavailable or build fails after MAX_RETRIES:
 ```bash
 # Trivy integration
 trivy image --severity CRITICAL,HIGH \
-    ghcr.io/owner/erpo3-backend:v1.0.0
+    ghcr.io/owner/erp03-backend:v1.0.0
 
 # Exit codes:
 # 0: Scan completed (vulnerabilities logged)
@@ -356,7 +356,7 @@ trivy image --severity CRITICAL,HIGH \
 | `VERSION` | Git tag/timestamp | Image version tag |
 | `REGISTRY_PRIMARY` | ghcr.io | Primary registry |
 | `REGISTRY_FALLBACK` | docker.io | Backup registry |
-| `IMAGE_PREFIX` | owner/erpo3 | Image name prefix |
+| `IMAGE_PREFIX` | owner/erp03 | Image name prefix |
 | `MAX_RETRIES` | 3 | Maximum retry attempts |
 | `RETRY_DELAY` | 5 | Base delay (seconds) |
 | `FALLBACK_ENABLED` | false | Enable fallback registry |
@@ -526,7 +526,7 @@ curl -I https://ghcr.io
 curl -I https://hub.docker.com
 
 # List images
-docker images | grep erpo3
+docker images | grep erp03
 
 # Check build cache
 docker buildx du
@@ -556,7 +556,7 @@ docker buildx create --use --name erp-builder
 - **Documentation**: `/workspace/SETUP_SUMMARY.md`
 - **Build Script Docs**: `/workspace/scripts/BUILD_SCRIPT_DOCUMENTATION.md`
 - **Kubernetes Guide**: `/workspace/kubernetes/README-Kubernetes.md`
-- **GitHub Issues**: https://github.com/owner/erpo3/issues
+- **GitHub Issues**: https://github.com/owner/erp03/issues
 
 ---
 

@@ -1,12 +1,12 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: erpo3-worker
-  namespace: erpo3
+  name: erp03-worker
+  namespace: erp03
   labels:
-    app.kubernetes.io/name: erpo3-worker
+    app.kubernetes.io/name: erp03-worker
     app.kubernetes.io/component: worker
-    app.kubernetes.io/part-of: erpo3
+    app.kubernetes.io/part-of: erp03
 spec:
   replicas: 2
   strategy:
@@ -16,21 +16,21 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app.kubernetes.io/name: erpo3-worker
+      app.kubernetes.io/name: erp03-worker
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: erpo3-worker
+        app.kubernetes.io/name: erp03-worker
         app.kubernetes.io/component: worker
-        app.kubernetes.io/part-of: erpo3
+        app.kubernetes.io/part-of: erp03
     spec:
-      serviceAccountName: erpo3
+      serviceAccountName: erp03
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
       containers:
       - name: worker
-        image: ghcr.io/nyeinpyaesone-ui/erpo3-worker:latest
+        image: ghcr.io/nyeinpyaesone-ui/erp03-worker:latest
         imagePullPolicy: Always
         env:
         - name: NODE_ENV
@@ -39,9 +39,9 @@ spec:
           value: "5"
         envFrom:
         - configMapRef:
-            name: erpo3-config
+            name: erp03-config
         - secretRef:
-            name: erpo3-secrets
+            name: erp03-secrets
         resources:
           requests:
             memory: "256Mi"
@@ -67,19 +67,19 @@ spec:
                 - key: app.kubernetes.io/name
                   operator: In
                   values:
-                  - erpo3-worker
+                  - erp03-worker
               topologyKey: kubernetes.io/hostname
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: erpo3-worker-hpa
-  namespace: erpo3
+  name: erp03-worker-hpa
+  namespace: erp03
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: erpo3-worker
+    name: erp03-worker
   minReplicas: 2
   maxReplicas: 10
   metrics:

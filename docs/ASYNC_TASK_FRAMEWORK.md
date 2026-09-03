@@ -1,17 +1,17 @@
-# ERP erpo3 Asynchronous Task Framework Guide
+# ERP erp03 Asynchronous Task Framework Guide
 
 ## Overview
 
-The ERP erpo3 Asynchronous Task Framework provides professional-grade async task execution with prefix-wired routing, exponential backoff retries, circuit breakers, and comprehensive error handling for real-world production scenarios.
+The ERP erp03 Asynchronous Task Framework provides professional-grade async task execution with prefix-wired routing, exponential backoff retries, circuit breakers, and comprehensive error handling for real-world production scenarios.
 
 ## Key Features
 
 ### 1. Prefix-Wired Task Routing
-- **Format**: `erpo3:{domain}:{action}`
+- **Format**: `erp03:{domain}:{action}`
 - **Examples**: 
-  - `erpo3:inventory:sync`
-  - `erpo3:payments:process`
-  - `erpo3:reports:generate`
+  - `erp03:inventory:sync`
+  - `erp03:payments:process`
+  - `erp03:reports:generate`
 
 ### 2. Exponential Backoff with Jitter
 - Configurable retry attempts (default: 3)
@@ -179,9 +179,9 @@ result = await executor.execute(
 ### Using the Decorator
 
 ```python
-from app.async_tasks import erpo3_task, PriorityLevel, RetryConfig
+from app.async_tasks import erp03_task, PriorityLevel, RetryConfig
 
-@erpo3_task(
+@erp03_task(
     domain="finance",
     action="reconcile",
     priority=PriorityLevel.HIGH,
@@ -334,19 +334,19 @@ async def reprocess_dead_letter():
 The framework includes pre-built handlers for common ERP operations:
 
 ### Inventory Operations
-- `erpo3:inventory:sync` - Sync inventory across warehouses
+- `erp03:inventory:sync` - Sync inventory across warehouses
 
 ### Payment Operations
-- `erpo3:payments:process` - Process payment transactions
+- `erp03:payments:process` - Process payment transactions
 
 ### Reporting Operations
-- `erpo3:reports:generate` - Generate analytics reports
+- `erp03:reports:generate` - Generate analytics reports
 
 ### Validation Operations
-- `erpo3:validation:check` - Validate data integrity
+- `erp03:validation:check` - Validate data integrity
 
 ### Notification Operations
-- `erpo3:notifications:send` - Send notifications to users
+- `erp03:notifications:send` - Send notifications to users
 
 ## Best Practices
 
@@ -446,7 +446,7 @@ config = {
 # Enable automatic garbage collection after tasks
 import gc
 
-@erpo3_task(domain="ml", action="predict")
+@erp03_task(domain="ml", action="predict")
 async def ml_prediction(data):
     result = await run_model(data)
     gc.collect()  # Force garbage collection
@@ -498,8 +498,8 @@ def old_sync_inventory(self, warehouse_ids):
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60)
 
-# New erpo3 async task
-@erpo3_task(
+# New erp03 async task
+@erp03_task(
     domain="inventory",
     action="sync",
     max_retries=3,
@@ -512,6 +512,6 @@ async def new_sync_inventory(warehouse_ids):
 
 ## Conclusion
 
-The ERP erpo3 Asynchronous Task Framework provides enterprise-grade reliability for distributed task execution with built-in resilience patterns, comprehensive monitoring, and flexible configuration for diverse workload requirements.
+The ERP erp03 Asynchronous Task Framework provides enterprise-grade reliability for distributed task execution with built-in resilience patterns, comprehensive monitoring, and flexible configuration for diverse workload requirements.
 
-For support and questions, refer to the main ERP erpo3 documentation or contact the development team.
+For support and questions, refer to the main ERP erp03 documentation or contact the development team.

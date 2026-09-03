@@ -1,6 +1,6 @@
 # Developer Onboarding Guide
 
-Welcome to the ERP erpo3! This guide will get you productive in under 30 minutes.
+Welcome to the ERP erp03! This guide will get you productive in under 30 minutes.
 
 ## Day 1: Setup (15 minutes)
 

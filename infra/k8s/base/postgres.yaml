@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: erpo3-postgres
-  namespace: erpo3
+  name: erp03-postgres
+  namespace: erp03
   labels:
-    app.kubernetes.io/name: erpo3-postgres
+    app.kubernetes.io/name: erp03-postgres
     app.kubernetes.io/component: database
-    app.kubernetes.io/part-of: erpo3
+    app.kubernetes.io/part-of: erp03
 spec:
-  serviceName: erpo3-postgres
+  serviceName: erp03-postgres
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: erpo3-postgres
+      app.kubernetes.io/name: erp03-postgres
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: erpo3-postgres
+        app.kubernetes.io/name: erp03-postgres
         app.kubernetes.io/component: database
-        app.kubernetes.io/part-of: erpo3
+        app.kubernetes.io/part-of: erp03
     spec:
       securityContext:
         runAsUser: 999
@@ -35,17 +35,17 @@ spec:
         - name: POSTGRES_DB
           valueFrom:
             configMapKeyRef:
-              name: erpo3-config
+              name: erp03-config
               key: DB_NAME
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
-              name: erpo3-secrets
+              name: erp03-secrets
               key: DB_USER
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: erpo3-secrets
+              name: erp03-secrets
               key: DB_PASSWORD
         - name: PGDATA
           value: "/var/lib/postgresql/data/pgdata"
@@ -84,15 +84,15 @@ spec:
       volumes:
       - name: init-scripts
         configMap:
-          name: erpo3-postgres-init
+          name: erp03-postgres-init
       - name: postgres-config
         configMap:
-          name: erpo3-postgres-config
+          name: erp03-postgres-config
   volumeClaimTemplates:
   - metadata:
       name: data
       labels:
-        app.kubernetes.io/name: erpo3-postgres
+        app.kubernetes.io/name: erp03-postgres
     spec:
       accessModes: ["ReadWriteOnce"]
       storageClassName: fast-ssd
@@ -103,10 +103,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: erpo3-postgres
-  namespace: erpo3
+  name: erp03-postgres
+  namespace: erp03
   labels:
-    app.kubernetes.io/name: erpo3-postgres
+    app.kubernetes.io/name: erp03-postgres
     app.kubernetes.io/component: database
 spec:
   type: ClusterIP
@@ -116,13 +116,13 @@ spec:
     targetPort: 5432
     protocol: TCP
   selector:
-    app.kubernetes.io/name: erpo3-postgres
+    app.kubernetes.io/name: erp03-postgres
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: erpo3-postgres-init
-  namespace: erpo3
+  name: erp03-postgres-init
+  namespace: erp03
 data:
   01-init.sql: |
     -- Create extensions
@@ -139,19 +139,19 @@ data:
     CREATE SCHEMA IF NOT EXISTS pos;
 
     -- Set default privileges
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO erpo3_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA accounting GRANT ALL ON TABLES TO erpo3_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA inventory GRANT ALL ON TABLES TO erpo3_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA manufacturing GRANT ALL ON TABLES TO erpo3_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA hr GRANT ALL ON TABLES TO erpo3_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA ecommerce GRANT ALL ON TABLES TO erpo3_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA pos GRANT ALL ON TABLES TO erpo3_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO erp03_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA accounting GRANT ALL ON TABLES TO erp03_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA inventory GRANT ALL ON TABLES TO erp03_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA manufacturing GRANT ALL ON TABLES TO erp03_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA hr GRANT ALL ON TABLES TO erp03_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA ecommerce GRANT ALL ON TABLES TO erp03_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA pos GRANT ALL ON TABLES TO erp03_user;
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: erpo3-postgres-config
-  namespace: erpo3
+  name: erp03-postgres-config
+  namespace: erp03
 data:
   postgresql.conf: |
     listen_addresses = '*'

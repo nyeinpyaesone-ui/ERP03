@@ -3,7 +3,7 @@ from app.domains.admin.system import ActivityLog
 from typing import Optional, Dict, Any
 import logging
 
-logger = logging.getLogger("erpo3.audit")
+logger = logging.getLogger("erp03.audit")
 
 
 def log_activity(

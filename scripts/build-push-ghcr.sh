@@ -1,6 +1,6 @@
 #!/bin/bash
 ###############################################################################
-# ERP erpo3 — GHCR Build & Push Script (Local Development)
+# ERP erp03 — GHCR Build & Push Script (Local Development)
 # Run this on your LOCAL MACHINE with Docker installed
 # Features: Automated triggers, retry logic, rate limiting, fallback plans
 ###############################################################################
@@ -13,7 +13,7 @@ set -euo pipefail
 GHCR_REGISTRY="ghcr.io"
 REPO_OWNER="${GITHUB_REPOSITORY_OWNER:-$(whoami)}"
 VERSION="${1:-dev-$(date +%Y%m%d%H%M%S)}"
-IMAGE_PREFIX="${GHCR_REGISTRY}/${REPO_OWNER}/erpo3"
+IMAGE_PREFIX="${GHCR_REGISTRY}/${REPO_OWNER}/erp03"
 
 # Retry Configuration
 MAX_RETRIES=3
@@ -23,7 +23,7 @@ RATE_LIMIT_DELAY=2  # seconds between API calls
 # Fallback Configuration
 FALLBACK_REGISTRY="docker.io"
 FALLBACK_ENABLED=${FALLBACK_ENABLED:-false}
-BACKUP_IMAGE_PREFIX="${FALLBACK_REGISTRY}/${REPO_OWNER}/erpo3-backup"
+BACKUP_IMAGE_PREFIX="${FALLBACK_REGISTRY}/${REPO_OWNER}/erp03-backup"
 
 # Colors for output
 RED='\033[0;31m'
@@ -206,8 +206,8 @@ build_backend() {
             --push \
             --tag "${BACKEND_IMAGE}" \
             --tag "${BACKEND_IMAGE_LATEST}" \
-            --label "org.opencontainers.image.source=https://github.com/${REPO_OWNER}/erpo3" \
-            --label "org.opencontainers.image.description=ERP erpo3 Backend API" \
+            --label "org.opencontainers.image.source=https://github.com/${REPO_OWNER}/erp03" \
+            --label "org.opencontainers.image.description=ERP erp03 Backend API" \
             --label "org.opencontainers.image.version=${VERSION}" \
             --label "org.opencontainers.image.created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
             --cache-from type=gha \
@@ -239,8 +239,8 @@ build_backend() {
                 --platform linux/amd64 \
                 --push \
                 --tag "${BACKEND_IMAGE}-fallback" \
-                --label "org.opencontainers.image.source=https://github.com/${REPO_OWNER}/erpo3" \
-                --label "org.opencontainers.image.description=ERP erpo3 Backend API (Fallback)" \
+                --label "org.opencontainers.image.source=https://github.com/${REPO_OWNER}/erp03" \
+                --label "org.opencontainers.image.description=ERP erp03 Backend API (Fallback)" \
                 --label "org.opencontainers.image.version=${VERSION}" \
                 --target production \
                 --file ./ERP-BACKEND/Dockerfile \
@@ -275,8 +275,8 @@ build_frontend() {
             --push \
             --tag "${FRONTEND_IMAGE}" \
             --tag "${FRONTEND_IMAGE_LATEST}" \
-            --label "org.opencontainers.image.source=https://github.com/${REPO_OWNER}/erpo3" \
-            --label "org.opencontainers.image.description=ERP erpo3 Frontend" \
+            --label "org.opencontainers.image.source=https://github.com/${REPO_OWNER}/erp03" \
+            --label "org.opencontainers.image.description=ERP erp03 Frontend" \
             --label "org.opencontainers.image.version=${VERSION}" \
             --label "org.opencontainers.image.created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
             --cache-from type=gha \
@@ -310,8 +310,8 @@ build_frontend() {
                 --platform linux/amd64 \
                 --push \
                 --tag "${FRONTEND_IMAGE}-fallback" \
-                --label "org.opencontainers.image.source=https://github.com/${REPO_OWNER}/erpo3" \
-                --label "org.opencontainers.image.description=ERP erpo3 Frontend (Fallback)" \
+                --label "org.opencontainers.image.source=https://github.com/${REPO_OWNER}/erp03" \
+                --label "org.opencontainers.image.description=ERP erp03 Frontend (Fallback)" \
                 --label "org.opencontainers.image.version=${VERSION}" \
                 --build-arg VITE_API_BASE_URL=/api/v1 \
                 --build-arg VITE_APP_VERSION="${VERSION}" \
@@ -442,7 +442,7 @@ generate_summary() {
     echo "  Security: /tmp/trivy-*.log (if Trivy installed)"
     echo ""
     echo "View images at:"
-    echo "  https://github.com/${REPO_OWNER}?tab=packages&repo_name=erpo3"
+    echo "  https://github.com/${REPO_OWNER}?tab=packages&repo_name=erp03"
     echo ""
     
     # Cleanup old buildx builders
@@ -459,7 +459,7 @@ main() {
     local exit_code=0
     
     echo "=========================================="
-    echo "  ERP erpo3 — GHCR Build & Push"
+    echo "  ERP erp03 — GHCR Build & Push"
     echo "  Version: ${VERSION}"
     echo "  Registry: ${GHCR_REGISTRY}"
     echo "  Fallback Enabled: ${FALLBACK_ENABLED}"

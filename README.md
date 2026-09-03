@@ -242,7 +242,7 @@ Key variables in `.env`:
 
 ```bash
 # Database
-DATABASE_URL=postgresql://erp:password@postgres:5432/erpo3
+DATABASE_URL=postgresql://erp:password@postgres:5432/erp03
 POSTGRES_USER=erp
 POSTGRES_PASSWORD=your_secure_password
 
