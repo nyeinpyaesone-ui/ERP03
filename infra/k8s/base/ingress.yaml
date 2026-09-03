@@ -39,7 +39,7 @@ spec:
           service:
             name: erp03-api
             port:
-              number: 3000
+              number: 8000
   - host: admin.erp-domain.com
     http:
       paths:
