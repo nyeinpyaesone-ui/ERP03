@@ -17,6 +17,7 @@ resources:
   - worker-deployment.yaml
   - ingress.yaml
   - cronjob.yaml
+  - pdb.yaml
 
 commonLabels:
   app.kubernetes.io/part-of: erp03
