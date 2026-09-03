@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: erp_solution-postgres
-  namespace: erp_solution
+  name: erpo3-postgres
+  namespace: erpo3
   labels:
-    app.kubernetes.io/name: erp_solution-postgres
+    app.kubernetes.io/name: erpo3-postgres
     app.kubernetes.io/component: database
-    app.kubernetes.io/part-of: erp_solution
+    app.kubernetes.io/part-of: erpo3
 spec:
-  serviceName: erp_solution-postgres
+  serviceName: erpo3-postgres
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: erp_solution-postgres
+      app.kubernetes.io/name: erpo3-postgres
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: erp_solution-postgres
+        app.kubernetes.io/name: erpo3-postgres
         app.kubernetes.io/component: database
-        app.kubernetes.io/part-of: erp_solution
+        app.kubernetes.io/part-of: erpo3
     spec:
       securityContext:
         runAsUser: 999
@@ -35,17 +35,17 @@ spec:
         - name: POSTGRES_DB
           valueFrom:
             configMapKeyRef:
-              name: erp_solution-config
+              name: erpo3-config
               key: DB_NAME
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
-              name: erp_solution-secrets
+              name: erpo3-secrets
               key: DB_USER
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: erp_solution-secrets
+              name: erpo3-secrets
               key: DB_PASSWORD
         - name: PGDATA
           value: "/var/lib/postgresql/data/pgdata"
@@ -84,15 +84,15 @@ spec:
       volumes:
       - name: init-scripts
         configMap:
-          name: erp_solution-postgres-init
+          name: erpo3-postgres-init
       - name: postgres-config
         configMap:
-          name: erp_solution-postgres-config
+          name: erpo3-postgres-config
   volumeClaimTemplates:
   - metadata:
       name: data
       labels:
-        app.kubernetes.io/name: erp_solution-postgres
+        app.kubernetes.io/name: erpo3-postgres
     spec:
       accessModes: ["ReadWriteOnce"]
       storageClassName: fast-ssd
@@ -103,10 +103,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: erp_solution-postgres
-  namespace: erp_solution
+  name: erpo3-postgres
+  namespace: erpo3
   labels:
-    app.kubernetes.io/name: erp_solution-postgres
+    app.kubernetes.io/name: erpo3-postgres
     app.kubernetes.io/component: database
 spec:
   type: ClusterIP
@@ -116,13 +116,13 @@ spec:
     targetPort: 5432
     protocol: TCP
   selector:
-    app.kubernetes.io/name: erp_solution-postgres
+    app.kubernetes.io/name: erpo3-postgres
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: erp_solution-postgres-init
-  namespace: erp_solution
+  name: erpo3-postgres-init
+  namespace: erpo3
 data:
   01-init.sql: |
     -- Create extensions
@@ -139,19 +139,19 @@ data:
     CREATE SCHEMA IF NOT EXISTS pos;
 
     -- Set default privileges
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO erp_solution_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA accounting GRANT ALL ON TABLES TO erp_solution_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA inventory GRANT ALL ON TABLES TO erp_solution_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA manufacturing GRANT ALL ON TABLES TO erp_solution_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA hr GRANT ALL ON TABLES TO erp_solution_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA ecommerce GRANT ALL ON TABLES TO erp_solution_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA pos GRANT ALL ON TABLES TO erp_solution_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO erpo3_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA accounting GRANT ALL ON TABLES TO erpo3_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA inventory GRANT ALL ON TABLES TO erpo3_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA manufacturing GRANT ALL ON TABLES TO erpo3_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA hr GRANT ALL ON TABLES TO erpo3_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA ecommerce GRANT ALL ON TABLES TO erpo3_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA pos GRANT ALL ON TABLES TO erpo3_user;
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: erp_solution-postgres-config
-  namespace: erp_solution
+  name: erpo3-postgres-config
+  namespace: erpo3
 data:
   postgresql.conf: |
     listen_addresses = '*'

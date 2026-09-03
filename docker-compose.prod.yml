@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: erp-postgres
+    container_name: erpo3-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER:?DB_USER must be set}
@@ -16,11 +16,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    networks: [erp-network]
+    networks: [erpo3-network]
 
   redis:
     image: redis:7-alpine
-    container_name: erp-redis
+    container_name: erpo3-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "$${REDIS_PASSWORD}"]
     environment:
@@ -33,11 +33,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    networks: [erp-network]
+    networks: [erpo3-network]
 
-  erp-backend:
-    image: ghcr.io/nyeinpyaesone-ui/erp03-backend:${BACKEND_IMAGE_TAG:?BACKEND_IMAGE_TAG must be set}
-    container_name: erp-backend
+  erpo3-backend:
+    image: ghcr.io/nyeinpyaesone-ui/erpo3-backend:${BACKEND_IMAGE_TAG:?BACKEND_IMAGE_TAG must be set}
+    container_name: erpo3-backend
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
@@ -53,7 +53,7 @@ services:
         condition: service_healthy
     volumes:
       - backend_logs:/app/logs
-    networks: [erp-network]
+    networks: [erpo3-network]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=5)"]
       interval: 30s
@@ -62,13 +62,13 @@ services:
       start_period: 45s
 
   frontend:
-    image: ghcr.io/nyeinpyaesone-ui/erp03-frontend:${FRONTEND_IMAGE_TAG:?FRONTEND_IMAGE_TAG must be set}
-    container_name: erp-frontend
+    image: ghcr.io/nyeinpyaesone-ui/erpo3-frontend:${FRONTEND_IMAGE_TAG:?FRONTEND_IMAGE_TAG must be set}
+    container_name: erpo3-frontend
     restart: unless-stopped
     depends_on:
-      erp-backend:
+      erpo3-backend:
         condition: service_healthy
-    networks: [erp-network]
+    networks: [erpo3-network]
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]
       interval: 30s
@@ -78,15 +78,15 @@ services:
 
   ollama:
     image: ollama/ollama:latest
-    container_name: erp-ollama
+    container_name: erpo3-ollama
     restart: unless-stopped
     volumes:
       - ollama_data:/root/.ollama
-    networks: [erp-network]
+    networks: [erpo3-network]
 
   nginx:
     image: nginx:1.29-alpine
-    container_name: erp-nginx
+    container_name: erpo3-nginx
     restart: unless-stopped
     ports:
       - "80:80"
@@ -98,11 +98,11 @@ services:
       - ./ssl:/etc/nginx/ssl:ro
       - ./logs/nginx:/var/log/nginx
     depends_on:
-      erp-backend:
+      erpo3-backend:
         condition: service_healthy
       frontend:
         condition: service_healthy
-    networks: [erp-network]
+    networks: [erpo3-network]
 
 volumes:
   postgres_data:
@@ -111,5 +111,5 @@ volumes:
   backend_logs:
 
 networks:
-  erp-network:
+  erpo3-network:
     driver: bridge

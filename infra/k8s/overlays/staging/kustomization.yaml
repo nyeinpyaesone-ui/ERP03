@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: erp_solution-staging
+namespace: erpo3-staging
 
 resources:
   - ../base
@@ -12,24 +12,24 @@ commonLabels:
   environment: staging
 
 replicas:
-  - name: erp_solution-api
+  - name: erpo3-api
     count: 2
-  - name: erp_solution-web
+  - name: erpo3-web
     count: 1
-  - name: erp_solution-worker
+  - name: erpo3-worker
     count: 1
 
 patches:
   - target:
       kind: ConfigMap
-      name: erp_solution-config
+      name: erpo3-config
     patch: |-
       - op: replace
         path: /data/APP_ENV
         value: staging
       - op: replace
         path: /data/DB_NAME
-        value: erp_solution_staging
+        value: erpo3_staging
       - op: replace
         path: /data/API_BASE_URL
         value: https://staging-api.erp-domain.com
@@ -39,7 +39,7 @@ patches:
 
   - target:
       kind: Ingress
-      name: erp_solution-ingress
+      name: erpo3-ingress
     patch: |-
       - op: replace
         path: /spec/rules/0/host
@@ -58,14 +58,14 @@ patches:
           - staging-store.erp-domain.com
       - op: replace
         path: /spec/tls/0/secretName
-        value: staging-erp_solution-tls
+        value: staging-erpo3-tls
       - op: add
         path: /metadata/annotations/nginx.ingress.kubernetes.io~1whitelist-source-range
         value: "0.0.0.0/0"
 
   - target:
       kind: HorizontalPodAutoscaler
-      name: erp_solution-api-hpa
+      name: erpo3-api-hpa
     patch: |-
       - op: replace
         path: /spec/minReplicas
@@ -75,10 +75,10 @@ patches:
         value: 5
 
 images:
-  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-api
+  - name: ghcr.io/nyeinpyaesone-ui/erpo3-api
     newTag: staging
-  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-web
+  - name: ghcr.io/nyeinpyaesone-ui/erpo3-web
     newTag: staging
-  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-worker
+  - name: ghcr.io/nyeinpyaesone-ui/erpo3-worker
     newTag: staging
 

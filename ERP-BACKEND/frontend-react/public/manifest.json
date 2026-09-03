@@ -1,6 +1,6 @@
 {
-  "name": "ERP SOLUTION System",
-  "short_name": "ERP SOLUTION",
+  "name": "ERP erpo3 System",
+  "short_name": "ERP erpo3",
   "description": "AI-Powered Enterprise Resource Planning",
   "start_url": "/",
   "display": "standalone",

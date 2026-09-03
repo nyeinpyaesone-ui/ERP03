@@ -1,12 +1,12 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: erp_solution-uploads
-  namespace: erp_solution
+  name: erpo3-uploads
+  namespace: erpo3
   labels:
-    app.kubernetes.io/name: erp_solution
+    app.kubernetes.io/name: erpo3
     app.kubernetes.io/component: storage
-    app.kubernetes.io/part-of: erp_solution
+    app.kubernetes.io/part-of: erpo3
 spec:
   accessModes:
   - ReadWriteMany

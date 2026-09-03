@@ -1,19 +1,19 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: erp_solution-metrics
-  namespace: erp_solution-monitoring
+  name: erpo3-metrics
+  namespace: erpo3-monitoring
   labels:
-    app.kubernetes.io/name: erp_solution-metrics
-    app.kubernetes.io/part-of: erp_solution
+    app.kubernetes.io/name: erpo3-metrics
+    app.kubernetes.io/part-of: erpo3
     release: prometheus
 spec:
   namespaceSelector:
     matchNames:
-    - erp_solution
+    - erpo3
   selector:
     matchLabels:
-      app.kubernetes.io/part-of: erp_solution
+      app.kubernetes.io/part-of: erpo3
   endpoints:
   - port: http
     path: /metrics
@@ -23,93 +23,93 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: erp_solution-alerts
-  namespace: erp_solution-monitoring
+  name: erpo3-alerts
+  namespace: erpo3-monitoring
   labels:
-    app.kubernetes.io/name: erp_solution-alerts
-    app.kubernetes.io/part-of: erp_solution
+    app.kubernetes.io/name: erpo3-alerts
+    app.kubernetes.io/part-of: erpo3
     release: prometheus
 spec:
   groups:
-  - name: erp_solution
+  - name: erpo3
     rules:
     - alert: AIERPApiHighErrorRate
       expr: |
         (
-          sum(rate(http_requests_total{job=~"erp_solution-api",status=~"5.."}[5m]))
+          sum(rate(http_requests_total{job=~"erpo3-api",status=~"5.."}[5m]))
           /
-          sum(rate(http_requests_total{job=~"erp_solution-api"}[5m]))
+          sum(rate(http_requests_total{job=~"erpo3-api"}[5m]))
         ) > 0.05
       for: 5m
       labels:
         severity: critical
       annotations:
-        summary: "ERP SOLUTION API High Error Rate"
+        summary: "ERP erpo3 API High Error Rate"
         description: "Error rate is above 5% for {{ $labels.namespace }}/{{ $labels.pod }}"
 
     - alert: AIERPApiHighLatency
       expr: |
         histogram_quantile(0.95,
-          sum(rate(http_request_duration_seconds_bucket{job=~"erp_solution-api"}[5m])) by (le, namespace, pod)
+          sum(rate(http_request_duration_seconds_bucket{job=~"erpo3-api"}[5m])) by (le, namespace, pod)
         ) > 2
       for: 5m
       labels:
         severity: warning
       annotations:
-        summary: "ERP SOLUTION API High Latency"
+        summary: "ERP erpo3 API High Latency"
         description: "P95 latency is above 2s for {{ $labels.namespace }}/{{ $labels.pod }}"
 
     - alert: AIERPApiPodRestart
       expr: |
-        rate(kube_pod_container_status_restarts_total{namespace="erp_solution",container="api"}[15m]) > 0
+        rate(kube_pod_container_status_restarts_total{namespace="erpo3",container="api"}[15m]) > 0
       for: 5m
       labels:
         severity: warning
       annotations:
-        summary: "ERP SOLUTION API Pod Restarting"
+        summary: "ERP erpo3 API Pod Restarting"
         description: "Pod {{ $labels.pod }} is restarting frequently"
 
     - alert: AIERPDBHighConnections
       expr: |
-        pg_stat_activity_count{namespace="erp_solution"} > 150
+        pg_stat_activity_count{namespace="erpo3"} > 150
       for: 5m
       labels:
         severity: warning
       annotations:
-        summary: "ERP SOLUTION Database High Connections"
+        summary: "ERP erpo3 Database High Connections"
         description: "Database connections are above 150"
 
     - alert: AIERPDBReplicationLag
       expr: |
-        pg_replication_lag{namespace="erp_solution"} > 300
+        pg_replication_lag{namespace="erpo3"} > 300
       for: 5m
       labels:
         severity: critical
       annotations:
-        summary: "ERP SOLUTION Database Replication Lag"
+        summary: "ERP erpo3 Database Replication Lag"
         description: "Replication lag is above 5 minutes"
 
     - alert: AIERPWorkerQueueDepth
       expr: |
-        queue_depth{namespace="erp_solution"} > 1000
+        queue_depth{namespace="erpo3"} > 1000
       for: 5m
       labels:
         severity: warning
       annotations:
-        summary: "ERP SOLUTION Worker Queue Depth High"
+        summary: "ERP erpo3 Worker Queue Depth High"
         description: "Worker queue depth is above 1000"
 
     - alert: AIERPPVCUsage
       expr: |
         (
-          kubelet_volume_stats_used_bytes{namespace="erp_solution"}
+          kubelet_volume_stats_used_bytes{namespace="erpo3"}
           /
-          kubelet_volume_stats_capacity_bytes{namespace="erp_solution"}
+          kubelet_volume_stats_capacity_bytes{namespace="erpo3"}
         ) > 0.85
       for: 5m
       labels:
         severity: warning
       annotations:
-        summary: "ERP SOLUTION PVC Usage High"
+        summary: "ERP erpo3 PVC Usage High"
         description: "PVC {{ $labels.persistentvolumeclaim }} is above 85%"
 

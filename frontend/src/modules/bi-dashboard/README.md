@@ -1,7 +1,7 @@
-# ERP SOLUTION Business Intelligence Dashboard v3.2
+# ERP erpo3 Business Intelligence Dashboard v3.2
 
 ## Overview
-Executive-level business intelligence dashboard for the ERP SOLUTION platform. Real-time KPIs, revenue analytics, AI-powered forecasting, inventory insights, and activity feeds.
+Executive-level business intelligence dashboard for the ERP erpo3 platform. Real-time KPIs, revenue analytics, AI-powered forecasting, inventory insights, and activity feeds.
 
 ## Features
 
@@ -47,7 +47,7 @@ Executive-level business intelligence dashboard for the ERP SOLUTION platform. R
 ## Architecture
 
 ```
-erp_solution-bi-dashboard/
+erpo3-bi-dashboard/
 ├── components/
 │   ├── charts/
 │   │   ├── LineChartCard.tsx      # Reusable line chart wrapper
@@ -81,7 +81,7 @@ erp_solution-bi-dashboard/
 
 ## API Integration
 
-Consumes 14 API endpoints from the ERP SOLUTION OpenAPI spec:
+Consumes 14 API endpoints from the ERP erpo3 OpenAPI spec:
 
 | Hook | Endpoint | Purpose |
 |------|----------|---------|
@@ -184,5 +184,5 @@ Edit `DASHBOARD_PERIODS` in constants to add/remove periods.
 - Touch targets minimum 44x44dp
 
 ## License
-Proprietary - ERP SOLUTION v3.2
+Proprietary - ERP erpo3 v3.2
 

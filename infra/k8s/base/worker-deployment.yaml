@@ -1,12 +1,12 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: erp_solution-worker
-  namespace: erp_solution
+  name: erpo3-worker
+  namespace: erpo3
   labels:
-    app.kubernetes.io/name: erp_solution-worker
+    app.kubernetes.io/name: erpo3-worker
     app.kubernetes.io/component: worker
-    app.kubernetes.io/part-of: erp_solution
+    app.kubernetes.io/part-of: erpo3
 spec:
   replicas: 2
   strategy:
@@ -16,21 +16,21 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app.kubernetes.io/name: erp_solution-worker
+      app.kubernetes.io/name: erpo3-worker
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: erp_solution-worker
+        app.kubernetes.io/name: erpo3-worker
         app.kubernetes.io/component: worker
-        app.kubernetes.io/part-of: erp_solution
+        app.kubernetes.io/part-of: erpo3
     spec:
-      serviceAccountName: erp_solution
+      serviceAccountName: erpo3
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
       containers:
       - name: worker
-        image: ghcr.io/nyeinpyaesone-ui/erp_solution-worker:latest
+        image: ghcr.io/nyeinpyaesone-ui/erpo3-worker:latest
         imagePullPolicy: Always
         env:
         - name: NODE_ENV
@@ -39,9 +39,9 @@ spec:
           value: "5"
         envFrom:
         - configMapRef:
-            name: erp_solution-config
+            name: erpo3-config
         - secretRef:
-            name: erp_solution-secrets
+            name: erpo3-secrets
         resources:
           requests:
             memory: "256Mi"
@@ -67,19 +67,19 @@ spec:
                 - key: app.kubernetes.io/name
                   operator: In
                   values:
-                  - erp_solution-worker
+                  - erpo3-worker
               topologyKey: kubernetes.io/hostname
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: erp_solution-worker-hpa
-  namespace: erp_solution
+  name: erpo3-worker-hpa
+  namespace: erpo3
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: erp_solution-worker
+    name: erpo3-worker
   minReplicas: 2
   maxReplicas: 10
   metrics:

@@ -1,6 +1,6 @@
 #!/bin/bash
 ###############################################################################
-# ERP SOLUTION — Production Deployment Script
+# ERP erpo3 — Production Deployment Script
 # Usage: ./deploy.sh [server_ip]
 ###############################################################################
 
@@ -10,7 +10,7 @@ SERVER_IP="${1:-}"
 DOCKER_USERNAME="powerrangeranikg"
 
 echo "=========================================="
-echo "  ERP SOLUTION — Production Deployment"
+echo "  ERP erpo3 — Production Deployment"
 echo "=========================================="
 echo ""
 
@@ -25,7 +25,7 @@ echo ""
 
 # Step 1: Copy files to server
 echo "[1/6] Copying files to server..."
-rsync -avz --exclude='.git' --exclude='node_modules' --exclude='venv'     ./ root@$SERVER_IP:/opt/erp-solution/
+rsync -avz --exclude='.git' --exclude='node_modules' --exclude='venv'     ./ root@$SERVER_IP:/opt/erpo3/
 echo "  ✓ Files copied"
 
 # Step 2: Setup server
@@ -47,9 +47,9 @@ ssh root@$SERVER_IP << 'REMOTE'
     fi
 
     # Create necessary directories
-    mkdir -p /opt/erp-solution/ssl
-    mkdir -p /opt/erp-solution/logs/nginx
-    mkdir -p /opt/erp-solution/backups
+    mkdir -p /opt/erpo3/ssl
+    mkdir -p /opt/erpo3/logs/nginx
+    mkdir -p /opt/erpo3/backups
 
     echo "  ✓ Server setup complete"
 REMOTE
@@ -69,12 +69,12 @@ REMOTE
 
 # Step 4: Pull images
 echo "[4/6] Pulling Docker images..."
-ssh root@$SERVER_IP "cd /opt/erp-solution && docker pull $DOCKER_USERNAME/erp-solution-backend:latest && docker pull $DOCKER_USERNAME/erp-solution-frontend:latest"
+ssh root@$SERVER_IP "cd /opt/erpo3 && docker pull $DOCKER_USERNAME/erpo3-backend:latest && docker pull $DOCKER_USERNAME/erpo3-frontend:latest"
 echo "  ✓ Images pulled"
 
 # Step 5: Start services
 echo "[5/6] Starting services..."
-ssh root@$SERVER_IP "cd /opt/erp-solution && docker-compose -f docker-compose.prod.yml up -d"
+ssh root@$SERVER_IP "cd /opt/erpo3 && docker-compose -f docker-compose.prod.yml up -d"
 echo "  ✓ Services started"
 
 # Step 6: Verify

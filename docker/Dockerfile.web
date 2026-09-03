@@ -1,4 +1,4 @@
-# ERP SOLUTION Web Frontend Dockerfile
+# ERP erpo3 Web Frontend Dockerfile
 FROM node:20-alpine AS builder
 
 WORKDIR /app

@@ -1,34 +1,259 @@
-# Development environment overrides
+version: '3.8'
+
+# ============================================
+# ERP erpo3 - Development Docker Compose
+# ============================================
+# This configuration is optimized for local development
+# with hot-reload, debug mode, and developer tools
+# ============================================
+
+x-backend-common: &backend-common
+  build:
+    context: ./ERP-BACKEND
+    dockerfile: Dockerfile
+    target: production
+  environment:
+    - ENVIRONMENT=development
+    - DEBUG=true
+    - LOG_LEVEL=DEBUG
+    - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-erp_dev}:${POSTGRES_PASSWORD:-dev_password}@db:5432/${POSTGRES_DB:-erpo3_dev}
+    - REDIS_URL=redis://redis:6379/0
+    - SECRET_KEY=${SECRET_KEY:-dev_secret_key_CHANGE_THIS_IN_PRODUCTION}
+    - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_CHANGE_THIS_IN_PRODUCTION}
+    - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:8080,http://localhost:80
+  env_file:
+    - .env.dev
+  volumes:
+    - ./ERP-BACKEND:/app/app
+    - ./ERP-BACKEND/tests:/app/tests
+  networks:
+    - erpo3_internal
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
 services:
-  postgres:
+  # --------------------------------------------
+  # PostgreSQL Database
+  # --------------------------------------------
+  db:
+    image: postgres:15-alpine
+    container_name: erpo3-dev-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-erp_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-erpo3_dev}
     ports:
       - "5432:5432"
-    environment:
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-devpassword}
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./scripts/init-dev-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - erpo3_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-erp_dev} -d ${POSTGRES_DB:-erpo3_dev}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
 
+  # --------------------------------------------
+  # Redis Cache & Message Broker
+  # --------------------------------------------
   redis:
+    image: redis:7-alpine
+    container_name: erpo3-dev-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
-    environment:
-      REDIS_PASSWORD: ""
-    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - erpo3_internal
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
 
-  erp-backend:
-    environment:
-      ENVIRONMENT: development
-      DEBUG: "true"
+  # --------------------------------------------
+  # Backend API Server (FastAPI)
+  # --------------------------------------------
+  api:
+    <<: *backend-common
+    container_name: erpo3-dev-api
     ports:
       - "8000:8000"
-    volumes:
-      - ./ERP-BACKEND:/app
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app
+             --host 0.0.0.0
+             --port 8000
+             --reload
+             --log-level debug"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
 
+  # --------------------------------------------
+  # Celery Worker
+  # --------------------------------------------
+  worker:
+    <<: *backend-common
+    container_name: erpo3-dev-worker
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-erp_dev}:${POSTGRES_PASSWORD:-dev_password}@db:5432/${POSTGRES_DB:-erpo3_dev}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-2}
+    command: >
+      sh -c "celery -A app.workers.celery_app worker
+             --loglevel=debug
+             --concurrency=${CELERY_CONCURRENCY:-2}
+             --prefetch-multiplier=1
+             --max-tasks-per-child=50
+             --pool=solo"
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  # --------------------------------------------
+  # Flower - Celery Monitoring Dashboard
+  # --------------------------------------------
+  flower:
+    build:
+      context: ./ERP-BACKEND
+      dockerfile: Dockerfile
+      target: production
+    container_name: erpo3-dev-flower
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+    env_file:
+      - .env.dev
+    ports:
+      - "5555:5555"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - erpo3_internal
+    command: >
+      sh -c "celery -A app.workers.celery_app flower
+             --port=5555
+             --basic_auth=${FLOWER_USER:-dev_admin}:${FLOWER_PASSWORD:-dev_flower_password}"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  # --------------------------------------------
+  # Frontend (Vite + React)
+  # --------------------------------------------
   frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: builder
+      args:
+        - VITE_API_BASE_URL=http://localhost:8000/api/v1
+        - VITE_APP_VERSION=dev
+    container_name: erpo3-dev-frontend
+    restart: unless-stopped
     ports:
-      - "3000:80"
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000/api/v1
+      - VITE_APP_VERSION=dev
+      - WATCHPACK_POLLING=true
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - erpo3_internal
+      - erpo3_public
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
 
-  ollama:
+  # --------------------------------------------
+  # pgAdmin - Database Management UI (Optional)
+  # --------------------------------------------
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: erpo3-dev-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@erpo3.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
     ports:
-      - "11434:11434"
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - erpo3_internal
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+networks:
+  erpo3_internal:
+    driver: bridge
+    internal: true
+  erpo3_public:
+    driver: bridge
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
+  pgadmin_data:
+    driver: local

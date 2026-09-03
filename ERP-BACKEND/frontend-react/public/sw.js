@@ -1,4 +1,4 @@
-const CACHE_NAME = 'erp_solution-v1';
+const CACHE_NAME = 'erpo3-v1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
