@@ -563,7 +563,7 @@ class AsyncTaskExecutor:
         logger.info("AsyncTaskExecutor shutdown complete")
 
 
-class ERPo3TaskHandlers:
+class ERP03TaskHandlers:
     
     @staticmethod
     async def sync_inventory(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -616,11 +616,11 @@ class ERPo3TaskHandlers:
 def create_default_executor(config: Optional[Dict[str, Any]] = None) -> AsyncTaskExecutor:
     executor = AsyncTaskExecutor(config)
     
-    executor.register_handler("inventory", "sync", ERPo3TaskHandlers.sync_inventory)
-    executor.register_handler("payments", "process", ERPo3TaskHandlers.process_payment)
-    executor.register_handler("reports", "generate", ERPo3TaskHandlers.generate_report)
-    executor.register_handler("validation", "check", ERPo3TaskHandlers.validate_data)
-    executor.register_handler("notifications", "send", ERPo3TaskHandlers.send_notification)
+    executor.register_handler("inventory", "sync", ERP03TaskHandlers.sync_inventory)
+    executor.register_handler("payments", "process", ERP03TaskHandlers.process_payment)
+    executor.register_handler("reports", "generate", ERP03TaskHandlers.generate_report)
+    executor.register_handler("validation", "check", ERP03TaskHandlers.validate_data)
+    executor.register_handler("notifications", "send", ERP03TaskHandlers.send_notification)
     
     return executor
 
