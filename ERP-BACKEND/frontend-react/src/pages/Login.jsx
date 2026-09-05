@@ -48,7 +48,7 @@ export default function Login({ onLogin }) {
             <div className="w-16 h-16 bg-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-4">
               <span className="text-white font-bold text-2xl">AI</span>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">ERP SOLUTION System</h1>
+            <h1 className="text-2xl font-bold text-gray-900">ERP erp03 System</h1>
             <p className="text-gray-500 mt-1">Enterprise Resource Planning</p>
           </div>
 

@@ -22,8 +22,8 @@ httpx==0.28.1
 stripe==15.5.1
 aiofiles==25.1.0
 prometheus-client==0.26.0
-pytest==7.4.4
-pytest-asyncio==1.4.0
+pytest>=7.4.4
+pytest-asyncio>=0.21.0
 pytest-cov==7.1.0
 
 # Celery - Async task queue
@@ -31,7 +31,6 @@ celery==5.6.3
 flower==2.1.0
 
 # Prometheus - Metrics export
-prometheus-client==0.19.0
 
 # Structured logging
 structlog==26.1.0
