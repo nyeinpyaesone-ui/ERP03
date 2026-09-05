@@ -1,0 +1,63 @@
+version: '3.8'
+
+# Supabase PostgreSQL deployment profile.
+# Set DATABASE_URL and SECRET_KEY in the deployment environment; never commit secrets.
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks: [erp03_internal]
+
+  api:
+    build:
+      context: ./ERP-BACKEND
+      dockerfile: Dockerfile
+      target: production
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      ENVIRONMENT: production
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    networks: [erp03_internal, erp03_public]
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000
+             --workers 4 --loop uvloop --http httptools --log-level info"
+
+  worker:
+    build:
+      context: ./ERP-BACKEND
+      dockerfile: Dockerfile.worker
+      target: production
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      ENVIRONMENT: production
+      LOG_LEVEL: INFO
+    depends_on:
+      - redis
+    networks: [erp03_internal]
+    command: >
+      sh -c "celery -A app.workers.celery_app worker --loglevel=info
+             --concurrency=${CELERY_CONCURRENCY:-4} --prefetch-multiplier=1
+             --max-tasks-per-child=100 --pool=solo"
+
+networks:
+  erp03_internal:
+    driver: bridge
+  erp03_public:
+    driver: bridge
+
+volumes:
+  redis_data:
