@@ -9,7 +9,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  erp-backend:
+  erp03-backend:
     restart: unless-stopped
     environment:
       DATABASE_URL: null
