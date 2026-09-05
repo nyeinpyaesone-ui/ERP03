@@ -110,11 +110,11 @@ class SearchService:
             stmt = postgresql_insert(SearchIndex).values(values_list).on_conflict_do_update(
                 index_elements=['entity_type', 'entity_id'],
                 set_={
-                    'title': stmt.excluded.title,
-                    'content': stmt.excluded.content,
-                    'searchable_text': stmt.excluded.searchable_text,
-                    'meta_data': stmt.excluded.meta_data,
-                    'tags': stmt.excluded.tags,
+                    'title': postgresql_insert(SearchIndex).excluded.title,
+                    'content': postgresql_insert(SearchIndex).excluded.content,
+                    'searchable_text': postgresql_insert(SearchIndex).excluded.searchable_text,
+                    'meta_data': postgresql_insert(SearchIndex).excluded.meta_data,
+                    'tags': postgresql_insert(SearchIndex).excluded.tags,
                     'updated_at': datetime.now(timezone.utc)
                 }
             )
