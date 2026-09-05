@@ -1,0 +1,1 @@
+{"version":3,"names":["getLegacyStorage","createAsyncStorage","AsyncStorageError"],"sourceRoot":"../../src","sources":["index.tsx"],"mappings":";;AAAA,SAASA,gBAAgB,QAAQ,sBAAsB;AAGvD,SAASC,kBAAkB,QAAQ,sBAAsB;AAEzD,SAASC,iBAAiB,QAAQ,wBAAqB;;AAEvD;AACA,eAAeF,gBAAgB,CAAC,CAAC","ignoreList":[]}
