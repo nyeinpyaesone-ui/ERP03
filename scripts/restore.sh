@@ -8,7 +8,7 @@ set -Eeuo pipefail
 
 BACKUP_FILE="${1:?Usage: ./scripts/restore.sh <backup.sql|backup.sql.gpg>}"
 DB_USER="${DB_USER:-erp}"
-DB_NAME="${DB_NAME:-erp_solution}"
+DB_NAME="${DB_NAME:-erp03}"
 
 [[ -f "${BACKUP_FILE}" ]] || { echo "Backup file not found: ${BACKUP_FILE}" >&2; exit 1; }
 

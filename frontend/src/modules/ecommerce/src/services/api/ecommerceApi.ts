@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { createApiClient } from '@/shared/services/apiClient';
 import { env } from '../config/env';
 import {
   StoreProduct,
@@ -15,15 +15,9 @@ import {
   SearchFilters,
 } from '../types/ecommerce';
 
-const api = axios.create({
+const api = createApiClient({
   baseURL: `${env.apiUrl}/ecommerce`,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-api.interceptors.request.use(async (config) => {
-  const token = await getAuthToken();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
+  moduleName: 'ecommerce',
 });
 
 // Product APIs
@@ -156,8 +150,3 @@ export const ecommerceKPIAPI = {
   getSalesReport: (params: { dateFrom: string; dateTo: string; groupBy?: 'day' | 'week' | 'month' | 'product' | 'category' }) =>
     api.get('/reports/sales', { params }).then((r) => r.data),
 };
-
-async function getAuthToken(): Promise<string | null> {
-  return null;
-}
-
