@@ -1,4 +1,4 @@
-# ERP SOLUTION Manufacturing / MRP Module (v2.7)
+# ERP erp03 Manufacturing / MRP Module (v2.7)
 
 ## Overview
 Complete Manufacturing Resource Planning module with Bill of Materials (BOM), Work Orders, Production Planning, and MRP calculations.

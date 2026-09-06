@@ -1,21 +1,21 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: erp_solution
-  namespace: erp_solution
+  name: erp03
+  namespace: erp03
   labels:
-    app.kubernetes.io/name: erp_solution
-    app.kubernetes.io/part-of: erp_solution
+    app.kubernetes.io/name: erp03
+    app.kubernetes.io/part-of: erp03
 automountServiceAccountToken: true
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: erp_solution
-  namespace: erp_solution
+  name: erp03
+  namespace: erp03
   labels:
-    app.kubernetes.io/name: erp_solution
-    app.kubernetes.io/part-of: erp_solution
+    app.kubernetes.io/name: erp03
+    app.kubernetes.io/part-of: erp03
 rules:
 - apiGroups: [""]
   resources: ["pods", "services", "endpoints", "configmaps", "secrets"]
@@ -30,17 +30,17 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: erp_solution
-  namespace: erp_solution
+  name: erp03
+  namespace: erp03
   labels:
-    app.kubernetes.io/name: erp_solution
-    app.kubernetes.io/part-of: erp_solution
+    app.kubernetes.io/name: erp03
+    app.kubernetes.io/part-of: erp03
 subjects:
 - kind: ServiceAccount
-  name: erp_solution
-  namespace: erp_solution
+  name: erp03
+  namespace: erp03
 roleRef:
   kind: Role
-  name: erp_solution
+  name: erp03
   apiGroup: rbac.authorization.k8s.io
 

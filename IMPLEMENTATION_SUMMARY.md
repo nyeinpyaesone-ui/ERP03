@@ -36,7 +36,7 @@ env:
 - name: REDIS_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: erp_solution-secrets
+      name: erp03-secrets
       key: REDIS_PASSWORD
 ```
 
@@ -103,7 +103,7 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
 # Database Configuration
 DB_USER=erp
 DB_PASSWORD=your_secure_password_here
-DB_NAME=erp_solution
+DB_NAME=erp03
 
 # Redis Configuration
 REDIS_PASSWORD=your_redis_password_here
@@ -267,14 +267,14 @@ curl http://localhost:8000/health
 
 1. **Backup Data**
    ```bash
-   kubectl get secrets -n erp_solution -o yaml > secrets-backup.yaml
-   kubectl get configmaps -n erp_solution -o yaml > config-backup.yaml
+   kubectl get secrets -n erp03 -o yaml > secrets-backup.yaml
+   kubectl get configmaps -n erp03 -o yaml > config-backup.yaml
    ```
 
 2. **Update Redis Deployment**
    ```bash
    kubectl apply -f infra/k8s/base/redis.yaml
-   kubectl rollout restart statefulset/erp_solution-redis -n erp_solution
+   kubectl rollout restart statefulset/erp03-redis -n erp03
    ```
 
 3. **Update API Deployment**
@@ -310,5 +310,5 @@ This cleanup effort has transformed the repository from a "documentation-complet
 ---
 
 *Generated: $(date)*  
-*Repository: ERP Backend Solution*  
+*Repository: ERP Backend erp03*  
 *Version: v1.0.0 (stabilized)*
