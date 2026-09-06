@@ -1,0 +1,142 @@
+name: ERP03 Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 2 * * *'
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended,security-and-quality
+      - uses: github/codeql-action/autobuild@v3
+        if: matrix.language == 'python' || matrix.language == 'javascript'
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: true
+
+  secret-detection:
+    name: Secret Detection
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  pip-audit:
+    name: Pip Audit
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        requirements:
+          - ERP-BACKEND/requirements.txt
+          - erp-core/requirements.txt
+          - erp03/apps/erp/requirements.txt
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pip-audit
+      - run: |
+          if [ -f "${{ matrix.requirements }}" ]; then
+            pip-audit -r ${{ matrix.requirements }} --desc --format=json || true
+          else
+            echo "File not found: ${{ matrix.requirements }}"
+          fi
+
+  npm-audit:
+    name: NPM Audit
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        app:
+          - path: frontend
+            name: Frontend
+          - path: mobile
+            name: Mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ${{ matrix.app.path }}/package-lock.json
+      - working-directory: ${{ matrix.app.path }}
+        run: npm audit --audit-level=high || true
+
+  docker-security:
+    name: Docker Security Scan
+    runs-on: ubuntu-22.04
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        dockerfile:
+          - path: ./frontend/Dockerfile
+            name: frontend
+          - path: ./ERP-BACKEND/Dockerfile
+            name: backend
+          - path: ./docker/Dockerfile.worker
+            name: worker
+          - path: ./erp-core/Dockerfile
+            name: erp-core
+          - path: ./erp03/apps/erp/Dockerfile
+            name: erp03-ai
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          if [ -f "${{ matrix.dockerfile.path }}" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      - uses: hadolint/hadolint-action@v3.1.0
+        if: steps.check.outputs.exists == 'true'
+        with:
+          dockerfile: ${{ matrix.dockerfile.path }}
+          format: sarif
+          output-file: hadolint-${{ matrix.dockerfile.name }}.sarif
+          no-fail: true
+      - uses: github/codeql-action/upload-sarif@v3
+        if: steps.check.outputs.exists == 'true'
+        with:
+          sarif_file: hadolint-${{ matrix.dockerfile.name }}.sarif
+          category: hadolint-${{ matrix.dockerfile.name }}

@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: erp_solution-postgres
-  namespace: erp_solution
+  name: erp03-postgres
+  namespace: erp03
   labels:
-    app.kubernetes.io/name: erp_solution-postgres
+    app.kubernetes.io/name: erp03-postgres
     app.kubernetes.io/component: database
-    app.kubernetes.io/part-of: erp_solution
+    app.kubernetes.io/part-of: erp03
 spec:
-  serviceName: erp_solution-postgres
-  replicas: 1
+  serviceName: erp03-postgres
+  replicas: 3
   selector:
     matchLabels:
-      app.kubernetes.io/name: erp_solution-postgres
+      app.kubernetes.io/name: erp03-postgres
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: erp_solution-postgres
+        app.kubernetes.io/name: erp03-postgres
         app.kubernetes.io/component: database
-        app.kubernetes.io/part-of: erp_solution
+        app.kubernetes.io/part-of: erp03
     spec:
       securityContext:
         runAsUser: 999
@@ -26,7 +26,7 @@ spec:
         fsGroup: 999
       containers:
       - name: postgres
-        image: postgres:15-alpine
+        image: postgres:15.4-alpine3.18
         ports:
         - name: postgres
           containerPort: 5432
@@ -35,20 +35,25 @@ spec:
         - name: POSTGRES_DB
           valueFrom:
             configMapKeyRef:
-              name: erp_solution-config
+              name: erp03-config
               key: DB_NAME
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
-              name: erp_solution-secrets
+              name: erp03-secrets
               key: DB_USER
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: erp_solution-secrets
+              name: erp03-secrets
               key: DB_PASSWORD
         - name: PGDATA
           value: "/var/lib/postgresql/data/pgdata"
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: erp03-secrets
+              key: DB_PASSWORD
         resources:
           requests:
             memory: "1Gi"
@@ -62,17 +67,23 @@ spec:
             - pg_isready
             - -U
             - $(POSTGRES_USER)
-          initialDelaySeconds: 30
+            - -d
+            - $(POSTGRES_DB)
+          initialDelaySeconds: 60
           periodSeconds: 10
           timeoutSeconds: 5
+          failureThreshold: 6
         readinessProbe:
           exec:
             command:
             - pg_isready
             - -U
             - $(POSTGRES_USER)
-          initialDelaySeconds: 5
+            - -d
+            - $(POSTGRES_DB)
+          initialDelaySeconds: 30
           periodSeconds: 5
+          failureThreshold: 3
         volumeMounts:
         - name: data
           mountPath: /var/lib/postgresql/data
@@ -81,32 +92,96 @@ spec:
         - name: postgres-config
           mountPath: /etc/postgresql/postgresql.conf
           subPath: postgresql.conf
+        - name: backups
+          mountPath: /backups
       volumes:
       - name: init-scripts
         configMap:
-          name: erp_solution-postgres-init
+          name: erp03-postgres-init
       - name: postgres-config
         configMap:
-          name: erp_solution-postgres-config
+          name: erp03-postgres-config
+      - name: backups
+        emptyDir:
+          sizeLimit: 10Gi
   volumeClaimTemplates:
   - metadata:
       name: data
       labels:
-        app.kubernetes.io/name: erp_solution-postgres
+        app.kubernetes.io/name: erp03-postgres
     spec:
       accessModes: ["ReadWriteOnce"]
       storageClassName: fast-ssd
       resources:
         requests:
-          storage: 100Gi
+          storage: 50Gi
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: erp_solution-postgres
-  namespace: erp_solution
+  name: erp03-postgres
+  namespace: erp03
   labels:
-    app.kubernetes.io/name: erp_solution-postgres
+    app.kubernetes.io/name: erp03-postgres
+    app.kubernetes.io/component: database
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: erp03-postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: erp03-postgres-primary
+  namespace: erp03
+  labels:
+    app.kubernetes.io/name: erp03-postgres
+    app.kubernetes.io/component: database
+    role: primary
+spec:
+  type: ClusterIP
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: erp03-postgres
+    statefulset.kubernetes.io/pod-name: erp03-postgres-0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: erp03-postgres-replica
+  namespace: erp03
+  labels:
+    app.kubernetes.io/name: erp03-postgres
+    app.kubernetes.io/component: database
+    role: replica
+spec:
+  type: ClusterIP
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: erp03-postgres
+    statefulset.kubernetes.io/pod-name: erp03-postgres-1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: erp03-postgres
+  namespace: erp03
+  labels:
+    app.kubernetes.io/name: erp03-postgres
     app.kubernetes.io/component: database
 spec:
   type: ClusterIP
@@ -116,13 +191,13 @@ spec:
     targetPort: 5432
     protocol: TCP
   selector:
-    app.kubernetes.io/name: erp_solution-postgres
+    app.kubernetes.io/name: erp03-postgres
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: erp_solution-postgres-init
-  namespace: erp_solution
+  name: erp03-postgres-init
+  namespace: erp03
 data:
   01-init.sql: |
     -- Create extensions
@@ -139,19 +214,19 @@ data:
     CREATE SCHEMA IF NOT EXISTS pos;
 
     -- Set default privileges
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO erp_solution_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA accounting GRANT ALL ON TABLES TO erp_solution_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA inventory GRANT ALL ON TABLES TO erp_solution_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA manufacturing GRANT ALL ON TABLES TO erp_solution_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA hr GRANT ALL ON TABLES TO erp_solution_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA ecommerce GRANT ALL ON TABLES TO erp_solution_user;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA pos GRANT ALL ON TABLES TO erp_solution_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO erp03_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA accounting GRANT ALL ON TABLES TO erp03_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA inventory GRANT ALL ON TABLES TO erp03_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA manufacturing GRANT ALL ON TABLES TO erp03_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA hr GRANT ALL ON TABLES TO erp03_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA ecommerce GRANT ALL ON TABLES TO erp03_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA pos GRANT ALL ON TABLES TO erp03_user;
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: erp_solution-postgres-config
-  namespace: erp_solution
+  name: erp03-postgres-config
+  namespace: erp03
 data:
   postgresql.conf: |
     listen_addresses = '*'

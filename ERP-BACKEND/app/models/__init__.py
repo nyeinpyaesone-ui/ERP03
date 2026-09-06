@@ -1,4 +1,4 @@
-"""ERP Solution SQLAlchemy models.
+"""ERP erp03 SQLAlchemy models.
 
 This package contains all database models organized by domain:
 - user: User authentication and profile

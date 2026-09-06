@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: erp_solution
+namespace: erp03
 
 resources:
   - namespace.yaml
@@ -17,16 +17,17 @@ resources:
   - worker-deployment.yaml
   - ingress.yaml
   - cronjob.yaml
+  - pdb.yaml
 
 commonLabels:
-  app.kubernetes.io/part-of: erp_solution
+  app.kubernetes.io/part-of: erp03
   app.kubernetes.io/managed-by: kustomize
 
 images:
-  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-api
+  - name: ghcr.io/nyeinpyaesone-ui/erp03-api
     newTag: latest
-  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-web
+  - name: ghcr.io/nyeinpyaesone-ui/erp03-web
     newTag: latest
-  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-worker
+  - name: ghcr.io/nyeinpyaesone-ui/erp03-worker
     newTag: latest
 
