@@ -1,7 +1,7 @@
-# ERP SOLUTION Kubernetes Deployment (v3.1)
+# ERP erp03 Kubernetes Deployment (v3.1)
 
 ## Overview
-Production-ready Kubernetes deployment for ERP SOLUTION with auto-scaling, rolling updates, monitoring, and disaster recovery.
+Production-ready Kubernetes deployment for ERP erp03 with auto-scaling, rolling updates, monitoring, and disaster recovery.
 
 ## Architecture
 
@@ -96,12 +96,12 @@ docker-compose up -d
 kubectl apply -k overlays/development/
 
 # Verify deployment
-kubectl get pods -n erp_solution-dev
-kubectl get svc -n erp_solution-dev
-kubectl get ingress -n erp_solution-dev
+kubectl get pods -n erp03-dev
+kubectl get svc -n erp03-dev
+kubectl get ingress -n erp03-dev
 
 # View logs
-kubectl logs -f deployment/dev-erp_solution-api -n erp_solution-dev
+kubectl logs -f deployment/dev-erp03-api -n erp03-dev
 ```
 
 ### 3. Staging Environment
@@ -111,7 +111,7 @@ kubectl logs -f deployment/dev-erp_solution-api -n erp_solution-dev
 ./scripts/deploy.sh staging v3.0.0-rc1
 
 # Verify
-kubectl get pods -n erp_solution-staging
+kubectl get pods -n erp03-staging
 ```
 
 ### 4. Production Environment
@@ -121,9 +121,9 @@ kubectl get pods -n erp_solution-staging
 ./scripts/deploy.sh production v3.0.0
 
 # Monitor rollout
-kubectl rollout status deployment/erp_solution-api -n erp_solution
-kubectl rollout status deployment/erp_solution-web -n erp_solution
-kubectl rollout status deployment/erp_solution-worker -n erp_solution
+kubectl rollout status deployment/erp03-api -n erp03
+kubectl rollout status deployment/erp03-web -n erp03
+kubectl rollout status deployment/erp03-worker -n erp03
 ```
 
 ## Configuration
@@ -137,7 +137,7 @@ Before deploying, fill in the secrets:
 vim base/secrets.yaml
 
 # Or use kubectl to create secrets
-kubectl create secret generic erp_solution-secrets   --from-literal=DB_PASSWORD=$(openssl rand -base64 32)   --from-literal=JWT_SECRET=$(openssl rand -base64 64)   --from-literal=REDIS_PASSWORD=$(openssl rand -base64 32)   --from-literal=AWS_ACCESS_KEY_ID=YOUR_KEY   --from-literal=AWS_SECRET_ACCESS_KEY=YOUR_SECRET   -n erp_solution
+kubectl create secret generic erp03-secrets   --from-literal=DB_PASSWORD=$(openssl rand -base64 32)   --from-literal=JWT_SECRET=$(openssl rand -base64 64)   --from-literal=REDIS_PASSWORD=$(openssl rand -base64 32)   --from-literal=AWS_ACCESS_KEY_ID=YOUR_KEY   --from-literal=AWS_SECRET_ACCESS_KEY=YOUR_SECRET   -n erp03
 ```
 
 ### TLS Certificates
@@ -173,13 +173,13 @@ EOF
 
 ```bash
 # View current HPA status
-kubectl get hpa -n erp_solution
+kubectl get hpa -n erp03
 
 # Manually scale API pods
-kubectl scale deployment erp_solution-api --replicas=10 -n erp_solution
+kubectl scale deployment erp03-api --replicas=10 -n erp03
 
 # View metrics
-kubectl top pods -n erp_solution
+kubectl top pods -n erp03
 ```
 
 ### Database Scaling
@@ -190,18 +190,18 @@ kubectl apply -f - <<EOF
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: erp_solution-postgres-replica
-  namespace: erp_solution
+  name: erp03-postgres-replica
+  namespace: erp03
 spec:
-  serviceName: erp_solution-postgres-replica
+  serviceName: erp03-postgres-replica
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: erp_solution-postgres-replica
+      app.kubernetes.io/name: erp03-postgres-replica
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: erp_solution-postgres-replica
+        app.kubernetes.io/name: erp03-postgres-replica
     spec:
       containers:
       - name: postgres
@@ -210,17 +210,17 @@ spec:
         - name: POSTGRES_DB
           valueFrom:
             configMapKeyRef:
-              name: erp_solution-config
+              name: erp03-config
               key: DB_NAME
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
-              name: erp_solution-secrets
+              name: erp03-secrets
               key: DB_USER
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: erp_solution-secrets
+              name: erp03-secrets
               key: DB_PASSWORD
         - name: PGDATA
           value: "/var/lib/postgresql/data/pgdata"
@@ -229,9 +229,9 @@ spec:
         - -c
         - |
           rm -rf /var/lib/postgresql/data/pgdata/*
-          pg_basebackup -h erp_solution-postgres -D /var/lib/postgresql/data/pgdata -U $(POSTGRES_USER) -v -P -W
+          pg_basebackup -h erp03-postgres -D /var/lib/postgresql/data/pgdata -U $(POSTGRES_USER) -v -P -W
           echo "standby_mode = 'on'" >> /var/lib/postgresql/data/pgdata/recovery.conf
-          echo "primary_conninfo = 'host=erp_solution-postgres port=5432 user=$(POSTGRES_USER) password=$(POSTGRES_PASSWORD)'" >> /var/lib/postgresql/data/pgdata/recovery.conf
+          echo "primary_conninfo = 'host=erp03-postgres port=5432 user=$(POSTGRES_USER) password=$(POSTGRES_PASSWORD)'" >> /var/lib/postgresql/data/pgdata/recovery.conf
           postgres -D /var/lib/postgresql/data/pgdata
 EOF
 ```
@@ -250,20 +250,20 @@ Backups run automatically via CronJob:
 
 ```bash
 # Database backup
-kubectl create job manual-db-backup --from=cronjob/erp_solution-db-backup -n erp_solution
+kubectl create job manual-db-backup --from=cronjob/erp03-db-backup -n erp03
 
 # Redis backup
-kubectl create job manual-redis-backup --from=cronjob/erp_solution-redis-backup -n erp_solution
+kubectl create job manual-redis-backup --from=cronjob/erp03-redis-backup -n erp03
 ```
 
 ### Restore from Backup
 
 ```bash
 # Restore database
-kubectl exec -it erp_solution-postgres-0 -n erp_solution -- bash
-aws s3 cp s3://erp_solution-production/backups/database/erp_solution-20240101-020000.sql.gz /tmp/
-gunzip /tmp/erp_solution-20240101-020000.sql.gz
-psql -U erp_solution_user -d erp_solution_production < /tmp/erp_solution-20240101-020000.sql
+kubectl exec -it erp03-postgres-0 -n erp03 -- bash
+aws s3 cp s3://erp03-production/backups/database/erp03-20240101-020000.sql.gz /tmp/
+gunzip /tmp/erp03-20240101-020000.sql.gz
+psql -U erp03_user -d erp03_production < /tmp/erp03-20240101-020000.sql
 ```
 
 ## Monitoring
@@ -272,7 +272,7 @@ psql -U erp_solution_user -d erp_solution_production < /tmp/erp_solution-2024010
 
 ```bash
 # Install Prometheus
-helm install prometheus prometheus-community/kube-prometheus-stack   --namespace erp_solution-monitoring   --create-namespace
+helm install prometheus prometheus-community/kube-prometheus-stack   --namespace erp03-monitoring   --create-namespace
 
 # Apply ServiceMonitor
 kubectl apply -f monitoring/prometheus.yaml
@@ -282,7 +282,7 @@ kubectl apply -f monitoring/prometheus.yaml
 
 ```bash
 # Import dashboard
-kubectl create configmap erp_solution-dashboard   --from-file=monitoring/grafana-dashboard.json   -n erp_solution-monitoring   --dry-run=client -o yaml | kubectl apply -f -
+kubectl create configmap erp03-dashboard   --from-file=monitoring/grafana-dashboard.json   -n erp03-monitoring   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 ### Alerts
@@ -327,22 +327,22 @@ Minimal permissions:
 
 ```bash
 # Pod not starting
-kubectl describe pod <pod-name> -n erp_solution
-kubectl logs <pod-name> -n erp_solution --previous
+kubectl describe pod <pod-name> -n erp03
+kubectl logs <pod-name> -n erp03 --previous
 
 # High memory usage
-kubectl top pods -n erp_solution
-kubectl exec -it <pod-name> -n erp_solution -- sh -c "ps aux --sort=-%mem | head"
+kubectl top pods -n erp03
+kubectl exec -it <pod-name> -n erp03 -- sh -c "ps aux --sort=-%mem | head"
 
 # Database connection issues
-kubectl exec -it erp_solution-postgres-0 -n erp_solution -- psql -U erp_solution_user -d erp_solution_production -c "SELECT count(*) FROM pg_stat_activity;"
+kubectl exec -it erp03-postgres-0 -n erp03 -- psql -U erp03_user -d erp03_production -c "SELECT count(*) FROM pg_stat_activity;"
 
 # Redis issues
-kubectl exec -it erp_solution-redis-0 -n erp_solution -- redis-cli info
+kubectl exec -it erp03-redis-0 -n erp03 -- redis-cli info
 
 # Ingress issues
-kubectl get ingress -n erp_solution
-kubectl describe ingress erp_solution-ingress -n erp_solution
+kubectl get ingress -n erp03
+kubectl describe ingress erp03-ingress -n erp03
 kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
 ```
 
@@ -353,9 +353,9 @@ kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
 ./scripts/rollback.sh production
 
 # Or manual rollback
-kubectl rollout undo deployment/erp_solution-api -n erp_solution
-kubectl rollout undo deployment/erp_solution-web -n erp_solution
-kubectl rollout undo deployment/erp_solution-worker -n erp_solution
+kubectl rollout undo deployment/erp03-api -n erp03
+kubectl rollout undo deployment/erp03-web -n erp03
+kubectl rollout undo deployment/erp03-worker -n erp03
 ```
 
 ## Cost Optimization

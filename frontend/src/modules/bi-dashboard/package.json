@@ -1,7 +1,7 @@
 {
-  "name": "@erp_solution/bi-dashboard",
+  "name": "@erp03/bi-dashboard",
   "version": "3.2.0",
-  "description": "Business Intelligence Dashboard for ERP SOLUTION",
+  "description": "Business Intelligence Dashboard for ERP erp03",
   "main": "DashboardNavigator.tsx",
   "types": "types/dashboard.ts",
   "dependencies": {
@@ -22,7 +22,7 @@
     "business-intelligence",
     "react-native"
   ],
-  "author": "ERP SOLUTION Team",
+  "author": "ERP erp03 Team",
   "license": "Proprietary"
 }
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 ###############################################################################
-# ERP SOLUTION — Project Statistics Generator
+# ERP erp03 — Project Statistics Generator
 # Usage: ./scripts/project-stats.sh
 ###############################################################################
 
 set -e
 
 echo "=========================================="
-echo "  ERP SOLUTION — Project Statistics"
+echo "  ERP erp03 — Project Statistics"
 echo "=========================================="
 echo ""
 
