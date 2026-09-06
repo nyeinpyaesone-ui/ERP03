@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: erp03-ollama
+  namespace: erp03
+  labels:
+    app.kubernetes.io/name: erp03-ollama
+    app.kubernetes.io/component: ai
+    app.kubernetes.io/part-of: erp03
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: erp03-ollama
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: erp03-ollama
+        app.kubernetes.io/component: ai
+        app.kubernetes.io/part-of: erp03
+    spec:
+      securityContext:
+        runAsNonRoot: false
+      containers:
+      - name: ollama
+        image: ollama/ollama:0.5.4
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 11432
+          protocol: TCP
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "1000m"
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+        livenessProbe:
+          httpGet:
+            path: /api/tags
+            port: 11434
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/tags
+            port: 11434
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+        volumeMounts:
+        - name: ollama-data
+          mountPath: /root/.ollama
+      volumes:
+      - name: ollama-data
+        persistentVolumeClaim:
+          claimName: erp03-ollama-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: erp03-ollama
+  namespace: erp03
+  labels:
+    app.kubernetes.io/name: erp03-ollama
+    app.kubernetes.io/component: ai
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 11434
+    targetPort: 11434
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: erp03-ollama
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: erp03-ollama-data
+  namespace: erp03
+  labels:
+    app.kubernetes.io/name: erp03-ollama
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 20Gi
