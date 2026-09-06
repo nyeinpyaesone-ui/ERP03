@@ -37,6 +37,7 @@ def test_openapi_contract_exposes_versioned_boundary_and_security() -> None:
 
 
 def test_openapi_contract_requires_idempotency_key_for_commands() -> None:
+    """Verify that the ERP commands contract requires an idempotency key."""
     spec = (ROOT / "erp-ai.openapi.yaml").read_text(encoding="utf-8")
     command_section = spec.split("/erp/commands:", 1)[1]
     assert "IdempotencyKey" in command_section

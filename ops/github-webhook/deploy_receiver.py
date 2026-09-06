@@ -12,10 +12,24 @@ PORT = int(os.getenv("WEBHOOK_PORT", "9001"))
 SECRET = os.environ["GITHUB_WEBHOOK_SECRET"].encode()
 REPOSITORY = os.getenv("GITHUB_REPOSITORY", "nyeinpyaesone-ui/ERP03")
 BRANCH = os.getenv("GITHUB_BRANCH", "main")
-DEPLOY_SCRIPT = os.getenv("DEPLOY_SCRIPT", "/opt/erp03/ops/github-webhook/deploy-from-github.sh")
+DEPLOY_WORKFLOW = os.getenv("DEPLOY_WORKFLOW", "Container Build and Publish")
+# Validate DEPLOY_SCRIPT to prevent command injection - must be an absolute path to approved script
+DEPLOY_SCRIPT_RAW = os.getenv("DEPLOY_SCRIPT", "/opt/erp03/ops/github-webhook/deploy-from-github.sh")
+if not DEPLOY_SCRIPT_RAW.startswith("/opt/erp03/") or ".." in DEPLOY_SCRIPT_RAW:
+    raise ValueError("Invalid DEPLOY_SCRIPT path: must be under /opt/erp03/ and contain no '..'")
+DEPLOY_SCRIPT = DEPLOY_SCRIPT_RAW
 
 
 def valid_signature(body: bytes, header: str | None) -> bool:
+    """Determine whether a webhook signature matches the request body.
+    
+    Parameters:
+    	body (bytes): The raw webhook request body.
+    	header (str | None): The signature header to verify.
+    
+    Returns:
+    	bool: `true` if the header contains a valid HMAC-SHA256 signature for the body, `false` otherwise.
+    """
     if not header or not header.startswith("sha256="):
         return False
     expected = "sha256=" + hmac.new(SECRET, body, hashlib.sha256).hexdigest()
@@ -24,6 +38,7 @@ def valid_signature(body: bytes, header: str | None) -> bool:
 
 class Handler(BaseHTTPRequestHandler):
     def _respond(self, status: int, message: str) -> None:
+        """Send a plain-text HTTP response with the specified status and message."""
         body = message.encode()
         self.send_response(status)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
@@ -32,6 +47,12 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self) -> None:
+        """
+        Process valid GitHub webhook requests and start deployment for matching events.
+        
+        The request must target the configured repository and represent a successful
+        configured workflow completion or an eligible push to the configured branch.
+        """
         if self.path != "/github/webhook":
             self._respond(404, "not found")
             return
@@ -60,6 +81,7 @@ class Handler(BaseHTTPRequestHandler):
                 run.get("action") == "completed"
                 and run.get("conclusion") == "success"
                 and run.get("head_branch") == BRANCH
+                and run.get("name") == DEPLOY_WORKFLOW
             )
         elif event == "push" and os.getenv("DEPLOY_ON_PUSH", "false").lower() == "true":
             deploy = payload.get("ref") == f"refs/heads/{BRANCH}"
@@ -83,6 +105,7 @@ class Handler(BaseHTTPRequestHandler):
         self._respond(202, "deployment started")
 
     def log_message(self, fmt: str, *args) -> None:
+        """Print an HTTP server log message with a ``github-webhook:`` prefix."""
         print("github-webhook:", fmt % args, flush=True)
 
 

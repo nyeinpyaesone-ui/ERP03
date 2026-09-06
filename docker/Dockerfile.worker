@@ -1,30 +1,53 @@
-# ERP SOLUTION Worker Dockerfile
-FROM node:20-alpine AS builder
+# ERP Celery Worker Dockerfile
+# Multi-stage build for Python Celery workers with memory control
+
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY . .
-RUN npm run build
+# Copy and install Python dependencies
+COPY ERP-BACKEND/requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
 
-FROM node:20-alpine AS production
+# Copy application code
+COPY ERP-BACKEND/app ./app
+COPY ERP-BACKEND/alembic.ini ./
 
-RUN addgroup -g 1000 -S nodejs && adduser -S nodejs -u 1000
+# Stage 2: Production image
+FROM python:3.12-slim AS production
+
+# Create non-root user
+RUN groupadd -r celerygroup && useradd -r -g celerygroup celeryuser
 
 WORKDIR /app
 
-COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./
+# Copy installed packages from builder
+COPY --from=builder /root/.local /home/celeryuser/.local
 
-USER nodejs
+# Copy application code
+COPY --from=builder /app/app ./app
+COPY --from=builder /app/alembic.ini ./
 
-EXPOSE 3000
+# Set environment variables
+ENV PATH=/home/celeryuser/.local/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health/live', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
+# Change ownership
+RUN chown -R celeryuser:celerygroup /app
 
-CMD ["node", "dist/worker.js"]
+USER celeryuser
+
+# Health check using celery inspect
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD python -c "from app.workers.celery_app import celery_app; print('OK')" || exit 1
+
+# Default command (overridden in docker-compose)
+CMD ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info"]
 

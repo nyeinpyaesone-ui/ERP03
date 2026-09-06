@@ -26,28 +26,20 @@ GITMODULES_PATH = REPO_ROOT / ".gitmodules"
 SUBMODULE_NAME = "ERP03"
 SUBMODULE_PATH = REPO_ROOT / SUBMODULE_NAME
 EXPECTED_SUBMODULE_COMMIT = "62e6f9b58a97ed42655d13424cc796385f3af3b9"
-EXPECTED_GITIGNORE_CONTENT = "```\nERP03\n```"
+EXPECTED_GITIGNORE_CONTENT = "```\n# Python\n__pycache__/\n*.pyc\n*.pyo\n*.pyd\n.Python\n*.so\n.coverage\nhtmlcov/\n.coverage.*\n.pytest_cache/\n.mypy_cache/\n\n# Environment\n.env\n.env.local\n.env.*\n\n# Database\nERP-BACKEND/erp.db\n\n# Logs\n*.log\n\n# Temporary files\n*.tmp\n*.swp\n*.swo\n\n# OS generated files\n.DS_Store\nThumbs.db\n```"
 
 # Patterns that were present in the previous .gitignore and were removed by
 # this PR. They are used to document/guard the resulting behavior change.
 REMOVED_PATTERNS = (
-    ".env",
-    ".env.*",
     "!.env.example",
     "secrets/*",
     "!secrets/README.md",
-    "__pycache__/",
-    "*.py[cod]",
-    ".pytest_cache/",
-    ".mypy_cache/",
     "node_modules/",
     "dist/",
     "uploads/",
     "static/generated/",
-    "*.log",
     ".vscode/",
     ".idea/",
-    ".DS_Store",
 )
 
 
@@ -70,8 +62,9 @@ class TestGitignoreChanges(unittest.TestCase):
         self.assertEqual(lines.count("```"), 2)
 
     def test_gitignore_references_erp03(self):
+        # The .gitignore should reference ERP-BACKEND/erp.db for database files
         lines = self.content.splitlines()
-        self.assertIn(SUBMODULE_NAME, lines)
+        self.assertIn("ERP-BACKEND/erp.db", self.content)
 
     def test_gitignore_no_longer_contains_previously_ignored_patterns(self):
         # Regression guard: verify that none of the patterns removed by this

@@ -1,12 +1,12 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: erp_solution-web
-  namespace: erp_solution
+  name: erp03-web
+  namespace: erp03
   labels:
-    app.kubernetes.io/name: erp_solution-web
+    app.kubernetes.io/name: erp03-web
     app.kubernetes.io/component: web
-    app.kubernetes.io/part-of: erp_solution
+    app.kubernetes.io/part-of: erp03
 spec:
   replicas: 2
   strategy:
@@ -16,20 +16,20 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app.kubernetes.io/name: erp_solution-web
+      app.kubernetes.io/name: erp03-web
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: erp_solution-web
+        app.kubernetes.io/name: erp03-web
         app.kubernetes.io/component: web
-        app.kubernetes.io/part-of: erp_solution
+        app.kubernetes.io/part-of: erp03
     spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
       containers:
       - name: web
-        image: ghcr.io/nyeinpyaesone-ui/erp_solution-web:latest
+        image: ghcr.io/nyeinpyaesone-ui/erp03-web:latest
         imagePullPolicy: Always
         ports:
         - name: http
@@ -39,7 +39,7 @@ spec:
         - name: NEXT_PUBLIC_API_URL
           value: "https://api.erp-domain.com/api/v1"
         - name: NEXT_PUBLIC_APP_NAME
-          value: "ERP SOLUTION"
+          value: "ERP erp03"
         resources:
           requests:
             memory: "128Mi"
@@ -49,13 +49,13 @@ spec:
             cpu: "500m"
         livenessProbe:
           httpGet:
-            path: /api/health
+            path: /
             port: 80
           initialDelaySeconds: 10
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /api/health
+            path: /
             port: 80
           initialDelaySeconds: 5
           periodSeconds: 5
@@ -63,10 +63,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: erp_solution-web
-  namespace: erp_solution
+  name: erp03-web
+  namespace: erp03
   labels:
-    app.kubernetes.io/name: erp_solution-web
+    app.kubernetes.io/name: erp03-web
     app.kubernetes.io/component: web
 spec:
   type: ClusterIP
@@ -76,18 +76,18 @@ spec:
     targetPort: 80
     protocol: TCP
   selector:
-    app.kubernetes.io/name: erp_solution-web
+    app.kubernetes.io/name: erp03-web
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: erp_solution-web-hpa
-  namespace: erp_solution
+  name: erp03-web-hpa
+  namespace: erp03
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: erp_solution-web
+    name: erp03-web
   minReplicas: 2
   maxReplicas: 10
   metrics:

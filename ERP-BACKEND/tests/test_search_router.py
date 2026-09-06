@@ -4,7 +4,7 @@ Tests cover API endpoints, request/response validation, authentication, and inte
 """
 import pytest
 from unittest.mock import MagicMock, patch, call
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -996,17 +996,43 @@ class TestGetPopularQueries:
     ):
         """Test getting popular queries when no data exists."""
         mock_db.query.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = []
-        
+
         from app.routers.search import get_popular_queries
-        
+
         result = get_popular_queries(
             limit=20,
             days=30,
             db=mock_db,
             current_user=mock_admin_user
         )
-        
+
         assert result["queries"] == []
+
+    def test_get_popular_queries_filters_by_timezone_aware_start_date(
+        self, mock_admin_user, mock_db
+    ):
+        """
+        Regression test: get_popular_queries() computes `start_date` using
+        datetime.now(timezone.utc). This exercises the real (unmocked)
+        datetime call so that a missing `timezone` import in
+        app/routers/search.py surfaces as a NameError here rather than only
+        in production.
+        """
+        mock_db.query.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = []
+
+        from app.routers.search import get_popular_queries
+
+        before = datetime.now(timezone.utc)
+        get_popular_queries(limit=20, days=7, db=mock_db, current_user=mock_admin_user)
+        after = datetime.now(timezone.utc)
+
+        filter_call_args = mock_db.query.return_value.filter.call_args
+        assert filter_call_args is not None
+        start_date = filter_call_args[0][0].right.value
+
+        assert start_date.tzinfo is not None
+        assert start_date.tzinfo == timezone.utc
+        assert before - timedelta(days=7) <= start_date <= after - timedelta(days=7)
 
 
 class TestAuthenticationRequirements:

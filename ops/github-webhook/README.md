@@ -1,6 +1,6 @@
 # ERP03 GitHub Webhook → Remote Deployment
 
-This receiver is intentionally host-level: it does not run inside the ERP backend container. The remote server receives GitHub's signed webhook, waits for a successful `workflow_run` on `main`, then updates `/opt/erp03` and refreshes the production Docker images.
+This receiver is intentionally host-level: it does not run inside the ERP backend container. The remote server receives GitHub's signed webhook, accepts only a successful `workflow_run` for the `Container Build and Publish` workflow on `main`, then updates `/opt/erp03` and pulls the exact commit-tagged ERP03 images from GHCR.
 
 ## Remote server setup
 
@@ -23,7 +23,7 @@ sudo chmod 600 /etc/erp03/github-webhook.env
 sudoedit /etc/erp03/github-webhook.env
 ```
 
-Set a long random `GITHUB_WEBHOOK_SECRET`. The same secret must be entered in the GitHub repository webhook configuration.
+Set a long random `GITHUB_WEBHOOK_SECRET`. The same secret must be entered in the GitHub repository webhook configuration. Configure the least-privilege GHCR credentials documented in the environment example when the packages are private.
 
 Install and start systemd:
 
@@ -70,13 +70,13 @@ SSL verification: enabled
 
 Events: `Workflow runs`
 
-The receiver deploys only when the workflow run is `completed`, `success`, and its branch is `main`. This avoids deploying from a raw `push` before the Docker image publishing workflow finishes.
+The receiver deploys only when the workflow run is `completed`, `success`, its branch is `main`, and its workflow name is `Container Build and Publish`. This prevents deployment from CodeQL, security, or release workflows that do not publish the main commit images.
 
 ## Deployment path
 
 ```text
 GitHub ERP03
-    │ workflow_run: completed + success
+    │ workflow_run: Container Build and Publish / completed + success
     ▼
 https://erp.anynoob.com/github/webhook
     │ HMAC SHA-256 verification
@@ -88,6 +88,8 @@ https://erp.anynoob.com/github/webhook
     │
     ├─ git fetch origin main
     ├─ reset local checkout to origin/main
+    ├─ derive exact Git SHA
+    ├─ docker login ghcr.io
     ├─ docker compose pull erp-backend frontend
     ├─ docker compose up -d --remove-orphans
     └─ GET http://127.0.0.1:8000/health

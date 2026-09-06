@@ -14,8 +14,18 @@ git fetch --prune origin "$BRANCH"
 git checkout -B "$BRANCH" "origin/$BRANCH"
 git reset --hard "origin/$BRANCH"
 
-docker compose -f "$COMPOSE_FILE" build --pull erp-backend frontend
+IMAGE_TAG="$(git rev-parse HEAD)"
+export BACKEND_IMAGE_TAG="$IMAGE_TAG"
+export FRONTEND_IMAGE_TAG="$IMAGE_TAG"
+
+: "${GHCR_USERNAME:?GHCR_USERNAME must be set for GHCR images}"
+: "${GHCR_TOKEN:?GHCR_TOKEN must be set for GHCR images}"
+printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+
+docker compose -f "$COMPOSE_FILE" pull erp-backend frontend
 docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+
+docker compose -f "$COMPOSE_FILE" ps
 
 for i in {1..30}; do
   if curl -fsS http://127.0.0.1:8000/health >/dev/null; then

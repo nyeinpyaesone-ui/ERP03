@@ -1,0 +1,13 @@
+# Production Environment Variables
+# Copy this file to production.tfvars and update with SECURE values
+# NEVER commit production.tfvars to version control
+
+aws_region = "us-east-1"
+vpc_cidr   = "10.2.0.0/16"
+
+# Database password - MUST be provided securely
+# Use AWS Secrets Manager or SSM Parameter Store in production
+db_password = "REPLACE_WITH_SECURE_PASSWORD_FROM_SECRETS_MANAGER"
+
+# Redis auth token - MUST be provided securely
+redis_auth_token = "REPLACE_WITH_SECURE_TOKEN_FROM_SECRETS_MANAGER"
