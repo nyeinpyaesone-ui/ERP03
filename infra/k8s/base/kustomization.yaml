@@ -12,6 +12,7 @@ resources:
   - pvc.yaml
   - postgres.yaml
   - redis.yaml
+  - ollama-deployment.yaml
   - api-deployment.yaml
   - web-deployment.yaml
   - worker-deployment.yaml
