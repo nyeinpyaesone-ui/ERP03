@@ -9,10 +9,7 @@ from time import perf_counter
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
-from app.database import engine
 from app.config import settings
 from app.middleware.rate_limiter import RateLimiter, AuthRateLimitMiddleware
 from app.middleware.error_handler import register_exception_handlers, error_handler_middleware
@@ -44,10 +41,8 @@ from app.domains.websocket import websocket
 from app.domains.admin import admin
 from app.domains.health import health
 
-# Import routers for features unique to main branch
 from app.routers import reports, integration_v1
 
-# AI Assistant (feat branch)
 try:
     from app.ai.assistant import build_router as build_ai_router
     AI_AVAILABLE = True
@@ -95,8 +90,6 @@ HTTP_REQUEST_DURATION = Histogram(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle without mutating the database schema."""
-    # Schema ownership belongs exclusively to Alembic. Deployment/qualification
-    # runs `alembic upgrade head` before the API becomes ready.
     yield
 
 
@@ -107,18 +100,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Initialize rate limiter for API endpoints (security hardening from main)
 rate_limiter = RateLimiter(default_limit="100/minute")
 app.state.limiter = rate_limiter.limiter
 rate_limiter.setup_exception_handler(app)
-
-# Add auth-specific rate limiting middleware to prevent brute force attacks
 app.add_middleware(AuthRateLimitMiddleware, max_attempts=5, window_seconds=60)
-
-# Register exception handlers
 register_exception_handlers(app)
-
-# Add error handler middleware (from feat branch)
 app.middleware("http")(error_handler_middleware)
 
 
@@ -136,11 +122,7 @@ async def observability_middleware(request, call_next):
     except Exception:
         logger.exception(
             "Unhandled request exception",
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-            },
+            extra={"request_id": request_id, "method": request.method, "path": request.url.path},
         )
         raise
     finally:
@@ -161,31 +143,20 @@ async def observability_middleware(request, call_next):
 
 
 cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()] or ["http://localhost:3000", "http://localhost:8080"]
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=[
-        "Authorization",
-        "Content-Type",
-        "Accept",
-        "Origin",
-        "X-Requested-With",
-        "X-Request-ID"
-    ],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "X-Request-ID"],
     expose_headers=["X-Request-ID", "Content-Length"],
     max_age=600,
 )
 
-# Setup plugin system using the package-local default path. This remains valid
-# in containers and local development environments.
 if PLUGINS_AVAILABLE:
     app.state.core_modules = CORE_MODULES
     plugin_manager = setup_plugins(app)
 
-# Include Core Routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(permissions.router, prefix="/api/v1/permissions", tags=["Permissions"])
@@ -234,6 +205,12 @@ async def root():
         response["core_modules"] = len(CORE_MODULES)
         response["plugins_enabled"] = True
     return response
+
+
+@app.get("/")
+async def root_duplicate_guard():
+    # This route is replaced by the canonical root handler above if FastAPI detects duplicates.
+    return {"status": "running"}
 
 
 @app.get("/health")
