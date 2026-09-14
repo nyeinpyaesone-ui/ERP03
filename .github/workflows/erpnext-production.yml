@@ -17,7 +17,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/erp03-erpnext
   FRAPPE_BRANCH: v16.31.1
-  FRAPPE_DOCKER_REF: v3.2.1
+  FRAPPE_DOCKER_REF: d4a310089f5d6fc38ed1317b898d75b9c74901db
 
 jobs:
   build-scan-publish:
@@ -30,7 +30,7 @@ jobs:
       - name: Validate apps.json
         run: python -m json.tool infra/erpnext/apps.json >/dev/null
 
-      - name: Checkout pinned official Frappe Docker
+      - name: Checkout immutable official Frappe Docker
         uses: actions/checkout@v5
         with:
           repository: frappe/frappe_docker
