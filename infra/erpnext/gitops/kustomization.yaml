@@ -10,4 +10,5 @@ resources:
   - alert-rules.yaml
 images:
   - name: ghcr.io/nyeinpyaesone-ui/erp03-erpnext
-    newTag: IMAGE_TAG
+    newName: ghcr.io/nyeinpyaesone-ui/erp03-erpnext
+    digest: IMAGE_DIGEST
