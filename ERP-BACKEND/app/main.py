@@ -12,7 +12,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from app.database import engine, Base
+from app.database import engine
 from app.config import settings
 from app.middleware.rate_limiter import RateLimiter, AuthRateLimitMiddleware
 from app.middleware.error_handler import register_exception_handlers, error_handler_middleware
@@ -54,21 +54,9 @@ try:
 except ImportError:
     AI_AVAILABLE = False
 
-# Check if running in test mode
-IS_TEST_MODE = os.getenv("TESTING", "false").lower() == "true" or os.getenv("TEST_MODE", "false").lower() == "true"
-
 
 class JsonFormatter(logging.Formatter):
     def format(self, record):
-        """
-        Serialize a log record as a JSON string with standard fields and optional request metadata.
-        
-        Parameters:
-        	record (logging.LogRecord): The log record to serialize.
-        
-        Returns:
-        	str: A JSON representation of the log record.
-        """
         payload = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created)),
             "level": record.levelname,
@@ -106,17 +94,11 @@ HTTP_REQUEST_DURATION = Histogram(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Only create tables if not in test mode (tests handle their own DB setup)
-    """
-    Manage application startup and shutdown lifecycle events.
-
-    Creates database tables during startup when the application is not running in test mode.
-    """
-    if not IS_TEST_MODE:
-        # For async engines, properly await the async connection
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+    """Manage application lifecycle without mutating the database schema."""
+    # Schema ownership belongs exclusively to Alembic. Deployment/qualification
+    # runs `alembic upgrade head` before the API becomes ready.
     yield
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -140,22 +122,9 @@ register_exception_handlers(app)
 app.middleware("http")(error_handler_middleware)
 
 
-
 @app.middleware("http")
 async def observability_middleware(request, call_next):
-    """
-    Track request metrics and attach a request identifier to the response.
-    
-    Parameters:
-    	request (Request): The incoming HTTP request.
-    	call_next (Callable): The handler for processing the request.
-    
-    Returns:
-    	response (Response): The response produced by the request handler.
-    
-    Raises:
-    	Exception: Re-raises exceptions raised while processing the request.
-    """
+    """Track request metrics and attach a request identifier to the response."""
     start = perf_counter()
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     status_code = 500
@@ -193,14 +162,11 @@ async def observability_middleware(request, call_next):
 
 cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()] or ["http://localhost:3000", "http://localhost:8080"]
 
-# SECURITY FIX: Restrict CORS methods and headers to only what's necessary
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    # Only allow necessary HTTP methods instead of wildcard
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    # Only allow necessary headers instead of wildcard
     allow_headers=[
         "Authorization",
         "Content-Type",
@@ -209,16 +175,15 @@ app.add_middleware(
         "X-Requested-With",
         "X-Request-ID"
     ],
-    # Expose only necessary headers to client
     expose_headers=["X-Request-ID", "Content-Length"],
-    # Max age for preflight cache
     max_age=600,
 )
 
-# Setup plugin system (from feat branch)
+# Setup plugin system using the package-local default path. This remains valid
+# in containers and local development environments.
 if PLUGINS_AVAILABLE:
     app.state.core_modules = CORE_MODULES
-    plugin_manager = setup_plugins(app, plugins_dir="/workspace/ERP-BACKEND/app/plugins")
+    plugin_manager = setup_plugins(app)
 
 # Include Core Routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
@@ -236,15 +201,14 @@ app.include_router(payments.router, prefix="/api/v1/payments", tags=["Payments"]
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
 app.include_router(search.router, prefix="/api/v1/search", tags=["Search"])
 app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["Integrations"])
-# Integration v1 router - DO NOT add extra prefix as it has its own prefix defined
 app.include_router(integration_v1.router, tags=["Integration v1"])
 app.include_router(websocket.router, prefix="/api/v1/ws", tags=["WebSocket"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(health.router, prefix="/api/v1", tags=["Health"])
 
-# AI Assistant router (from feat branch)
 if AI_AVAILABLE:
     app.include_router(build_ai_router(), prefix="/api/v1/ai", tags=["AI Assistant"])
+
 
 @app.get("/")
 async def root():
