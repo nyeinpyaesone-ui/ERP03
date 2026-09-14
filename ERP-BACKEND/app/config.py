@@ -34,7 +34,7 @@ class Settings(BaseSettings):
 
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15  # Reduced from 24 hours to 15 minutes for security
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     INTEGRATION_SERVICE_ISSUER: str = "erp03"
     INTEGRATION_SERVICE_AUDIENCE: str = "erp-ai-integration"
@@ -59,9 +59,11 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE: int = 50 * 1024 * 1024
     WS_HEARTBEAT_INTERVAL: int = 30
 
-    # Test mode flag (set by conftest.py during testing)
-    TEST_MODE: bool = False
+    # Schema ownership: production schema changes are applied by Alembic,
+    # never implicitly by application startup.
+    AUTO_CREATE_TABLES: bool = False
 
+    TEST_MODE: bool = False
     API_V1_PREFIX: str = "/api/v1"
 
     model_config = SettingsConfigDict(
@@ -77,22 +79,13 @@ class Settings(BaseSettings):
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@db:5432/{self.POSTGRES_DB}"
 
     def model_post_init(self, __context):
-        # Skip validation in test mode
-        """
-        Initialize settings, applying test-mode defaults or validating production configuration.
-        
-        Raises:
-            ValueError: If production mode lacks both a database URL and Postgres credentials,
-                or the secret key is shorter than 32 characters.
-        """
         if self.TEST_MODE:
             if not self.DATABASE_URL:
                 self.DATABASE_URL = "sqlite:///:memory:"
-            # SECURITY FIX: Require valid SECRET_KEY even in test mode
             if not self.SECRET_KEY or len(self.SECRET_KEY) < 32:
                 raise ValueError("SECRET_KEY must contain at least 32 characters even in test mode")
             return
-        
+
         database_url = _read_secret("DATABASE_URL")
         secret_key = _read_secret("SECRET_KEY")
         if database_url:
