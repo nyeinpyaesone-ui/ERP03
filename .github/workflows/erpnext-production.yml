@@ -110,9 +110,23 @@ jobs:
           provenance: true
           sbom: true
 
-      - name: Promote immutable image tag into GitOps
+      - name: Resolve published image digest
+        id: image-digest
         env:
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        run: |
+          set -euo pipefail
+          digest="$(docker buildx imagetools inspect "$IMAGE_REF" | awk '/^Digest:/ {print $2; exit}')"
+          test -n "$digest"
+          case "$digest" in
+            sha256:*) ;;
+            *) echo "Unexpected image digest: $digest" >&2; exit 1 ;;
+          esac
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Promote immutable image digest into GitOps
+        env:
+          IMAGE_DIGEST: ${{ steps.image-digest.outputs.digest }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -120,14 +134,14 @@ jobs:
           import os
           p = Path("infra/erpnext/gitops/kustomization.yaml")
           text = p.read_text()
-          old = "    newTag: IMAGE_TAG"
-          new = f"    newTag: {os.environ['IMAGE_TAG']}"
+          old = "    digest: IMAGE_DIGEST"
+          new = f"    digest: {os.environ['IMAGE_DIGEST']}"
           if old not in text:
-              raise SystemExit("expected IMAGE_TAG placeholder not found")
+              raise SystemExit("expected IMAGE_DIGEST placeholder not found")
           p.write_text(text.replace(old, new, 1))
           PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add infra/erpnext/gitops/kustomization.yaml
-          git commit -m "chore(gitops): promote ERPNext image $IMAGE_TAG"
+          git commit -m "chore(gitops): promote ERPNext image digest $IMAGE_DIGEST"
           git push origin HEAD:feat/erpnext-production
