@@ -1,8 +1,10 @@
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-from alembic import context
 import asyncio
+
+from alembic import context
+from sqlalchemy import engine_from_config, pool
+
+from app.config import settings
 from app.database import Base
 
 config = context.config
@@ -10,7 +12,11 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# Production credentials come from runtime settings, never alembic.ini.
+config.set_main_option("sqlalchemy.url", settings.get_database_url.replace("%", "%%"))
+
 target_metadata = Base.metadata
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
@@ -23,10 +29,12 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
+
 def do_run_migrations(connection):
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
+
 
 async def run_async_migrations():
     connectable = engine_from_config(
@@ -38,8 +46,10 @@ async def run_async_migrations():
         await connection.run_sync(do_run_migrations)
     await connectable.dispose()
 
+
 def run_migrations_online() -> None:
     asyncio.run(run_async_migrations())
+
 
 if context.is_offline_mode():
     run_migrations_offline()
