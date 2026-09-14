@@ -1,13 +1,17 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: erpnext-migrate-RELEASE
+  generateName: erpnext-migrate-
   annotations:
     argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "0"
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
 spec:
   backoffLimit: 2
   template:
+    metadata:
+      labels:
+        app: erpnext-migrate
     spec:
       restartPolicy: Never
       containers:
