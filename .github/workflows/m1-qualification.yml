@@ -2,7 +2,8 @@ name: M1 Qualification
 
 on:
   pull_request:
-    branches: [main]
+    branches:
+      - main
     paths:
       - "ERP-BACKEND/**"
       - ".github/workflows/m1-qualification.yml"
@@ -11,13 +12,17 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: m1-qualification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   migration-and-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:17
+        image: postgres:15
         env:
           POSTGRES_DB: erp03_test
           POSTGRES_USER: postgres
@@ -36,23 +41,26 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Python 3.12.13
+        uses: actions/setup-python@v7
         with:
-          python-version: "3.11"
+          python-version: "3.12.13"
           cache: pip
           cache-dependency-path: ERP-BACKEND/requirements.txt
 
       - name: Install backend dependencies
-        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
 
       - name: Upgrade database to Alembic head
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/erp03_test
           SECRET_KEY: 12345678901234567890123456789012
           TEST_MODE: "false"
+          AUTO_CREATE_TABLES: "false"
         run: alembic upgrade head
 
       - name: Verify Alembic head
@@ -60,6 +68,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/erp03_test
           SECRET_KEY: 12345678901234567890123456789012
           TEST_MODE: "false"
+          AUTO_CREATE_TABLES: "false"
         run: alembic current
 
       - name: Run backend tests
