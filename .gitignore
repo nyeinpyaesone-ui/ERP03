@@ -1,4 +1,3 @@
-```
 # Python
 __pycache__/
 *.py[cod]
@@ -83,4 +82,3 @@ target/
 *.Z
 *.lz
 *.lzo
-```
