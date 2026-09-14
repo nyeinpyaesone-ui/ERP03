@@ -1,81 +1,34 @@
-# ERP03 CI/CD Recovery Plan
+# ERP03 CI/CD Recovery Status
 
-## Current Status
-- **Local Commit:** `d2f369f` (ready to push)
-- **Remote HEAD:** `a60031e` (failing builds x15+)
-- **Branch:** `main` (ahead by 1 commit)
+## Current State
 
-## Critical Fixes in Local Commit
+ERP03 source-side qualification hardening is implemented on `main`. Production qualification remains blocked by GitHub Actions runner allocation.
 
-### 1. Removed Duplicate Workflows
-- ❌ Deleted `.github/workflows/docker-image.yml` (62 lines)
-- ❌ Deleted `.github/workflows/security.yml` (27 lines)
-- ✅ Kept consolidated `.github/workflows/cicd.yml`
+### Repository baseline
 
-**Reason:** Multiple workflows triggering on same events caused race conditions and resource conflicts.
+- Main HEAD: `256c44957830da61eebba6577cc4e6652f90e927`
+- Qualification workflow: `.github/workflows/erp03-qualification.yml`
+- Runtime baseline: Python 3.12.13, PostgreSQL 15, Redis 7
+- Frontend qualification uses the committed `package-lock.json` with `npm ci`
+- Production API migration ownership is externalized to the deployment gate; the API container does not run migrations during application startup
+- Production Python base images are pinned to an immutable registry digest
 
-### 2. Fixed bcrypt Compatibility
-- Changed `bcrypt==4.2.1` → `bcrypt==4.0.1`
-- **Impact:** Resolves `AttributeError: module 'bcrypt' has no attribute '__about__'`
-- **Affected:** All authentication operations
+## Blocking Gate
 
-### 3. Added Missing Dependency
-- Added `slowapi==0.1.4` to `requirements.txt`
-- **Required by:** `ERP-BACKEND/app/main.py` rate limiting middleware
+Issue #210 is the authoritative CI blocker.
 
-### 4. Fixed 105+ Datetime Warnings
-- Replaced `datetime.utcnow()` → `datetime.now(timezone.utc)`
-- **Files Updated:**
-  - `app/auth.py`
-  - `app/routers/auth.py`
-  - `app/routers/search.py`
-  - `app/services/search_service.py`
-  - `app/services/inventory_service.py`
-  - `app/models/regulated_inventory.py`
-  - `tests/conftest.py`
+Repeated qualification runs have terminated with `startup_failure` before GitHub creates any workflow jobs. Therefore the repository cannot obtain migration, test, lint, build, or container-build evidence from GitHub Actions until a usable GitHub-hosted or authorized self-hosted runner is available.
 
-### 5. Cleaned .gitignore
-- Removed duplicate patterns
-- Added proper exclusions for test artifacts
+## Required Recovery Action
 
-## Push Instructions (Manual)
+Restore or authorize a usable GitHub Actions runner for this repository, then execute the qualification workflow from `main`.
 
-Since automated push requires GitHub credentials, execute manually:
+The recovery criterion is **actual job allocation**, followed by successful execution of the backend migration/tests/container builds and frontend lint/build/container build.
 
-```bash
-cd /workspace
-git push origin main --force
-# Enter GitHub username: nyeinpyaesone-ui
-# Enter token/password: [YOUR_GITHUB_TOKEN]
-```
+## Security Note
 
-## Expected CI/CD Results After Push
+Do not store GitHub credentials, access tokens, passwords, or other authentication material in this document or in repository files. Git operations requiring authentication must use the GitHub credential mechanism appropriate to the execution environment.
 
-### Workflow Runs That Should Pass:
-1. **cicd.yml** - Security scan → Build → Test → Publish
-2. **release.yml** - Version tagging and release notes
+## Release Rule
 
-### Workflow Runs Eliminated:
-- ~~docker-image.yml~~ (deleted)
-- ~~security.yml~~ (deleted)
-
-## Verification Steps
-
-After push completes:
-1. Check GitHub Actions tab for green checkmarks
-2. Verify Docker image published to GHCR
-3. Confirm no "duplicate workflow" errors
-4. Validate test suite passes (expect 204+ tests)
-
-## Rollback Plan
-
-If issues persist:
-```bash
-git revert d2f369f
-git push origin main
-```
-
----
-**Created:** 2026-08-21
-**Author:** ERP03 Development Team
-**Priority:** CRITICAL
+A successful source build is not sufficient for production qualification. Do not publish or label ERP03 `v1.0.0` production-ready until the release-gate evidence exists for CI execution, runtime behavior, security/secrets, deployment, recovery, and client UAT.
