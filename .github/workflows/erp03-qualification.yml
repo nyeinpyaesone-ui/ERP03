@@ -1,0 +1,68 @@
+name: ERP03 Qualification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: erp03
+          POSTGRES_PASSWORD: erp03
+          POSTGRES_DB: erp03_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U erp03 -d erp03_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://erp03:erp03@127.0.0.1:5432/erp03_test
+      REDIS_URL: redis://127.0.0.1:6379/0
+      SECRET_KEY: qualification-only-secret-key
+      JWT_SECRET: qualification-only-jwt-secret
+      ENVIRONMENT: test
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.13'
+          cache: pip
+          cache-dependency-path: ERP-BACKEND/requirements.txt
+      - name: Install backend
+        working-directory: ERP-BACKEND
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Validate migrations
+        working-directory: ERP-BACKEND
+        run: alembic upgrade head
+      - name: Compile application
+        working-directory: ERP-BACKEND
+        run: python -m compileall -q app
+      - name: Run backend tests
+        working-directory: ERP-BACKEND
+        run: pytest tests -v --tb=short
+      - name: Validate production images
+        run: |
+          docker build --target production --tag erp03-api:qualification ./ERP-BACKEND
+          docker build --target production --tag erp03-worker:qualification -f ERP-BACKEND/Dockerfile.worker ./ERP-BACKEND
