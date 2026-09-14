@@ -16,22 +16,22 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/erp03-erpnext
-  FRAPPE_BRANCH: version-16
+  FRAPPE_BRANCH: v16.31.1
   FRAPPE_DOCKER_REF: v3.2.1
 
 jobs:
   build-scan-publish:
     name: Build, scan, publish, and promote ERPNext
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout ERP03
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate apps.json
         run: python -m json.tool infra/erpnext/apps.json >/dev/null
 
       - name: Checkout pinned official Frappe Docker
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: frappe/frappe_docker
           ref: ${{ env.FRAPPE_DOCKER_REF }}
