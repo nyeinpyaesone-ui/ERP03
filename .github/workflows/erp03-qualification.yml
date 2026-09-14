@@ -39,9 +39,10 @@ jobs:
     env:
       DATABASE_URL: postgresql+asyncpg://erp03:erp03@127.0.0.1:5432/erp03_test
       REDIS_URL: redis://127.0.0.1:6379/0
-      SECRET_KEY: qualification-only-secret-key
+      SECRET_KEY: qualification-only-secret-key-32-characters-minimum
       JWT_SECRET: qualification-only-jwt-secret
       ENVIRONMENT: test
+      TEST_MODE: "true"
       PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v4
