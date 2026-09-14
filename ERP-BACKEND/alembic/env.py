@@ -2,7 +2,7 @@ from logging.config import fileConfig
 import asyncio
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.config import settings
 from app.database import Base
@@ -13,15 +13,15 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Production credentials come from runtime settings, never alembic.ini.
-config.set_main_option("sqlalchemy.url", settings.get_database_url.replace("%", "%%"))
+database_url = settings.get_database_url
+config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    url = config.get_main_option("sqlalchemy.url")
     context.configure(
-        url=url,
+        url=database_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -30,21 +30,19 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def do_run_migrations(connection):
+def do_run_migrations(connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
 
 
-async def run_async_migrations():
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-    await connectable.dispose()
+async def run_async_migrations() -> None:
+    connectable = create_async_engine(database_url, pool_pre_ping=True, poolclass=None)
+    try:
+        async with connectable.connect() as connection:
+            await connection.run_sync(do_run_migrations)
+    finally:
+        await connectable.dispose()
 
 
 def run_migrations_online() -> None:
