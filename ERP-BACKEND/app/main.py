@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -14,7 +13,6 @@ from app.config import settings
 from app.middleware.rate_limiter import RateLimiter, AuthRateLimitMiddleware
 from app.middleware.error_handler import register_exception_handlers, error_handler_middleware
 
-# Import plugin system
 try:
     from app.plugins import setup_plugins, CORE_MODULES
     PLUGINS_AVAILABLE = True
@@ -22,7 +20,6 @@ except ImportError:
     PLUGINS_AVAILABLE = False
     CORE_MODULES = []
 
-# Import domain modules (feat branch structure)
 from app.domains.auth import auth, user
 from app.domains.users import users
 from app.domains.permissions import permissions
@@ -40,7 +37,6 @@ from app.domains.integrations import integrations
 from app.domains.websocket import websocket
 from app.domains.admin import admin
 from app.domains.health import health
-
 from app.routers import reports, integration_v1
 
 try:
@@ -205,12 +201,6 @@ async def root():
         response["core_modules"] = len(CORE_MODULES)
         response["plugins_enabled"] = True
     return response
-
-
-@app.get("/")
-async def root_duplicate_guard():
-    # This route is replaced by the canonical root handler above if FastAPI detects duplicates.
-    return {"status": "running"}
 
 
 @app.get("/health")
