@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "installCommand": "npm ci",
-  "framework": "vite"
+  "framework": "vite",
+  "installCommand": "npm --prefix frontend install --no-audit --no-fund",
+  "buildCommand": "npm --prefix frontend run build",
+  "outputDirectory": "frontend/dist"
 }
