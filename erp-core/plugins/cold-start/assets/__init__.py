@@ -1,1 +1,0 @@
-"""Assets Plugin Package"""\n
