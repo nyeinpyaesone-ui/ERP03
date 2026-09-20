@@ -1,8 +1,0 @@
-# Staging Environment Variables
-# Copy this file to staging.tfvars and update with your values
-
-aws_region = "us-east-1"
-vpc_cidr   = "10.1.0.0/16"
-
-# Database password (REQUIRED - change in production!)
-db_password = "ChangeMeInProduction123!"
