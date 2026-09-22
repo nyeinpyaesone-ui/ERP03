@@ -140,6 +140,7 @@ async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
                 )
             )
 
+    invoice_no = f"INV-{uuid4().hex[:8]}"
     async with SessionFactory() as session:
         with pytest.raises(DataError):
             await create_pos_sale(
@@ -147,7 +148,7 @@ async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
                 business_id=business.id,
                 branch_id=branch.id,
                 warehouse_id=warehouse.id,
-                invoice_no=f"INV-{uuid4().hex[:8]}",
+                invoice_no=invoice_no,
                 lines=[SaleLine(product.id, Decimal("1"))],
                 payments=[SalePayment(method="x" * 33, amount=Decimal("50"))],
             )
@@ -163,7 +164,7 @@ async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
         assert balance is not None
         assert balance.quantity == Decimal("2")
         assert await session.scalar(
-            select(Invoice).where(Invoice.id == product.id)
+            select(Invoice).where(Invoice.invoice_no == invoice_no)
         ) is None
 
 
