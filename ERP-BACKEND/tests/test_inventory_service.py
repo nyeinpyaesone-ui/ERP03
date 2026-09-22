@@ -1,6 +1,6 @@
 from decimal import Decimal
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -9,7 +9,7 @@ from app.services.inventory import InsufficientStockError, adjust_stock
 
 @pytest.mark.asyncio
 async def test_adjust_stock_rejects_deduction_without_balance():
-    result = AsyncMock()
+    result = MagicMock()
     result.scalar_one_or_none.return_value = None
     session = AsyncMock()
     session.execute.return_value = result
