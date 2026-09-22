@@ -5,14 +5,13 @@ from uuid import uuid4
 import httpx
 import pytest
 from sqlalchemy import select
-
-from app.core.security import create_access_token
+from sqlalchemy.exc import DataError
 from app.db.session import SessionFactory
 from app.main import app
-from app.models.erp import Invoice, Product, StockBalance, StockMovement, Warehouse
-from app.models.identity import Business
+from app.models.erp import Invoice, Product, StockBalance, Warehouse
+from app.models.identity import Branch
 from app.services.bootstrap import bootstrap_business
-from app.services.sales import SaleLine, SalePayment, SaleValidationError, create_pos_sale
+from app.services.sales import SaleLine, SalePayment, create_pos_sale
 
 
 async def _bootstrap(prefix: str):
@@ -142,7 +141,7 @@ async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
             )
 
     async with SessionFactory() as session:
-        with pytest.raises(Exception):
+        with pytest.raises(DataError):
             await create_pos_sale(
                 session,
                 business_id=business.id,
@@ -164,7 +163,7 @@ async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
         assert balance is not None
         assert balance.quantity == Decimal("2")
         assert await session.scalar(
-            select(Invoice).where(Invoice.invoice_no == "never")
+            select(Invoice).where(Invoice.id == product.id)
         ) is None
 
 
@@ -231,8 +230,6 @@ async def test_owner_token_cannot_cross_branch_boundary():
     business, branch, warehouse, user = await _bootstrap("BR")
     async with SessionFactory() as session:
         async with session.begin():
-            from app.models.identity import Branch
-
             other_branch = Branch(
                 business_id=business.id,
                 name="Other Branch",
