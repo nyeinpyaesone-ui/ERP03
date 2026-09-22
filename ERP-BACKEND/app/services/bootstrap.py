@@ -4,7 +4,7 @@ The caller owns the transaction. This service never commits partially-created
 tenant state and never resets an existing user's password.
 """
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
@@ -58,6 +58,11 @@ async def bootstrap_business(
     )
     if len(owner_password) < 12 or len(owner_password) > 256:
         raise ValueError("owner_password must contain 12 to 256 characters")
+
+    # Serialize concurrent first-tenant provisioning for the same code. The
+    # database unique constraint remains the final invariant; this lock keeps
+    # concurrent callers deterministic instead of racing on the pre-check.
+    await session.execute(select(func.pg_advisory_xact_lock(func.hashtext(business_code))))
 
     existing = await session.scalar(
         select(Business).where(Business.code == business_code)
