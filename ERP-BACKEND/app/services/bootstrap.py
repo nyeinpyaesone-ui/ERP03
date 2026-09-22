@@ -4,19 +4,26 @@ The caller owns the transaction. This service never commits partially-created
 tenant state and never resets an existing user's password.
 """
 
-from uuid import UUID
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.models.erp import Warehouse
-from app.models.identity import Branch, Business, Role, User
+from app.models.identity import Branch, Business, User
 from app.services.rbac import assign_role, ensure_default_roles
 
 
 class BootstrapConflictError(ValueError):
     """Raised when bootstrap would mutate an existing tenant unexpectedly."""
+
+
+def _required(value: str, field: str, maximum: int) -> str:
+    value = value.strip()
+    if not value:
+        raise ValueError(f"{field} must not be empty")
+    if len(value) > maximum:
+        raise ValueError(f"{field} exceeds maximum length")
+    return value
 
 
 async def bootstrap_business(
@@ -37,6 +44,21 @@ async def bootstrap_business(
     Existing business codes are rejected instead of silently mutating another
     tenant. The caller should execute this function inside one DB transaction.
     """
+    business_name = _required(business_name, "business_name", 200)
+    business_code = _required(business_code, "business_code", 64)
+    branch_name = _required(branch_name, "branch_name", 200)
+    branch_code = _required(branch_code, "branch_code", 64)
+    owner_name = _required(owner_name, "owner_name", 200)
+    owner_email = _required(owner_email, "owner_email", 320).lower()
+    warehouse_code = _required(warehouse_code, "warehouse_code", 64)
+    warehouse_name = (
+        _required(warehouse_name, "warehouse_name", 200)
+        if warehouse_name is not None
+        else branch_name
+    )
+    if len(owner_password) < 12 or len(owner_password) > 256:
+        raise ValueError("owner_password must contain 12 to 256 characters")
+
     existing = await session.scalar(
         select(Business).where(Business.code == business_code)
     )
@@ -44,8 +66,8 @@ async def bootstrap_business(
         raise BootstrapConflictError("Business code already exists")
 
     business = Business(
-        name=business_name.strip(),
-        code=business_code.strip(),
+        name=business_name,
+        code=business_code,
         default_currency="MMK",
         timezone="Asia/Yangon",
         locale="my-MM",
@@ -56,8 +78,8 @@ async def bootstrap_business(
 
     branch = Branch(
         business_id=business.id,
-        name=branch_name.strip(),
-        code=branch_code.strip(),
+        name=branch_name,
+        code=branch_code,
         active=True,
     )
     session.add(branch)
@@ -65,8 +87,8 @@ async def bootstrap_business(
 
     warehouse = Warehouse(
         branch_id=branch.id,
-        code=warehouse_code.strip(),
-        name=(warehouse_name or branch_name).strip(),
+        code=warehouse_code,
+        name=warehouse_name,
         active=True,
     )
     session.add(warehouse)
@@ -74,9 +96,9 @@ async def bootstrap_business(
     user = User(
         business_id=business.id,
         branch_id=branch.id,
-        email=owner_email.strip().lower(),
+        email=owner_email,
         password_hash=hash_password(owner_password),
-        display_name=owner_name.strip(),
+        display_name=owner_name,
         active=True,
     )
     session.add(user)
