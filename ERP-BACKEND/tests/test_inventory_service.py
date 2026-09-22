@@ -4,7 +4,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.models.erp import Base
+from app.db.base import Base
 from app.services.inventory import InsufficientStockError, adjust_stock
 
 
