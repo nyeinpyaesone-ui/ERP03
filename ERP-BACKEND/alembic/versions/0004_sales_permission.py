@@ -33,4 +33,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(sa.text("DELETE FROM permissions WHERE code = 'sales.create'"))
+    op.execute(
+        sa.text(
+            """
+            DELETE FROM role_permissions
+            WHERE permission_id = :permission_id
+            """
+        ),
+        {"permission_id": str(_PERMISSION_ID)},
+    )
+    op.execute(
+        sa.text("DELETE FROM permissions WHERE id = :permission_id"),
+        {"permission_id": str(_PERMISSION_ID)},
+    )
