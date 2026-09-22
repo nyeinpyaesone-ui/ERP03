@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.health import router as health_router
+from app.api.auth import router as auth_router\nfrom app.api.health import router as health_router
 from app.core.config import settings
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO), format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -44,4 +44,4 @@ async def api_root() -> dict[str, str]:
     return {"service": "erp03", "status": "ready", "version": settings.version}
 
 
-app.include_router(health_router, prefix="/api/v1")
+app.include_router(health_router, prefix="/api/v1")\napp.include_router(auth_router, prefix="/api/v1")
