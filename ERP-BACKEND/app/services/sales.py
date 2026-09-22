@@ -129,6 +129,9 @@ async def create_pos_sale(
         session.add(invoice)
         await session.flush()
 
+        # Lock stock rows in deterministic product order to reduce deadlock risk
+        # when concurrent cashiers sell overlapping multi-line baskets.
+        prepared.sort(key=lambda item: str(item[0].product_id))
         for line, price, line_total in prepared:
             session.add(InvoiceItem(
                 invoice_id=invoice.id,
