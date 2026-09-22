@@ -1,5 +1,3 @@
-from sqlalchemy import inspect
-
 from app.db.base import Base
 import app.models  # noqa: F401
 
