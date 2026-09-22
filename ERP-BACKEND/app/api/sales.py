@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.authorization import permission_dependency
 from app.core.security import current_claims
 from app.db.session import get_db_session
 from app.services.sales import SaleLine, SalePayment, SaleValidationError, create_pos_sale
@@ -40,7 +41,7 @@ class CreateSaleRequest(BaseModel):
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_sale(
     payload: CreateSaleRequest,
-    claims: dict = Depends(current_claims),
+    claims: dict = Depends(permission_dependency("sales.create")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
     try:
