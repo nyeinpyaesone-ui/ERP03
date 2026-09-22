@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import settings
 from app.db.base import Base
+import app.models  # noqa: F401 - register canonical ORM metadata
 
-# Import model modules here as the schema grows so Alembic can detect them.
 target_metadata = Base.metadata
 
 config = context.config
@@ -37,10 +37,8 @@ async def run_async_migrations() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
-
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
-
     await connectable.dispose()
 
 
