@@ -7,7 +7,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.erp import Customer, Invoice, InvoiceItem, Product, Payment
+from app.models.erp import Customer, Invoice, InvoiceItem, Payment, Product, Warehouse
+from app.models.identity import Branch
 from app.services.inventory import adjust_stock
 
 
@@ -61,10 +62,30 @@ async def create_pos_sale(
         raise SaleValidationError("Discount and tax cannot be negative")
     if any(payment.amount <= 0 for payment in payments):
         raise SaleValidationError("Payment amounts must be positive")
-    if any(payment.currency != currency for payment in payments):
+    if any(payment.currency.upper() != currency.upper() for payment in payments):
         raise SaleValidationError("Payment currency must match invoice currency")
 
     async with session.begin():
+        branch = await session.scalar(
+            select(Branch).where(
+                Branch.id == branch_id,
+                Branch.business_id == business_id,
+                Branch.active.is_(True),
+            ).with_for_update()
+        )
+        if branch is None:
+            raise SaleValidationError("Branch is not valid for this business")
+
+        warehouse = await session.scalar(
+            select(Warehouse).where(
+                Warehouse.id == warehouse_id,
+                Warehouse.branch_id == branch_id,
+                Warehouse.active.is_(True),
+            ).with_for_update()
+        )
+        if warehouse is None:
+            raise SaleValidationError("Warehouse is not valid for this branch")
+
         if customer_id is not None:
             customer = await session.scalar(
                 select(Customer).where(
@@ -119,7 +140,7 @@ async def create_pos_sale(
             customer_id=customer_id,
             invoice_no=invoice_no,
             status="paid" if paid == total else ("partial" if paid else "confirmed"),
-            currency=currency,
+            currency=currency.upper(),
             subtotal=subtotal,
             discount=discount_total,
             tax=tax_total,
@@ -129,8 +150,6 @@ async def create_pos_sale(
         session.add(invoice)
         await session.flush()
 
-        # Lock stock rows in deterministic product order to reduce deadlock risk
-        # when concurrent cashiers sell overlapping multi-line baskets.
         prepared.sort(key=lambda item: str(item[0].product_id))
         for line, price, line_total in prepared:
             session.add(InvoiceItem(
@@ -159,7 +178,7 @@ async def create_pos_sale(
                 branch_id=branch_id,
                 invoice_id=invoice.id,
                 method=payment.method,
-                currency=payment.currency,
+                currency=payment.currency.upper(),
                 amount=payment.amount,
                 reference=payment.reference,
             ))
