@@ -45,6 +45,10 @@ async def create_sale(
 ) -> dict:
     try:
         business_id = UUID(claims["business_id"])
+        claim_branch = claims.get("branch_id")
+        if claim_branch and claim_branch != str(payload.branch_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Branch access denied")
+
         result = await create_pos_sale(
             session,
             business_id=business_id,
@@ -56,6 +60,8 @@ async def create_sale(
             lines=[SaleLine(**line.model_dump()) for line in payload.lines],
             payments=[SalePayment(**payment.model_dump()) for payment in payload.payments],
         )
+    except HTTPException:
+        raise
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {
