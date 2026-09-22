@@ -45,8 +45,6 @@ class Business(Base):
 
 class Branch(Base):
     __tablename__ = "branches"
-    __table_args__ = (Index("ix_branches_business_active", "business_id", "active"),)
-
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     business_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
