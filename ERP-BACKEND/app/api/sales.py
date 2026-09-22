@@ -6,9 +6,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.authorization import permission_dependency
-from app.core.security import current_claims
 from app.db.session import get_db_session
-from app.services.sales import SaleLine, SalePayment, SaleValidationError, create_pos_sale
+from app.services.sales import SaleLine, SalePayment, create_pos_sale
 
 router = APIRouter(prefix="/sales", tags=["sales"])
 
