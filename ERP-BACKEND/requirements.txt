@@ -1,5 +1,15 @@
 fastapi==0.116.1
 uvicorn[standard]==0.35.0
 pydantic-settings==2.10.1
+sqlalchemy[asyncio]==2.0.43
+asyncpg==0.30.0
+alembic==1.16.5
+redis==6.4.0
+celery[redis]==5.5.3
+argon2-cffi==25.1.0
+PyJWT==2.10.1
+python-multipart==0.0.20
 httpx==0.28.1
 pytest==8.4.1
+pytest-asyncio==1.1.0
+email-validator==2.3.0

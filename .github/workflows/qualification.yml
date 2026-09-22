@@ -1,0 +1,59 @@
+name: ERP03 Qualification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: erp03-qualification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: erp03
+          POSTGRES_USER: erp03
+          POSTGRES_PASSWORD: erp03
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U erp03 -d erp03"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.13'
+          cache: pip
+          cache-dependency-path: ERP-BACKEND/requirements.txt
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package.json
+
+      - name: Install backend dependencies
+        working-directory: ERP-BACKEND
+        run: pip install --requirement requirements.txt
+
+      - name: Run canonical qualification
+        env:
+          DATABASE_URL: postgresql+asyncpg://erp03:erp03@127.0.0.1:5432/erp03
+        run: bash scripts/qualify.sh
