@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-erp03}
       POSTGRES_USER: ${POSTGRES_USER:-erp03}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -32,11 +32,18 @@ services:
       - "8000:8000"
     environment:
       ENVIRONMENT: production
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-erp03}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-erp03}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      DATABASE_URL: postgresql+asyncpg://$${POSTGRES_USER:-erp03}:$${POSTGRES_PASSWORD}@postgres:5432/$${POSTGRES_DB:-erp03}
       REDIS_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: qwen2.5:1.5b
       CORS_ORIGINS: http://localhost:3000,http://localhost:5173
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
     depends_on:
       postgres:
         condition: service_healthy
