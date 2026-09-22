@@ -224,3 +224,76 @@ async def test_concurrent_sales_cannot_oversell_stock():
         )
         assert balance is not None
         assert balance.quantity == Decimal("0")
+
+
+@pytest.mark.asyncio
+async def test_owner_token_cannot_cross_branch_boundary():
+    business, branch, warehouse, user = await _bootstrap("BR")
+    async with SessionFactory() as session:
+        async with session.begin():
+            from app.models.identity import Branch
+
+            other_branch = Branch(
+                business_id=business.id,
+                name="Other Branch",
+                code=f"OTHER-{uuid4().hex[:6]}",
+                active=True,
+            )
+            session.add(other_branch)
+            await session.flush()
+
+            other_warehouse = Warehouse(
+                branch_id=other_branch.id,
+                code="MAIN",
+                name="Other Warehouse",
+                active=True,
+            )
+            session.add(other_warehouse)
+            product = Product(
+                business_id=business.id,
+                branch_id=other_branch.id,
+                sku=f"SKU-{uuid4().hex[:8]}",
+                name="Other Branch Product",
+                unit="pcs",
+                sale_price=Decimal("25.00"),
+                cost_price=Decimal("10.00"),
+                active=True,
+            )
+            session.add(product)
+            await session.flush()
+            session.add(
+                StockBalance(
+                    warehouse_id=other_warehouse.id,
+                    product_id=product.id,
+                    quantity=Decimal("5"),
+                )
+            )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        login = await client.post(
+            "/api/v1/auth/login",
+            json={
+                "business_code": business.code,
+                "email": user.email,
+                "password": "Correct-Horse-123",
+            },
+        )
+        assert login.status_code == 200
+        token = login.json()["access_token"]
+
+        sale = await client.post(
+            "/api/v1/sales",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "branch_id": str(other_branch.id),
+                "warehouse_id": str(other_warehouse.id),
+                "invoice_no": f"INV-{uuid4().hex[:8]}",
+                "currency": "MMK",
+                "lines": [{"product_id": str(product.id), "quantity": "1"}],
+                "payments": [],
+            },
+        )
+        assert sale.status_code == 403
