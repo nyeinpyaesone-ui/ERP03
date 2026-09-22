@@ -7,8 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import current_claims
-from app.db.session import SessionFactory, get_db_session
-from app.models.identity import Permission, Role, User, role_permissions, user_roles
+from app.db.session import SessionFactory
+from app.models.identity import Business, Permission, Role, User, role_permissions, user_roles
 
 
 async def require_permission(
@@ -32,10 +32,13 @@ async def require_permission(
         .join(Role, Role.id == role_permissions.c.role_id)
         .join(user_roles, user_roles.c.role_id == Role.id)
         .join(User, User.id == user_roles.c.user_id)
+        .join(Business, Business.id == User.business_id)
         .where(
             User.id == user_id,
             User.business_id == business_id,
             User.active.is_(True),
+            Business.id == business_id,
+            Business.active.is_(True),
             Role.business_id == business_id,
             Permission.code == permission_code,
         )
