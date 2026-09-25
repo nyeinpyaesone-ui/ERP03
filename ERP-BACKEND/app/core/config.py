@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://ollama:11434"
     ollama_model: str = "qwen2.5:1.5b"
     ollama_timeout_seconds: float = 10.0
+    database_path: str = "/data/erp03.sqlite3"
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="ignore")
 
