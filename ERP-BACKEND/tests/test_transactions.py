@@ -94,3 +94,24 @@ def test_failed_write_rolls_back_and_key_can_be_retried():
     )
     assert result.transaction_id == "successful-retry-001"
     assert result.idempotent_replay is False
+
+
+def test_transaction_survives_store_reinitialization(tmp_path):
+    from app.core.transaction_store import TransactionStore
+
+    database = str(tmp_path / "transactions.sqlite3")
+    first_store = TransactionStore(database)
+    created = first_store.execute(
+        transaction_id="persistent-001",
+        idempotency_key="persistent-key-001",
+        operation="order.create",
+        amount="25.00",
+        currency="MMK",
+        metadata={"order": "ORD-001"},
+    )
+
+    second_store = TransactionStore(database)
+    loaded = second_store.get(created.transaction_id)
+    assert loaded is not None
+    assert loaded.transaction_id == created.transaction_id
+    assert loaded.metadata == {"order": "ORD-001"}
