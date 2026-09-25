@@ -66,3 +66,31 @@ def test_concurrent_same_key_commits_once():
     transaction_ids = {response.json()["transaction_id"] for response in responses}
     assert len(transaction_ids) == 1
     assert sum(response.json()["idempotent_replay"] for response in responses) == 7
+
+
+def test_failed_write_rolls_back_and_key_can_be_retried():
+    key = "rollback-retry-001"
+    try:
+        store.execute(
+            transaction_id="failed-write-001",
+            idempotency_key=key,
+            operation="finance.post",
+            amount="10.00",
+            currency="MMK",
+            metadata={"invalid": object()},
+        )
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("Expected metadata serialization to fail")
+
+    result = store.execute(
+        transaction_id="successful-retry-001",
+        idempotency_key=key,
+        operation="finance.post",
+        amount="10.00",
+        currency="MMK",
+        metadata={"retry": True},
+    )
+    assert result.transaction_id == "successful-retry-001"
+    assert result.idempotent_replay is False
