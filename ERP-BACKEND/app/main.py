@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.health import router as health_router
+from app.api.transactions import router as transactions_router
 from app.core.config import settings
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO), format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -18,7 +19,7 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Idempotency-Key"],
 )
 
 
@@ -45,3 +46,4 @@ async def api_root() -> dict[str, str]:
 
 
 app.include_router(health_router, prefix="/api/v1")
+app.include_router(transactions_router, prefix="/api/v1")
