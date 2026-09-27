@@ -20,6 +20,7 @@ class TransactionRequest(BaseModel):
     @field_validator("currency")
     @classmethod
     def normalize_currency(cls, value: str) -> str:
+        """Uppercase the currency without checking whether it is a known code."""
         return value.upper()
 
 
@@ -38,6 +39,17 @@ def create_transaction(
     payload: TransactionRequest,
     x_idempotency_key: str | None = Header(default=None),
 ) -> TransactionResponse:
+    """Record a transaction or return the original for a reused idempotency key.
+
+    Round the amount to two decimal places using the current decimal context
+    before looking up the key; even a positive amount can round to zero.
+    Replays return the original fields with ``idempotent_replay=True``, even
+    when the submitted fields differ. Both new records and replays use HTTP 201.
+
+    Raise HTTPException with status 400 for a missing, empty, or over-255-character
+    key, or 422 if quantization raises InvalidOperation. Store errors propagate
+    to the request middleware, which converts them to HTTP 500 responses.
+    """
     if not x_idempotency_key or len(x_idempotency_key) > 255:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -70,6 +82,12 @@ def create_transaction(
 
 @router.get("/{transaction_id}", response_model=TransactionResponse)
 def get_transaction(transaction_id: str) -> TransactionResponse:
+    """Return the stored transaction with ``idempotent_replay=False``.
+
+    Raise HTTPException with status 404 if the identifier is absent. Database
+    and metadata decoding errors propagate to the request middleware, which
+    converts them to HTTP 500 responses.
+    """
     result = store.get(transaction_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Transaction not found")

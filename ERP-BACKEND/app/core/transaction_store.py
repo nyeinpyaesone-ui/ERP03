@@ -22,12 +22,21 @@ class TransactionStore:
     """Durable transaction journal with atomic idempotency semantics."""
 
     def __init__(self, database_path: str) -> None:
+        """Initialize the SQLite journal, creating parent directories as needed.
+
+        Filesystem errors and SQLite initialization errors propagate to callers.
+        """
         self.database_path = database_path
         Path(database_path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
+        """Open an autocommit connection with named rows, WAL, and foreign keys.
+
+        Wait up to 10 seconds for database locks. The caller must close the
+        returned connection; SQLite connection and configuration errors propagate.
+        """
         connection = sqlite3.connect(
             self.database_path,
             timeout=10,
@@ -40,6 +49,7 @@ class TransactionStore:
         return connection
 
     def _initialize(self) -> None:
+        """Create the journal table if absent, propagating SQLite errors."""
         with self._connect() as connection:
             connection.execute(
                 """
@@ -66,6 +76,20 @@ class TransactionStore:
         currency: str,
         metadata: dict[str, Any],
     ) -> TransactionResult:
+        """Atomically record a committed entry or replay an existing key's entry.
+
+        A reused idempotency key returns the original fields with
+        ``idempotent_replay=True``, ignoring all other supplied fields. New
+        entries use the supplied transaction ID and return the flag as False.
+        The amount is stored as supplied, without rounding or validation;
+        metadata must be JSON-serializable. This only writes the journal and
+        does not perform the named business operation.
+
+        SQLite and metadata encoding/decoding errors propagate. Failures during
+        transaction handling trigger an attempted rollback; rollback errors are
+        suppressed. Raise RuntimeError if a newly committed entry cannot be
+        reloaded. Errors after commit do not undo it.
+        """
         with self._lock:
             connection = self._connect()
             try:
@@ -114,6 +138,11 @@ class TransactionStore:
 
     @staticmethod
     def _result(row: sqlite3.Row, *, replay: bool) -> TransactionResult:
+        """Decode a journal row and set its replay flag from ``replay``.
+
+        Missing columns raise IndexError; invalid metadata JSON raises
+        json.JSONDecodeError.
+        """
         return TransactionResult(
             transaction_id=row["transaction_id"],
             status=row["status"],
@@ -125,6 +154,10 @@ class TransactionStore:
         )
 
     def get(self, transaction_id: str) -> TransactionResult | None:
+        """Return the entry with its replay flag False, or None if absent.
+
+        SQLite errors and metadata JSON decoding errors propagate to callers.
+        """
         with self._connect() as connection:
             row = connection.execute(
                 "SELECT * FROM transactions WHERE transaction_id = ?",
