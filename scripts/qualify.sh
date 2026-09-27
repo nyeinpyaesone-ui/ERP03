@@ -9,11 +9,27 @@ FRONTEND_DIR="$ROOT_DIR/frontend"
 
 log() { printf '\n==> %s\n' "$*"; }
 
+require_path() {
+  local path="$1"
+  local description="$2"
+  [[ -e "$path" ]] || {
+    printf 'qualification prerequisite missing: %s (%s)\n' "$path" "$description" >&2
+    exit 1
+  }
+}
+
 cd "$ROOT_DIR"
 
 command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 2; }
 command -v node >/dev/null || { echo "node is required" >&2; exit 2; }
 command -v npm >/dev/null || { echo "npm is required" >&2; exit 2; }
+
+log "Validate repository foundations"
+require_path "$BACKEND_DIR/alembic.ini" "Alembic configuration"
+require_path "$BACKEND_DIR/alembic/env.py" "Alembic environment"
+require_path "$BACKEND_DIR/alembic/versions" "Alembic migration directory"
+require_path "$BACKEND_DIR/app" "backend application package"
+require_path "$FRONTEND_DIR/package.json" "frontend package manifest"
 
 log "Backend syntax"
 cd "$BACKEND_DIR"
