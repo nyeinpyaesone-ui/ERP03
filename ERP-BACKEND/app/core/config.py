@@ -19,9 +19,8 @@ class Settings(BaseSettings):
     celery_result_backend: str | None = None
     ollama_base_url: str = "http://ollama:11434"
     ollama_model: str = "qwen2.5:1.5b"
-    ollama_timeout_seconds: float = Field(default=120.0, gt=0, le=600)
-    secret_key: SecretStr = SecretStr("development-only-change-me")
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="ignore", case_sensitive=False)
+    ollama_timeout_seconds: float = 10.0
+    database_path: str = "/data/erp03.sqlite3"
 
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":
