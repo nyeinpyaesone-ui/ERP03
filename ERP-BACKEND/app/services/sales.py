@@ -165,8 +165,22 @@ async def create_pos_sale(
             total=total,
             paid=paid,
         )
-        session.add(invoice)
-        await session.flush()
+        try:
+            async with session.begin_nested():
+                session.add(invoice)
+                await session.flush()
+        except IntegrityError:
+            if idempotency_key is not None:
+                existing = await session.scalar(
+                    select(Invoice).where(
+                        Invoice.business_id == business_id,
+                        Invoice.branch_id == branch_id,
+                        Invoice.idempotency_key == idempotency_key,
+                    )
+                )
+                if existing is not None:
+                    return SaleResult(invoice_id=existing.id, total=existing.total, paid=existing.paid, balance=existing.total - existing.paid)
+            raise
 
         prepared.sort(key=lambda item: str(item[0].product_id))
         for line, price, line_total in prepared:
