@@ -5,6 +5,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.erp import Customer, Invoice, InvoiceItem, Payment, Product, Warehouse
@@ -52,6 +53,7 @@ async def create_pos_sale(
     payments: list[SalePayment],
     customer_id: UUID | None = None,
     currency: str = "MMK",
+    idempotency_key: str | None = None,
 ) -> SaleResult:
     """Create invoice, inventory movements and payments in one DB transaction."""
     if not lines:
@@ -62,6 +64,10 @@ async def create_pos_sale(
         raise SaleValidationError("Discount and tax cannot be negative")
     if any(payment.amount <= 0 for payment in payments):
         raise SaleValidationError("Payment amounts must be positive")
+    if idempotency_key is not None and not idempotency_key.strip():
+        raise SaleValidationError("Idempotency key cannot be empty")
+    if idempotency_key is not None and len(idempotency_key) > 255:
+        raise SaleValidationError("Idempotency key must be <= 255 characters")
     if any(payment.currency.upper() != currency.upper() for payment in payments):
         raise SaleValidationError("Payment currency must match invoice currency")
 
@@ -134,11 +140,23 @@ async def create_pos_sale(
         if paid > total:
             raise SaleValidationError("Overpayment is not allowed")
 
+        if idempotency_key is not None:
+            existing = await session.scalar(
+                select(Invoice).where(
+                    Invoice.business_id == business_id,
+                    Invoice.branch_id == branch_id,
+                    Invoice.idempotency_key == idempotency_key,
+                ).with_for_update()
+            )
+            if existing is not None:
+                return SaleResult(invoice_id=existing.id, total=existing.total, paid=existing.paid, balance=existing.total - existing.paid)
+
         invoice = Invoice(
             business_id=business_id,
             branch_id=branch_id,
             customer_id=customer_id,
             invoice_no=invoice_no,
+            idempotency_key=idempotency_key,
             status="paid" if paid == total else ("partial" if paid else "confirmed"),
             currency=currency.upper(),
             subtotal=subtotal,
