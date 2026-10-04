@@ -73,7 +73,7 @@ async def test_bootstrap_login_and_pos_sale_round_trip():
 
         sale = await client.post(
             "/api/v1/sales",
-            headers={"Authorization": f"Bearer {token}"},
+            headers={"Authorization": f"Bearer {token}", "X-Idempotency-Key": f"sale-{uuid4().hex}"},
             json={
                 "branch_id": str(branch.id),
                 "warehouse_id": str(warehouse.id),
