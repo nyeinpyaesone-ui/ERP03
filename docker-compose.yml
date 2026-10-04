@@ -26,6 +26,19 @@ services:
       retries: 10
     restart: unless-stopped
 
+  migrate:
+    build: ./ERP-BACKEND
+    environment:
+      ENVIRONMENT: production
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-erp03}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-erp03}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
   backend:
     build: ./ERP-BACKEND
     ports:
@@ -46,6 +59,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   frontend:
