@@ -295,3 +295,55 @@ async def test_owner_token_cannot_cross_branch_boundary():
             },
         )
         assert sale.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_pos_sale_idempotency_replays_same_invoice_without_double_stock():
+    business, branch, warehouse, user = await _bootstrap("ID")
+    async with SessionFactory() as session:
+        async with session.begin():
+            product = Product(
+                business_id=business.id,
+                branch_id=branch.id,
+                sku=f"SKU-{uuid4().hex[:8]}",
+                name="Idempotency Product",
+                unit="pcs",
+                sale_price=Decimal("100.00"),
+                cost_price=Decimal("60.00"),
+                active=True,
+            )
+            session.add(product)
+            await session.flush()
+            session.add(StockBalance(warehouse_id=warehouse.id, product_id=product.id, quantity=Decimal("5")))
+
+    key = f"retry-{uuid4().hex}"
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        login = await client.post("/api/v1/auth/login", json={
+            "business_code": business.code,
+            "email": user.email,
+            "password": "Correct-Horse-123",
+        })
+        assert login.status_code == 200
+        token = login.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}", "X-Idempotency-Key": key}
+        payload = {
+            "branch_id": str(branch.id),
+            "warehouse_id": str(warehouse.id),
+            "invoice_no": f"INV-{uuid4().hex[:8]}",
+            "currency": "MMK",
+            "lines": [{"product_id": str(product.id), "quantity": "2"}],
+            "payments": [{"method": "cash", "amount": "200.00", "currency": "MMK"}],
+        }
+        first = await client.post("/api/v1/sales", headers=headers, json=payload)
+        assert first.status_code == 201, first.text
+        second = await client.post("/api/v1/sales", headers=headers, json=payload | {"invoice_no": f"RETRY-{uuid4().hex[:8]}"})
+        assert second.status_code == 201, second.text
+        assert second.json()["invoice_id"] == first.json()["invoice_id"]
+
+    async with SessionFactory() as session:
+        balance = await session.scalar(select(StockBalance).where(
+            StockBalance.warehouse_id == warehouse.id,
+            StockBalance.product_id == product.id,
+        ))
+        assert balance is not None
+        assert balance.quantity == Decimal("3")
