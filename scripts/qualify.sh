@@ -31,9 +31,10 @@ require_path "$BACKEND_DIR/alembic/versions" "Alembic migration directory"
 require_path "$BACKEND_DIR/app" "backend application package"
 require_path "$FRONTEND_DIR/package.json" "frontend package manifest"
 
-log "Backend syntax"
+log "Backend syntax and production configuration"
 cd "$BACKEND_DIR"
 python3 -m compileall -q app alembic
+ENVIRONMENT=production SECRET_KEY="qualification-secret-key-with-at-least-32-bytes" CORS_ORIGINS="https://erp.example.invalid" DATABASE_PATH="/tmp/erp03-qualification.sqlite3" python3 -c "from app.main import app; assert any(r.path == '/api/v1/auth/login' for r in app.routes); assert any(r.path == '/api/v1/sales' for r in app.routes); print('production configuration and critical routes: OK')"
 
 log "Backend migration"
 DATABASE_URL="$DATABASE_URL" alembic upgrade head

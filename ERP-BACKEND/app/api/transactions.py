@@ -1,7 +1,7 @@
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.config import settings
@@ -63,7 +63,7 @@ def create_transaction(
 
     result = store.execute(
         transaction_id=uuid4().hex,
-        idempotency_key=x_idempotency_key,
+        idempotency_key=f"{claims['business_id']}:{x_idempotency_key}",
         operation=payload.operation,
         amount=str(amount),
         currency=payload.currency,

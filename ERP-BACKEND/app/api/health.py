@@ -18,6 +18,7 @@ async def readyz() -> JSONResponse:
     try:
         async for session in get_db_session():
             await session.execute(text("SELECT 1"))
+            revision = await session.scalar(text("SELECT version_num FROM alembic_version LIMIT 1"))
     except Exception as exc:
         return JSONResponse(
             status_code=503,
@@ -29,7 +30,10 @@ async def readyz() -> JSONResponse:
             },
         )
 
+    if revision is None:
+        return JSONResponse(status_code=503, content={"status": "not_ready", "service": "erp03-api", "dependency": "database_schema"})
+
     return JSONResponse(
         status_code=200,
-        content={"status": "ready", "service": "erp03-api", "ai_dependency": "optional"},
+        content={"status": "ready", "service": "erp03-api", "schema_revision": revision, "ai_dependency": "optional"},
     )

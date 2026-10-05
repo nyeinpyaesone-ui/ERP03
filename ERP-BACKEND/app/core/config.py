@@ -1,9 +1,11 @@
 from functools import lru_cache
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="ignore", case_sensitive=False)
+    secret_key: SecretStr = SecretStr("development-only-change-me")
     app_name: str = "ERP03 API"
     version: str = "1.0.0"
     environment: str = "development"
@@ -22,10 +24,22 @@ class Settings(BaseSettings):
     ollama_timeout_seconds: float = 10.0
     database_path: str = "/data/erp03.sqlite3"
 
+    @field_validator("cors_origins")
+    @classmethod
+    def validate_cors_origins(cls, value: str) -> str:
+        origins = [item.strip() for item in value.split(",") if item.strip()]
+        if not origins:
+            raise ValueError("CORS_ORIGINS must contain at least one origin")
+        return ",".join(origins)
+
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":
-        if self.environment.lower() in {"production", "prod"} and self.secret_key.get_secret_value() in {"", "development-only-change-me", "change-me-in-production"}:
-            raise ValueError("SECRET_KEY must be explicitly configured in production")
+        if self.environment.lower() in {"production", "prod"}:
+            secret = self.secret_key.get_secret_value()
+            if secret in {"", "development-only-change-me", "change-me-in-production"} or len(secret) < 32:
+                raise ValueError("SECRET_KEY must be explicitly configured with at least 32 characters in production")
+            if any(origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1") for origin in self.cors_origin_list):
+                raise ValueError("Production CORS_ORIGINS must not contain localhost/127.0.0.1")
         return self
 
     @property

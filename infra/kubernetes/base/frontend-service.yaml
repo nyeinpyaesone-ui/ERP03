@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: erp03-frontend
+  namespace: erp03
+spec:
+  selector:
+    app: erp03-frontend
+  ports:
+    - port: 80
+      targetPort: 80

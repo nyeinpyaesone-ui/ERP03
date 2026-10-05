@@ -1,7 +1,7 @@
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,12 +43,16 @@ async def create_sale(
     payload: CreateSaleRequest,
     claims: dict = Depends(permission_dependency("sales.create")),
     session: AsyncSession = Depends(get_db_session),
+    x_idempotency_key: str | None = Header(default=None),
 ) -> dict:
     try:
         business_id = UUID(claims["business_id"])
         claim_branch = claims.get("branch_id")
         if claim_branch and claim_branch != str(payload.branch_id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Branch access denied")
+
+        if not x_idempotency_key or len(x_idempotency_key) > 255:
+            raise HTTPException(status_code=400, detail="X-Idempotency-Key is required and must be <= 255 characters")
 
         result = await create_pos_sale(
             session,
@@ -60,6 +64,7 @@ async def create_sale(
             currency=payload.currency.upper(),
             lines=[SaleLine(**line.model_dump()) for line in payload.lines],
             payments=[SalePayment(**payment.model_dump()) for payment in payload.payments],
+            idempotency_key=f"{business_id}:{x_idempotency_key}",
         )
     except HTTPException:
         raise

@@ -117,6 +117,7 @@ class Invoice(Base):
     __tablename__ = "invoices"
     __table_args__ = (
         UniqueConstraint("branch_id", "invoice_no", name="uq_invoices_branch_no"),
+        UniqueConstraint("business_id", "branch_id", "idempotency_key", name="uq_invoices_idempotency"),
         Index("ix_invoices_branch_status_created", "branch_id", "status", "created_at"),
         Index("ix_invoices_customer_created", "customer_id", "created_at"),
     )
@@ -125,6 +126,7 @@ class Invoice(Base):
     branch_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="RESTRICT"))
     customer_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("customers.id", ondelete="RESTRICT"))
     invoice_no: Mapped[str] = mapped_column(String(64))
+    idempotency_key: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(24), default="draft")
     currency: Mapped[str] = mapped_column(String(3), default="MMK")
     subtotal: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)

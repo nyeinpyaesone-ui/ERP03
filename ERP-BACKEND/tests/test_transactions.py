@@ -1,9 +1,18 @@
 import threading
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.api.transactions import store
+from app.core.security import current_claims
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def authenticated_transaction_requests():
+    app.dependency_overrides[current_claims] = lambda: {"sub": "test-user", "business_id": "test-business"}
+    yield
+    app.dependency_overrides.pop(current_claims, None)
 
 
 def test_transaction_requires_idempotency_key():

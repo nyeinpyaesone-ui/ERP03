@@ -8,13 +8,16 @@ from fastapi.responses import JSONResponse
 
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
+from app.api.sales import router as sales_router
 from app.api.transactions import router as transactions_router
 from app.core.config import settings
+from app.core.metrics import REQUEST_COUNT, REQUEST_LATENCY, metrics_app
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO), format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("erp03")
 
 app = FastAPI(title=settings.app_name, version=settings.version, docs_url="/docs", redoc_url="/redoc")
+app.mount("/metrics", metrics_app)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -33,11 +36,16 @@ async def request_context(request: Request, call_next):
     except Exception:
         logger.exception("Unhandled request error request_id=%s path=%s", request_id, request.url.path)
         response = JSONResponse(status_code=500, content={"error": {"code": "INTERNAL_ERROR", "message": "Internal server error", "request_id": request_id}})
+    duration = time.perf_counter() - started
+    route = request.scope.get("route")
+    route_name = getattr(route, "path", request.url.path)
+    REQUEST_COUNT.labels(request.method, route_name, str(response.status_code)).inc()
+    REQUEST_LATENCY.labels(request.method, route_name).observe(duration)
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
-    logger.info("request method=%s path=%s status=%s duration_ms=%.2f request_id=%s", request.method, request.url.path, response.status_code, (time.perf_counter() - started) * 1000, request_id)
+    logger.info("request method=%s path=%s status=%s duration_ms=%.2f request_id=%s", request.method, request.url.path, response.status_code, duration * 1000, request_id)
     return response
 
 
@@ -47,4 +55,6 @@ async def api_root() -> dict[str, str]:
 
 
 app.include_router(health_router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(sales_router, prefix="/api/v1")
 app.include_router(transactions_router, prefix="/api/v1")
