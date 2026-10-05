@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: erp03-backend
+  namespace: erp03
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: erp03-backend
+  template:
+    metadata:
+      labels:
+        app: erp03-backend
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/nyeinpyaesone-ui/erp03-backend@sha256:REPLACE_WITH_REAL_DIGEST
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: erp03-runtime
+            - secretRef:
+                name: erp03-secrets
+          readinessProbe:
+            httpGet:
+              path: /api/v1/readyz
+              port: 8000
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/v1/healthz
+              port: 8000
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
