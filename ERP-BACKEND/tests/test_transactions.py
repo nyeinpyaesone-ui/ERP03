@@ -235,3 +235,52 @@ def test_existing_journal_is_migrated_and_legacy_tenant_is_recovered(tmp_path):
     assert owned is not None
     assert owned.metadata == {"invoice": "LEGACY-001"}
     assert foreign is None
+
+
+
+def test_same_idempotency_key_with_different_payload_returns_conflict():
+    key = f"payload-conflict-{uuid4().hex}"
+    headers = {"X-Idempotency-Key": key}
+    first_payload = {
+        "operation": "invoice.create",
+        "amount": "10.00",
+        "currency": "MMK",
+        "metadata": {"invoice": "INV-A"},
+    }
+    changed_payload = {
+        "operation": "invoice.create",
+        "amount": "11.00",
+        "currency": "MMK",
+        "metadata": {"invoice": "INV-A"},
+    }
+    with TestClient(app) as client:
+        first = client.post("/api/v1/transactions", json=first_payload, headers=headers)
+        conflict = client.post("/api/v1/transactions", json=changed_payload, headers=headers)
+
+    assert first.status_code == 201
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"]["code"] == "IDEMPOTENCY_KEY_REUSED"
+
+
+def test_idempotency_fingerprint_ignores_metadata_key_order(tmp_path):
+    isolated_store = TransactionStore(str(tmp_path / "fingerprint.sqlite3"))
+    first = isolated_store.execute(
+        transaction_id="canonical-001",
+        idempotency_key="canonical-key",
+        operation="invoice.create",
+        amount="10.00",
+        currency="MMK",
+        metadata={"invoice": "INV-A", "source": "pos"},
+        business_id="canonical-business",
+    )
+    replay = isolated_store.execute(
+        transaction_id="canonical-002",
+        idempotency_key="canonical-key",
+        operation="invoice.create",
+        amount="10.00",
+        currency="MMK",
+        metadata={"source": "pos", "invoice": "INV-A"},
+        business_id="canonical-business",
+    )
+    assert replay.transaction_id == first.transaction_id
+    assert replay.idempotent_replay is True
