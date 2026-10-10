@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sqlite3
 import threading
@@ -5,6 +6,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+
+class IdempotencyConflict(ValueError):
+    """Raised when a key is reused for a different canonical command."""
 
 
 @dataclass(frozen=True)
@@ -22,14 +27,12 @@ class TransactionStore:
     """Durable transaction journal with atomic idempotency and tenant isolation."""
 
     def __init__(self, database_path: str) -> None:
-        """Initialize the journal and migrate legacy databases in place."""
         self.database_path = database_path
         Path(database_path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
-        """Open a connection; callers are responsible for closing it."""
         connection = sqlite3.connect(
             self.database_path,
             timeout=10,
@@ -41,10 +44,8 @@ class TransactionStore:
         return connection
 
     def _initialize(self) -> None:
-        """Create the journal and apply a serialized, backward-compatible migration."""
         connection = self._connect()
         try:
-            # WAL is persistent database configuration; do not repeat it on each request.
             connection.execute("PRAGMA journal_mode=WAL")
             connection.execute("BEGIN IMMEDIATE")
             connection.execute(
@@ -57,6 +58,7 @@ class TransactionStore:
                     amount TEXT NOT NULL,
                     currency TEXT NOT NULL,
                     metadata_json TEXT NOT NULL,
+                    request_fingerprint TEXT,
                     status TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 )
@@ -70,10 +72,10 @@ class TransactionStore:
                 connection.execute(
                     "ALTER TABLE transactions ADD COLUMN business_id TEXT NOT NULL DEFAULT ''"
                 )
-
-            # Older API records encoded tenant ownership in "business_id:key".
-            # Recover that tenant marker once so legacy records remain accessible only
-            # to the business that originally submitted them.
+            if "request_fingerprint" not in columns:
+                connection.execute(
+                    "ALTER TABLE transactions ADD COLUMN request_fingerprint TEXT"
+                )
             connection.execute(
                 """
                 UPDATE transactions
@@ -97,6 +99,27 @@ class TransactionStore:
         finally:
             connection.close()
 
+    @staticmethod
+    def _fingerprint(
+        operation: str,
+        amount: str,
+        currency: str,
+        metadata: dict[str, Any],
+    ) -> str:
+        canonical = json.dumps(
+            {
+                "operation": operation,
+                "amount": amount,
+                "currency": currency,
+                "metadata": metadata,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
     def execute(
         self,
         *,
@@ -108,13 +131,13 @@ class TransactionStore:
         metadata: dict[str, Any],
         business_id: str = "",
     ) -> TransactionResult:
-        """Atomically persist a journal entry or replay the existing entry for a key.
+        """Atomically persist a journal entry or replay an identical command.
 
-        This records a transaction-journal entry; it does not execute the named
-        business operation. The caller must execute domain mutations in their own
-        database transaction and must not treat this journal entry alone as proof
-        that an invoice, payment, or inventory mutation was performed.
+        This records a journal entry; it does not execute the named domain
+        operation. Legacy records without a fingerprint are replayed unchanged
+        for compatibility, but cannot be checked for payload equality.
         """
+        fingerprint = self._fingerprint(operation, amount, currency, metadata)
         with self._lock:
             connection = self._connect()
             try:
@@ -124,6 +147,11 @@ class TransactionStore:
                     (idempotency_key,),
                 ).fetchone()
                 if existing:
+                    previous = existing["request_fingerprint"]
+                    if previous is not None and previous != fingerprint:
+                        raise IdempotencyConflict(
+                            "Idempotency key was already used for a different request"
+                        )
                     connection.execute("COMMIT")
                     return self._result(existing, replay=True)
 
@@ -131,8 +159,8 @@ class TransactionStore:
                     """
                     INSERT INTO transactions
                     (transaction_id, idempotency_key, business_id, operation, amount,
-                     currency, metadata_json, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'committed', ?)
+                     currency, metadata_json, request_fingerprint, status, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'committed', ?)
                     """,
                     (
                         transaction_id,
@@ -142,6 +170,7 @@ class TransactionStore:
                         amount,
                         currency,
                         json.dumps(metadata, sort_keys=True, separators=(",", ":")),
+                        fingerprint,
                         datetime.now(timezone.utc).isoformat(),
                     ),
                 )
@@ -164,7 +193,6 @@ class TransactionStore:
 
     @staticmethod
     def _result(row: sqlite3.Row, *, replay: bool) -> TransactionResult:
-        """Decode a journal row and set its replay flag."""
         return TransactionResult(
             transaction_id=row["transaction_id"],
             status=row["status"],
@@ -181,11 +209,7 @@ class TransactionStore:
         *,
         business_id: str | None = None,
     ) -> TransactionResult | None:
-        """Return a journal entry, optionally requiring an exact tenant match.
-
-        API handlers must always supply business_id. The unscoped form remains
-        available for trusted internal maintenance and backward-compatible tests.
-        """
+        """Return a journal entry, optionally requiring an exact tenant match."""
         connection = self._connect()
         try:
             if business_id is None:
