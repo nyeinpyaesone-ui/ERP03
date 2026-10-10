@@ -45,3 +45,10 @@ POS sale idempotency remains enforced at the PostgreSQL invoice boundary, where 
 ## Remaining integrity work
 
 This slice establishes the persistence/idempotency foundation. Cross-module business transactions still need domain-specific participants and compensation/recovery tests as those modules are introduced.
+
+
+## Idempotency payload conflicts
+
+For newly recorded journal entries, the store hashes a canonical JSON representation of operation, normalized amount, currency, and metadata. Repeating the same business-scoped key with the same command returns the original record. Reusing that key with a different command returns HTTP 409 with code \`IDEMPOTENCY_KEY_REUSED\`. Metadata object key order does not affect the fingerprint.
+
+Legacy records migrated without a fingerprint retain backward-compatible replay behavior because their original command cannot be reliably reconstructed. They should be upgraded through a deliberate backfill if historical payloads are available.
