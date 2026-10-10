@@ -19,24 +19,17 @@ class TransactionResult:
 
 
 class TransactionStore:
-    """Durable transaction journal with atomic idempotency semantics."""
+    """Durable transaction journal with atomic idempotency and tenant isolation."""
 
     def __init__(self, database_path: str) -> None:
-        """Initialize the SQLite journal, creating parent directories as needed.
-
-        Filesystem errors and SQLite initialization errors propagate to callers.
-        """
+        """Initialize the journal and migrate legacy databases in place."""
         self.database_path = database_path
         Path(database_path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
-        """Open an autocommit connection with named rows, WAL, and foreign keys.
-
-        Wait up to 10 seconds for database locks. The caller must close the
-        returned connection; SQLite connection and configuration errors propagate.
-        """
+        """Open a connection; callers are responsible for closing it."""
         connection = sqlite3.connect(
             self.database_path,
             timeout=10,
@@ -44,18 +37,22 @@ class TransactionStore:
             check_same_thread=False,
         )
         connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA foreign_keys=ON")
         return connection
 
     def _initialize(self) -> None:
-        """Create the journal table if absent, propagating SQLite errors."""
-        with self._connect() as connection:
+        """Create the journal and apply a serialized, backward-compatible migration."""
+        connection = self._connect()
+        try:
+            # WAL is persistent database configuration; do not repeat it on each request.
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute("BEGIN IMMEDIATE")
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS transactions (
                     transaction_id TEXT PRIMARY KEY,
                     idempotency_key TEXT NOT NULL UNIQUE,
+                    business_id TEXT NOT NULL DEFAULT '',
                     operation TEXT NOT NULL,
                     amount TEXT NOT NULL,
                     currency TEXT NOT NULL,
@@ -65,6 +62,40 @@ class TransactionStore:
                 )
                 """
             )
+            columns = {
+                column["name"]
+                for column in connection.execute("PRAGMA table_info(transactions)")
+            }
+            if "business_id" not in columns:
+                connection.execute(
+                    "ALTER TABLE transactions ADD COLUMN business_id TEXT NOT NULL DEFAULT ''"
+                )
+
+            # Older API records encoded tenant ownership in "business_id:key".
+            # Recover that tenant marker once so legacy records remain accessible only
+            # to the business that originally submitted them.
+            connection.execute(
+                """
+                UPDATE transactions
+                SET business_id = substr(idempotency_key, 1, instr(idempotency_key, ':') - 1)
+                WHERE business_id = '' AND instr(idempotency_key, ':') > 0
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_transactions_business_transaction
+                ON transactions (business_id, transaction_id)
+                """
+            )
+            connection.execute("COMMIT")
+        except Exception:
+            try:
+                connection.execute("ROLLBACK")
+            except sqlite3.Error:
+                pass
+            raise
+        finally:
+            connection.close()
 
     def execute(
         self,
@@ -75,20 +106,14 @@ class TransactionStore:
         amount: str,
         currency: str,
         metadata: dict[str, Any],
+        business_id: str = "",
     ) -> TransactionResult:
-        """Atomically record a committed entry or replay an existing key's entry.
+        """Atomically persist a journal entry or replay the existing entry for a key.
 
-        A reused idempotency key returns the original fields with
-        ``idempotent_replay=True``, ignoring all other supplied fields. New
-        entries use the supplied transaction ID and return the flag as False.
-        The amount is stored as supplied, without rounding or validation;
-        metadata must be JSON-serializable. This only writes the journal and
-        does not perform the named business operation.
-
-        SQLite and metadata encoding/decoding errors propagate. Failures during
-        transaction handling trigger an attempted rollback; rollback errors are
-        suppressed. Raise RuntimeError if a newly committed entry cannot be
-        reloaded. Errors after commit do not undo it.
+        This records a transaction-journal entry; it does not execute the named
+        business operation. The caller must execute domain mutations in their own
+        database transaction and must not treat this journal entry alone as proof
+        that an invoice, payment, or inventory mutation was performed.
         """
         with self._lock:
             connection = self._connect()
@@ -105,13 +130,14 @@ class TransactionStore:
                 connection.execute(
                     """
                     INSERT INTO transactions
-                    (transaction_id, idempotency_key, operation, amount, currency,
-                     metadata_json, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, 'committed', ?)
+                    (transaction_id, idempotency_key, business_id, operation, amount,
+                     currency, metadata_json, status, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'committed', ?)
                     """,
                     (
                         transaction_id,
                         idempotency_key,
+                        business_id,
                         operation,
                         amount,
                         currency,
@@ -138,11 +164,7 @@ class TransactionStore:
 
     @staticmethod
     def _result(row: sqlite3.Row, *, replay: bool) -> TransactionResult:
-        """Decode a journal row and set its replay flag from ``replay``.
-
-        Missing columns raise IndexError; invalid metadata JSON raises
-        json.JSONDecodeError.
-        """
+        """Decode a journal row and set its replay flag."""
         return TransactionResult(
             transaction_id=row["transaction_id"],
             status=row["status"],
@@ -153,14 +175,32 @@ class TransactionStore:
             idempotent_replay=replay,
         )
 
-    def get(self, transaction_id: str) -> TransactionResult | None:
-        """Return the entry with its replay flag False, or None if absent.
+    def get(
+        self,
+        transaction_id: str,
+        *,
+        business_id: str | None = None,
+    ) -> TransactionResult | None:
+        """Return a journal entry, optionally requiring an exact tenant match.
 
-        SQLite errors and metadata JSON decoding errors propagate to callers.
+        API handlers must always supply business_id. The unscoped form remains
+        available for trusted internal maintenance and backward-compatible tests.
         """
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT * FROM transactions WHERE transaction_id = ?",
-                (transaction_id,),
-            ).fetchone()
+        connection = self._connect()
+        try:
+            if business_id is None:
+                row = connection.execute(
+                    "SELECT * FROM transactions WHERE transaction_id = ?",
+                    (transaction_id,),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    """
+                    SELECT * FROM transactions
+                    WHERE transaction_id = ? AND business_id = ?
+                    """,
+                    (transaction_id, business_id),
+                ).fetchone()
             return self._result(row, replay=False) if row else None
+        finally:
+            connection.close()
