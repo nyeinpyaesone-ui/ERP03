@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sqlite3
 import threading
@@ -5,6 +6,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+
+class IdempotencyConflict(ValueError):
+    """Raised when a key is reused for a different canonical command."""
 
 
 @dataclass(frozen=True)
@@ -19,24 +24,15 @@ class TransactionResult:
 
 
 class TransactionStore:
-    """Durable transaction journal with atomic idempotency semantics."""
+    """Durable transaction journal with atomic idempotency and tenant isolation."""
 
     def __init__(self, database_path: str) -> None:
-        """Initialize the SQLite journal, creating parent directories as needed.
-
-        Filesystem errors and SQLite initialization errors propagate to callers.
-        """
         self.database_path = database_path
         Path(database_path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
-        """Open an autocommit connection with named rows, WAL, and foreign keys.
-
-        Wait up to 10 seconds for database locks. The caller must close the
-        returned connection; SQLite connection and configuration errors propagate.
-        """
         connection = sqlite3.connect(
             self.database_path,
             timeout=10,
@@ -44,27 +40,85 @@ class TransactionStore:
             check_same_thread=False,
         )
         connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA foreign_keys=ON")
         return connection
 
     def _initialize(self) -> None:
-        """Create the journal table if absent, propagating SQLite errors."""
-        with self._connect() as connection:
+        connection = self._connect()
+        try:
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute("BEGIN IMMEDIATE")
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS transactions (
                     transaction_id TEXT PRIMARY KEY,
                     idempotency_key TEXT NOT NULL UNIQUE,
+                    business_id TEXT NOT NULL DEFAULT '',
                     operation TEXT NOT NULL,
                     amount TEXT NOT NULL,
                     currency TEXT NOT NULL,
                     metadata_json TEXT NOT NULL,
+                    request_fingerprint TEXT,
                     status TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 )
                 """
             )
+            columns = {
+                column["name"]
+                for column in connection.execute("PRAGMA table_info(transactions)")
+            }
+            if "business_id" not in columns:
+                connection.execute(
+                    "ALTER TABLE transactions ADD COLUMN business_id TEXT NOT NULL DEFAULT ''"
+                )
+            if "request_fingerprint" not in columns:
+                connection.execute(
+                    "ALTER TABLE transactions ADD COLUMN request_fingerprint TEXT"
+                )
+            connection.execute(
+                """
+                UPDATE transactions
+                SET business_id = substr(idempotency_key, 1, instr(idempotency_key, ':') - 1)
+                WHERE business_id = '' AND instr(idempotency_key, ':') > 0
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_transactions_business_transaction
+                ON transactions (business_id, transaction_id)
+                """
+            )
+            connection.execute("COMMIT")
+        except Exception:
+            try:
+                connection.execute("ROLLBACK")
+            except sqlite3.Error:
+                pass
+            raise
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _fingerprint(
+        operation: str,
+        amount: str,
+        currency: str,
+        metadata: dict[str, Any],
+    ) -> str:
+        canonical = json.dumps(
+            {
+                "operation": operation,
+                "amount": amount,
+                "currency": currency,
+                "metadata": metadata,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     def execute(
         self,
@@ -75,21 +129,15 @@ class TransactionStore:
         amount: str,
         currency: str,
         metadata: dict[str, Any],
+        business_id: str = "",
     ) -> TransactionResult:
-        """Atomically record a committed entry or replay an existing key's entry.
+        """Atomically persist a journal entry or replay an identical command.
 
-        A reused idempotency key returns the original fields with
-        ``idempotent_replay=True``, ignoring all other supplied fields. New
-        entries use the supplied transaction ID and return the flag as False.
-        The amount is stored as supplied, without rounding or validation;
-        metadata must be JSON-serializable. This only writes the journal and
-        does not perform the named business operation.
-
-        SQLite and metadata encoding/decoding errors propagate. Failures during
-        transaction handling trigger an attempted rollback; rollback errors are
-        suppressed. Raise RuntimeError if a newly committed entry cannot be
-        reloaded. Errors after commit do not undo it.
+        This records a journal entry; it does not execute the named domain
+        operation. Legacy records without a fingerprint are replayed unchanged
+        for compatibility, but cannot be checked for payload equality.
         """
+        fingerprint = self._fingerprint(operation, amount, currency, metadata)
         with self._lock:
             connection = self._connect()
             try:
@@ -99,23 +147,30 @@ class TransactionStore:
                     (idempotency_key,),
                 ).fetchone()
                 if existing:
+                    previous = existing["request_fingerprint"]
+                    if previous is not None and previous != fingerprint:
+                        raise IdempotencyConflict(
+                            "Idempotency key was already used for a different request"
+                        )
                     connection.execute("COMMIT")
                     return self._result(existing, replay=True)
 
                 connection.execute(
                     """
                     INSERT INTO transactions
-                    (transaction_id, idempotency_key, operation, amount, currency,
-                     metadata_json, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, 'committed', ?)
+                    (transaction_id, idempotency_key, business_id, operation, amount,
+                     currency, metadata_json, request_fingerprint, status, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'committed', ?)
                     """,
                     (
                         transaction_id,
                         idempotency_key,
+                        business_id,
                         operation,
                         amount,
                         currency,
                         json.dumps(metadata, sort_keys=True, separators=(",", ":")),
+                        fingerprint,
                         datetime.now(timezone.utc).isoformat(),
                     ),
                 )
@@ -138,11 +193,6 @@ class TransactionStore:
 
     @staticmethod
     def _result(row: sqlite3.Row, *, replay: bool) -> TransactionResult:
-        """Decode a journal row and set its replay flag from ``replay``.
-
-        Missing columns raise IndexError; invalid metadata JSON raises
-        json.JSONDecodeError.
-        """
         return TransactionResult(
             transaction_id=row["transaction_id"],
             status=row["status"],
@@ -153,14 +203,28 @@ class TransactionStore:
             idempotent_replay=replay,
         )
 
-    def get(self, transaction_id: str) -> TransactionResult | None:
-        """Return the entry with its replay flag False, or None if absent.
-
-        SQLite errors and metadata JSON decoding errors propagate to callers.
-        """
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT * FROM transactions WHERE transaction_id = ?",
-                (transaction_id,),
-            ).fetchone()
+    def get(
+        self,
+        transaction_id: str,
+        *,
+        business_id: str | None = None,
+    ) -> TransactionResult | None:
+        """Return a journal entry, optionally requiring an exact tenant match."""
+        connection = self._connect()
+        try:
+            if business_id is None:
+                row = connection.execute(
+                    "SELECT * FROM transactions WHERE transaction_id = ?",
+                    (transaction_id,),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    """
+                    SELECT * FROM transactions
+                    WHERE transaction_id = ? AND business_id = ?
+                    """,
+                    (transaction_id, business_id),
+                ).fetchone()
             return self._result(row, replay=False) if row else None
+        finally:
+            connection.close()
