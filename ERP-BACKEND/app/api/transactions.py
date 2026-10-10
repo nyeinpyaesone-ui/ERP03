@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.core.config import settings
 from app.core.security import current_claims
-from app.core.transaction_store import TransactionStore
+from app.core.transaction_store import IdempotencyConflict, TransactionStore
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 store = TransactionStore(settings.database_path)
@@ -82,15 +82,21 @@ def create_transaction(
         raise HTTPException(status_code=422, detail="Amount must be at least 0.01")
 
     business_id = _business_id(claims)
-    result = store.execute(
-        transaction_id=uuid4().hex,
-        idempotency_key=f"{business_id}:{idempotency_key}",
-        business_id=business_id,
-        operation=payload.operation,
-        amount=str(amount),
-        currency=payload.currency,
-        metadata=payload.metadata,
-    )
+    try:
+        result = store.execute(
+            transaction_id=uuid4().hex,
+            idempotency_key=f"{business_id}:{idempotency_key}",
+            business_id=business_id,
+            operation=payload.operation,
+            amount=str(amount),
+            currency=payload.currency,
+            metadata=payload.metadata,
+        )
+    except IdempotencyConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "IDEMPOTENCY_KEY_REUSED", "message": str(exc)},
+        ) from exc
     return TransactionResponse(
         transaction_id=result.transaction_id,
         status=result.status,
