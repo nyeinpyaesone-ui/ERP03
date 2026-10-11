@@ -1,1 +1,34 @@
-Nothing should be ignored based on the provided file changes, as they only include source code files (.ts) without any build artifacts, dependencies, or temporary files.
+```
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.coverage
+htmlcov/
+.coverage.*
+.pytest_cache/
+.mypy_cache/
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Database
+ERP-BACKEND/erp.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+```
