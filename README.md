@@ -155,9 +155,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 | Contact | Details |
 |---------|---------|
 | **Email** | <maintainer-email> |
-| **LinkedIn** | [linkedin.com/in/nyein-pyae-sone-3250501ba](https://linkedin.com/in/nyein-pyae-sone-3250501ba) |
+| **LinkedIn** | <linkedin-profile> |
 | **GitHub** | [github.com/<github-owner>/ERP](https://github.com/<github-owner>/ERP) |
-| **Phone** | +959699795380 |
+| **Phone** | <maintainer-phone> |
 | **Issues** | [GitHub Issues](https://github.com/<github-owner>/ERP/issues) |
 
 ---

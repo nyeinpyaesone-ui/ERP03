@@ -75,6 +75,6 @@ Yes, MIT license permits commercial use.
 ## Contact
 
 - Email: <maintainer-email>
-- LinkedIn: https://linkedin.com/in/nyein-pyae-sone-3250501ba
+- LinkedIn: <linkedin-profile>
 - GitHub: https://github.com/<github-owner>/ERP
-- Phone: +959699795380
+- Phone: <maintainer-phone>

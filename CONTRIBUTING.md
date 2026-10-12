@@ -56,6 +56,6 @@ Example: `feat: add inventory forecasting module`
 ## Contact
 
 - Email: <maintainer-email>
-- LinkedIn: https://linkedin.com/in/nyein-pyae-sone-3250501ba
+- LinkedIn: <linkedin-profile>
 - GitHub: https://github.com/<github-owner>/ERP
-- Phone: +959699795380
+- Phone: <maintainer-phone>

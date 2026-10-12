@@ -85,9 +85,9 @@
 | Contact | Details |
 |---------|---------|
 | Email | <maintainer-email> |
-| LinkedIn | linkedin.com/in/nyein-pyae-sone-3250501ba |
+| LinkedIn | <linkedin-profile> |
 | GitHub | github.com/<github-owner>/ERP |
-| Phone | +959699795380 |
+| Phone | <maintainer-phone> |
 
 ---
 
