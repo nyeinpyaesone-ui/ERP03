@@ -15,7 +15,7 @@ This means images were NEVER pushed. Here's how to fix:
 
 ### Step 2: Get Your Access Token
 1. Go to https://hub.docker.com
-2. Login as **powerrangeranikg**
+2. Login as **<docker-hub-username>**
 3. Click your name (top right) → **Account Settings**
 4. Click **Security** (left sidebar)
 5. Click **New Access Token**
@@ -34,39 +34,39 @@ This means images were NEVER pushed. Here's how to fix:
 cd ~
 
 # 2. Download your code
-git clone https://github.com/nyeinpyaesone-ui/ERP.git
+git clone https://github.com/<github-owner>/ERP.git
 
 # 3. Enter the folder
 cd ERP
 
 # 4. Login to Docker Hub
-docker login -u powerrangeranikg
+docker login -u <docker-hub-username>
 # When it asks for password, PASTE YOUR ACCESS TOKEN
 # (Right-click → Paste, or Ctrl+V)
 # You should see: "Login Succeeded"
 
 # 5. Build backend (takes 3-5 minutes)
-docker build -t powerrangeranikg/erp-solution-backend:v1.0.0 ./backend
+docker build -t <docker-hub-username>/erp-solution-backend:v1.0.0 ./backend
 
 # 6. Build frontend (takes 3-5 minutes)
-docker build -t powerrangeranikg/erp-solution-frontend:v1.0.0 ./frontend
+docker build -t <docker-hub-username>/erp-solution-frontend:v1.0.0 ./frontend
 
 # 7. Tag as latest
-docker tag powerrangeranikg/erp-solution-backend:v1.0.0 powerrangeranikg/erp-solution-backend:latest
-docker tag powerrangeranikg/erp-solution-frontend:v1.0.0 powerrangeranikg/erp-solution-frontend:latest
+docker tag <docker-hub-username>/erp-solution-backend:v1.0.0 <docker-hub-username>/erp-solution-backend:latest
+docker tag <docker-hub-username>/erp-solution-frontend:v1.0.0 <docker-hub-username>/erp-solution-frontend:latest
 
 # 8. Push backend (takes 5-10 minutes)
-docker push powerrangeranikg/erp-solution-backend:v1.0.0
-docker push powerrangeranikg/erp-solution-backend:latest
+docker push <docker-hub-username>/erp-solution-backend:v1.0.0
+docker push <docker-hub-username>/erp-solution-backend:latest
 
 # 9. Push frontend (takes 5-10 minutes)
-docker push powerrangeranikg/erp-solution-frontend:v1.0.0
-docker push powerrangeranikg/erp-solution-frontend:latest
+docker push <docker-hub-username>/erp-solution-frontend:v1.0.0
+docker push <docker-hub-username>/erp-solution-frontend:latest
 ```
 
 ### Step 5: Verify
 Open your phone browser and go to:
-https://hub.docker.com/r/powerrangeranikg/erp-solution-backend
+https://hub.docker.com/r/<docker-hub-username>/erp-solution-backend
 
 You should see:
 - ✅ Image name
@@ -81,11 +81,11 @@ You should see:
 If you don't want to use command line, set up GitHub Actions:
 
 ### Step 1: Add Secrets to GitHub
-1. Go to https://github.com/nyeinpyaesone-ui/ERP/settings/secrets/actions
+1. Go to https://github.com/<github-owner>/ERP/settings/secrets/actions
 2. Click **New repository secret**
 3. Add:
    - Name: `DOCKER_USERNAME`
-   - Value: `powerrangeranikg`
+   - Value: `<docker-hub-username>`
 4. Click **Add secret**
 5. Add another:
    - Name: `DOCKER_PASSWORD`
@@ -93,7 +93,7 @@ If you don't want to use command line, set up GitHub Actions:
 6. Click **Add secret**
 
 ### Step 2: Trigger Build
-1. Go to https://github.com/nyeinpyaesone-ui/ERP/releases
+1. Go to https://github.com/<github-owner>/ERP/releases
 2. Click **Draft a new release**
 3. Tag version: `v1.0.0`
 4. Release title: `ERP SOLUTION v1.0.0`
@@ -126,9 +126,9 @@ GitHub will automatically build and push your images!
 
 | Contact | Details |
 |---------|---------|
-| Email | nyeinpyaesone273@gmail.com |
+| Email | <maintainer-email> |
 | LinkedIn | linkedin.com/in/nyein-pyae-sone-3250501ba |
-| GitHub | github.com/nyeinpyaesone-ui/ERP |
+| GitHub | github.com/<github-owner>/ERP |
 | Phone | +959699795380 |
 
 ---
@@ -136,7 +136,7 @@ GitHub will automatically build and push your images!
 ## ✅ SUCCESS CHECKLIST
 
 After pushing, verify:
-- [ ] https://hub.docker.com/r/powerrangeranikg/erp-solution-backend shows image
-- [ ] https://hub.docker.com/r/powerrangeranikg/erp-solution-frontend shows image
+- [ ] https://hub.docker.com/r/<docker-hub-username>/erp-solution-backend shows image
+- [ ] https://hub.docker.com/r/<docker-hub-username>/erp-solution-frontend shows image
 - [ ] Both have tags: v1.0.0 and latest
 - [ ] No "Empty repository" message

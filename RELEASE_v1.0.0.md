@@ -41,7 +41,7 @@
 ## Quick Start
 
 ```bash
-git clone https://github.com/nyeinpyaesone-ui/ERP.git
+git clone https://github.com/<github-owner>/ERP.git
 cd ERP
 ./scripts/setup.sh
 docker-compose up -d
@@ -67,10 +67,10 @@ kubectl apply -f infra/k8s/
 
 ## Support
 
-- GitHub Issues: https://github.com/nyeinpyaesone-ui/ERP/issues
+- GitHub Issues: https://github.com/<github-owner>/ERP/issues
 - Documentation: See `docs/` directory
 - Status: `./scripts/gh-manager.sh status`
 
 ---
 
-**Full Changelog**: https://github.com/nyeinpyaesone-ui/ERP/commits/v1.0.0
+**Full Changelog**: https://github.com/<github-owner>/ERP/commits/v1.0.0

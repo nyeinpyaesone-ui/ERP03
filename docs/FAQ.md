@@ -19,7 +19,7 @@ Yes! v1.0.0 is production-ready with full CI/CD, Docker support, and Kubernetes 
 
 ### How do I set up locally?
 ```bash
-git clone https://github.com/nyeinpyaesone-ui/ERP.git
+git clone https://github.com/<github-owner>/ERP.git
 cd ERP
 ./scripts/setup.sh
 docker-compose up -d
@@ -74,7 +74,7 @@ Yes, MIT license permits commercial use.
 
 ## Contact
 
-- Email: nyeinpyaesone273@gmail.com
+- Email: <maintainer-email>
 - LinkedIn: https://linkedin.com/in/nyein-pyae-sone-3250501ba
-- GitHub: https://github.com/nyeinpyaesone-ui/ERP
+- GitHub: https://github.com/<github-owner>/ERP
 - Phone: +959699795380

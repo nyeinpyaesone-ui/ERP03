@@ -43,7 +43,7 @@ services:
 
   # Backend API
   backend:
-    image: powerrangeranikg/erp-solution-backend:latest
+    image: <docker-hub-username>/erp-solution-backend:latest
     container_name: erp-backend
     restart: unless-stopped
     environment:
@@ -67,7 +67,7 @@ services:
 
   # Frontend Web App
   frontend:
-    image: powerrangeranikg/erp-solution-frontend:latest
+    image: <docker-hub-username>/erp-solution-frontend:latest
     container_name: erp-frontend
     restart: unless-stopped
     environment:

@@ -54,5 +54,5 @@ GitHub Actions will automatically:
 ## Verify
 
 Check your Docker Hub:
-- https://hub.docker.com/r/powerrangeranikg/erp-solution-backend
-- https://hub.docker.com/r/powerrangeranikg/erp-solution-frontend
+- https://hub.docker.com/r/<docker-hub-username>/erp-solution-backend
+- https://hub.docker.com/r/<docker-hub-username>/erp-solution-frontend

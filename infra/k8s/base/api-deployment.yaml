@@ -35,7 +35,7 @@ spec:
         fsGroup: 1000
       containers:
       - name: api
-        image: ghcr.io/nyeinpyaesone-ui/erp_solution-api:latest
+        image: ghcr.io/<your-ghcr-org>/erp_solution-api:latest
         imagePullPolicy: Always
         ports:
         - name: http

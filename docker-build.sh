@@ -4,7 +4,7 @@
 
 set -e
 
-DOCKER_USER="powerrangeranikg"
+DOCKER_USER="${DOCKER_USERNAME}"
 VERSION="v1.0.0"
 
 echo "ERP SOLUTION — Building Docker Images"

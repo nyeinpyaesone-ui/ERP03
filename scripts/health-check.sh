@@ -127,6 +127,6 @@ echo -e "${C}══════════════════════�
 echo ""
 echo "  Run 'make dev' to start development environment"
 echo "  Run './scripts/gh-manager.sh verify' for full verification"
-echo "  Visit https://github.com/nyeinpyaesone-ui/ERP for repository"
+echo "  Visit https://github.com/${GITHUB_OWNER}/ERP for repository"
 echo ""
 echo -e "${C}══════════════════════════════════════════════════════════════════${NC}"

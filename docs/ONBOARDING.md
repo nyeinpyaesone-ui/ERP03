@@ -6,7 +6,7 @@ Welcome to the ERP SOLUTION! This guide will get you productive in under 30 minu
 
 ### 1. Clone and Install
 ```bash
-git clone https://github.com/nyeinpyaesone-ui/ERP.git
+git clone https://github.com/<github-owner>/ERP.git
 cd ERP
 ./scripts/setup.sh
 ```
@@ -173,9 +173,9 @@ git push origin feature/my-feature
 1. **Documentation**: Check `docs/` directory
 2. **FAQ**: See `docs/FAQ.md`
 3. **Troubleshooting**: See `docs/TROUBLESHOOTING.md`
-4. **GitHub Issues**: https://github.com/nyeinpyaesone-ui/ERP/issues
+4. **GitHub Issues**: https://github.com/<github-owner>/ERP/issues
 5. **Team Chat**: [Your team chat link]
-6. **Email**: nyeinpyaesone273@gmail.com
+6. **Email**: <maintainer-email>
 
 ## First Week Goals
 

@@ -31,7 +31,7 @@
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/nyeinpyaesone-ui/ERP.git
+git clone https://github.com/<github-owner>/ERP.git
 cd ERP
 
 # 2. Create production .env
@@ -206,6 +206,6 @@ docker stats
 
 ## Support
 
-- GitHub Issues: https://github.com/nyeinpyaesone-ui/ERP/issues
+- GitHub Issues: https://github.com/<github-owner>/ERP/issues
 - Documentation: `/docs` in repository
 - API Docs: `https://api.yourdomain.com/docs`

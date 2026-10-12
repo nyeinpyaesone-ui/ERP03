@@ -105,11 +105,11 @@ patches:
         value: 20
 
 images:
-  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-api
+  - name: ghcr.io/<your-ghcr-org>/erp_solution-api
     newTag: v3.0.0
-  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-web
+  - name: ghcr.io/<your-ghcr-org>/erp_solution-web
     newTag: v3.0.0
-  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-worker
+  - name: ghcr.io/<your-ghcr-org>/erp_solution-worker
     newTag: v3.0.0
 
 ---

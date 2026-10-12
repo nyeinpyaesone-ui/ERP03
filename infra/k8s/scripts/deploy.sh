@@ -28,14 +28,14 @@ fi
 
 # Build and push images
 echo "Building Docker images..."
-docker build -t ghcr.io/nyeinpyaesone-ui/erp_solution-api:${VERSION} -f docker/Dockerfile.api ../
-docker build -t ghcr.io/nyeinpyaesone-ui/erp_solution-web:${VERSION} -f docker/Dockerfile.web ../
-docker build -t ghcr.io/nyeinpyaesone-ui/erp_solution-worker:${VERSION} -f docker/Dockerfile.worker ../
+docker build -t ghcr.io/<your-ghcr-org>/erp_solution-api:${VERSION} -f docker/Dockerfile.api ../
+docker build -t ghcr.io/<your-ghcr-org>/erp_solution-web:${VERSION} -f docker/Dockerfile.web ../
+docker build -t ghcr.io/<your-ghcr-org>/erp_solution-worker:${VERSION} -f docker/Dockerfile.worker ../
 
 echo "Pushing Docker images..."
-docker push ghcr.io/nyeinpyaesone-ui/erp_solution-api:${VERSION}
-docker push ghcr.io/nyeinpyaesone-ui/erp_solution-web:${VERSION}
-docker push ghcr.io/nyeinpyaesone-ui/erp_solution-worker:${VERSION}
+docker push ghcr.io/<your-ghcr-org>/erp_solution-api:${VERSION}
+docker push ghcr.io/<your-ghcr-org>/erp_solution-web:${VERSION}
+docker push ghcr.io/<your-ghcr-org>/erp_solution-worker:${VERSION}
 
 # Update image tags in overlay
 if [ "$VERSION" != "latest" ]; then

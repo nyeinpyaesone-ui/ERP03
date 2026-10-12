@@ -6,7 +6,7 @@
 
 set -e
 
-REPO="nyeinpyaesone-ui/ERP"
+REPO="${GITHUB_OWNER}/ERP"
 BRANCH="main"
 
 C='[0;36m'; G='[0;32m'; Y='[1;33m'; R='[0;31m'; NC='[0m'

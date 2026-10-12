@@ -243,7 +243,7 @@ interface EnvConfig {
 
 ### 1. Clone and Setup
 ```bash
-git clone git@github.com:nyeinpyaesone-ui/AI_aGENts_muLTIverse.git
+git clone git@github.com:<github-owner>/AI_aGENts_muLTIverse.git
 cd AI_aGENts_muLTIverse
 
 # Install dependencies

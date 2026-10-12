@@ -22,7 +22,7 @@ Examples of behavior that contributes to a positive environment:
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement at
-nyeinpyaesone273@gmail.com.
+<maintainer-email>.
 
 All complaints will be reviewed and investigated promptly and fairly.
 

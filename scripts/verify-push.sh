@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "=== ERP SOLUTION Verification ==="
-echo "Repository: https://github.com/nyeinpyaesone-ui/ERP"
+echo "Repository: https://github.com/${GITHUB_OWNER}/ERP"
 echo "Branch: $(git branch --show-current)"
 echo "Commits: $(git rev-list --count HEAD)"
 echo "Files: $(git ls-files | wc -l)"

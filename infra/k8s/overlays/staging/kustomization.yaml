@@ -75,10 +75,10 @@ patches:
         value: 5
 
 images:
-  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-api
+  - name: ghcr.io/<your-ghcr-org>/erp_solution-api
     newTag: staging
-  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-web
+  - name: ghcr.io/<your-ghcr-org>/erp_solution-web
     newTag: staging
-  - name: ghcr.io/nyeinpyaesone-ui/erp_solution-worker
+  - name: ghcr.io/<your-ghcr-org>/erp_solution-worker
     newTag: staging
 

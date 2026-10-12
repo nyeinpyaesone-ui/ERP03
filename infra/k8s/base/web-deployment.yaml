@@ -29,7 +29,7 @@ spec:
         runAsUser: 1000
       containers:
       - name: web
-        image: ghcr.io/nyeinpyaesone-ui/erp_solution-web:latest
+        image: ghcr.io/<your-ghcr-org>/erp_solution-web:latest
         imagePullPolicy: Always
         ports:
         - name: http

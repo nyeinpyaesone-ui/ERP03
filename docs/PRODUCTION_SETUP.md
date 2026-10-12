@@ -38,7 +38,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 ### 4. Clone Repository
 
 ```bash
-git clone https://github.com/nyeinpyaesone-ui/ERP.git /opt/erp-solution
+git clone https://github.com/<github-owner>/ERP.git /opt/erp-solution
 cd /opt/erp-solution
 ```
 
@@ -65,8 +65,8 @@ sudo cp /etc/letsencrypt/live/api.yourdomain.com/privkey.pem ./ssl/key.pem
 
 ```bash
 # Pull images
-docker pull powerrangeranikg/erp-solution-backend:latest
-docker pull powerrangeranikg/erp-solution-frontend:latest
+docker pull <docker-hub-username>/erp-solution-backend:latest
+docker pull <docker-hub-username>/erp-solution-frontend:latest
 
 # Start services
 docker-compose -f docker-compose.prod.yml up -d
@@ -126,7 +126,7 @@ docker-compose exec postgres pg_dump -U erp erp_solution > backup_$(date +%Y%m%d
 
 | Contact | Details |
 |---------|---------|
-| Email | nyeinpyaesone273@gmail.com |
+| Email | <maintainer-email> |
 | LinkedIn | linkedin.com/in/nyein-pyae-sone-3250501ba |
-| GitHub | github.com/nyeinpyaesone-ui/ERP |
+| GitHub | github.com/<github-owner>/ERP |
 | Phone | +959699795380 |

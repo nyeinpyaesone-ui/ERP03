@@ -10,33 +10,33 @@ Download: https://docs.docker.com/get-docker/
 
 ```bash
 # 1. Download your code
-git clone https://github.com/nyeinpyaesone-ui/ERP.git
+git clone https://github.com/<github-owner>/ERP.git
 cd ERP
 
 # 2. Login to Docker Hub (use your username)
-docker login -u powerrangeranikg
+docker login -u <docker-hub-username>
 # When asked for password, paste your ACCESS TOKEN (not your password)
 
 # 3. Build backend image (this takes 2-5 minutes)
-docker build -t powerrangeranikg/erp-solution-backend:v1.0.0 ./backend
+docker build -t <docker-hub-username>/erp-solution-backend:v1.0.0 ./backend
 
 # 4. Build frontend image (this takes 2-5 minutes)
-docker build -t powerrangeranikg/erp-solution-frontend:v1.0.0 ./frontend
+docker build -t <docker-hub-username>/erp-solution-frontend:v1.0.0 ./frontend
 
 # 5. Tag as latest
-docker tag powerrangeranikg/erp-solution-backend:v1.0.0 powerrangeranikg/erp-solution-backend:latest
-docker tag powerrangeranikg/erp-solution-frontend:v1.0.0 powerrangeranikg/erp-solution-frontend:latest
+docker tag <docker-hub-username>/erp-solution-backend:v1.0.0 <docker-hub-username>/erp-solution-backend:latest
+docker tag <docker-hub-username>/erp-solution-frontend:v1.0.0 <docker-hub-username>/erp-solution-frontend:latest
 
 # 6. Push to Docker Hub (this takes 5-10 minutes)
-docker push powerrangeranikg/erp-solution-backend:v1.0.0
-docker push powerrangeranikg/erp-solution-frontend:v1.0.0
-docker push powerrangeranikg/erp-solution-backend:latest
-docker push powerrangeranikg/erp-solution-frontend:latest
+docker push <docker-hub-username>/erp-solution-backend:v1.0.0
+docker push <docker-hub-username>/erp-solution-frontend:v1.0.0
+docker push <docker-hub-username>/erp-solution-backend:latest
+docker push <docker-hub-username>/erp-solution-frontend:latest
 ```
 
 ## Step 4: Check on Your Phone
 After pushing, open your browser and go to:
-https://hub.docker.com/r/powerrangeranikg/erp-solution-backend
+https://hub.docker.com/r/<docker-hub-username>/erp-solution-backend
 
 You should see:
 - ✅ Image name: erp-solution-backend
@@ -46,7 +46,7 @@ You should see:
 ## ❓ Where to Get Your Access Token
 
 1. Go to https://hub.docker.com on your computer
-2. Login as powerrangeranikg
+2. Login as <docker-hub-username>
 3. Click your avatar → Account Settings → Security
 4. Click "New Access Token"
 5. Name it "ERP Push"

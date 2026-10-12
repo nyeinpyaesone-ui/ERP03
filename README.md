@@ -1,6 +1,6 @@
 # ERP SOLUTION
 
-[![GitHub Actions](https://github.com/nyeinpyaesone-ui/ERP/actions/workflows/ci.yml/badge.svg)](https://github.com/nyeinpyaesone-ui/ERP/actions)
+[![GitHub Actions](https://github.com/<github-owner>/ERP/actions/workflows/ci.yml/badge.svg)](https://github.com/<github-owner>/ERP/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Node 20+](https://img.shields.io/badge/node-20+-green.svg)](https://nodejs.org/)
@@ -38,7 +38,7 @@
 
 ### One-Command Setup
 ```bash
-git clone https://github.com/nyeinpyaesone-ui/ERP.git
+git clone https://github.com/<github-owner>/ERP.git
 cd ERP
 ./scripts/setup.sh        # Install dependencies
 docker-compose up -d      # Start services
@@ -154,11 +154,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 | Contact | Details |
 |---------|---------|
-| **Email** | nyeinpyaesone273@gmail.com |
+| **Email** | <maintainer-email> |
 | **LinkedIn** | [linkedin.com/in/nyein-pyae-sone-3250501ba](https://linkedin.com/in/nyein-pyae-sone-3250501ba) |
-| **GitHub** | [github.com/nyeinpyaesone-ui/ERP](https://github.com/nyeinpyaesone-ui/ERP) |
+| **GitHub** | [github.com/<github-owner>/ERP](https://github.com/<github-owner>/ERP) |
 | **Phone** | +959699795380 |
-| **Issues** | [GitHub Issues](https://github.com/nyeinpyaesone-ui/ERP/issues) |
+| **Issues** | [GitHub Issues](https://github.com/<github-owner>/ERP/issues) |
 
 ---
 

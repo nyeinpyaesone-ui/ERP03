@@ -6,7 +6,9 @@
 
 set -e
 
-DOCKER_USERNAME="powerrangeranikg"
+# Set your Docker Hub username via environment (never hardcode credentials):
+#   export DOCKER_USERNAME=<your-docker-hub-username>
+DOCKER_USERNAME="${DOCKER_USERNAME:?Set DOCKER_USERNAME to your Docker Hub username (e.g. export DOCKER_USERNAME=...)}"
 VERSION="${1:-v1.0.0}"
 
 echo "=========================================="

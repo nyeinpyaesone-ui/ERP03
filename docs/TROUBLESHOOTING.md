@@ -46,6 +46,6 @@ git push origin main --force
 
 ## Getting Help
 1. Check [docs/](docs/) for specific guides
-2. Search [GitHub Issues](https://github.com/nyeinpyaesone-ui/ERP/issues)
+2. Search [GitHub Issues](https://github.com/<github-owner>/ERP/issues)
 3. Run `./scripts/gh-manager.sh verify` for diagnostics
-4. Contact: nyeinpyaesone273@gmail.com
+4. Contact: <maintainer-email>

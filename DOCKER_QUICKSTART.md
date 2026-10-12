@@ -6,15 +6,15 @@
 
 ## COMMANDS TO RUN:
 ```bash
-docker login -u powerrangeranikg
-docker build -t powerrangeranikg/erp-solution-backend:v1.0.0 ./backend
-docker build -t powerrangeranikg/erp-solution-frontend:v1.0.0 ./frontend
-docker push powerrangeranikg/erp-solution-backend:v1.0.0
-docker push powerrangeranikg/erp-solution-frontend:v1.0.0
+docker login -u <docker-hub-username>
+docker build -t <docker-hub-username>/erp-solution-backend:v1.0.0 ./backend
+docker build -t <docker-hub-username>/erp-solution-frontend:v1.0.0 ./frontend
+docker push <docker-hub-username>/erp-solution-backend:v1.0.0
+docker push <docker-hub-username>/erp-solution-frontend:v1.0.0
 ```
 
 ## VERIFY:
-https://hub.docker.com/r/powerrangeranikg/erp-solution-backend
+https://hub.docker.com/r/<docker-hub-username>/erp-solution-backend
 
 ## NEED HELP?
 See DOCKER_TROUBLESHOOT.md for full details
