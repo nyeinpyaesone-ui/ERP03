@@ -1,3 +1,60 @@
-Since the only file change is the addition of `.gitignore` itself and there are no other file changes provided in the list, there are no build artifacts, dependencies, or temporary files to ignore. The file changes contain only the `.gitignore` file itself, which doesn't warrant any ignore rules.
+# ============================
+# Environment & credentials
+# ============================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.local.yaml
 
-Therefore, no .gitignore content is needed.
+# ============================
+# Dependencies
+# ============================
+node_modules/
+bower_components/
+
+# ============================
+# Build outputs
+# ============================
+dist/
+build/
+.next/
+.expo/
+out/
+*.tsbuildinfo
+
+# ============================
+# Test & coverage
+# ============================
+coverage/
+.nyc_output/
+
+# ============================
+# Python
+# ============================
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# ============================
+# Logs & temp files
+# ============================
+logs/
+*.log
+tmp/
+temp/
+.DS_Store
+Thumbs.db
+
+# ============================
+# IDE / editor
+# ============================
+.idea/
+.vscode/
+*.swp
+*.swo
