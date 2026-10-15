@@ -10,7 +10,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import InsufficientStockError
+from app.core.errors import InsufficientStockError, ValidationError
 from app.db.base import utcnow
 from app.models.erp import StockBalance, StockMovement
 
@@ -28,7 +28,7 @@ async def adjust_stock(
 ) -> StockBalance:
     """Atomically adjust one warehouse/product balance using a row lock."""
     if quantity_delta == 0:
-        raise ValueError("quantity_delta must not be zero")
+        raise ValidationError("quantity_delta must not be zero")
 
     result = await session.execute(
         select(StockBalance)

@@ -5,6 +5,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import ValidationError
 from app.models.identity import Permission, Role, User, user_roles
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
@@ -68,7 +69,7 @@ async def assign_role(
         select(Role).where(Role.id == role_id, Role.business_id == business_id)
     )
     if user is None or role is None:
-        raise ValueError("User and role must belong to the same active business")
+        raise ValidationError("User and role must belong to the same active business")
 
     exists = await session.scalar(
         select(user_roles.c.user_id).where(

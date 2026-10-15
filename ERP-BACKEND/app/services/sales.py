@@ -8,10 +8,23 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import SaleValidationError
+from app.core.errors import ConflictError, SaleValidationError
 from app.models.erp import Customer, Invoice, InvoiceItem, Payment, Product, Warehouse
 from app.models.identity import Branch
 from app.services.inventory import adjust_stock
+
+
+async def _find_idempotent_invoice(
+    session: AsyncSession, business_id: UUID, branch_id: UUID, key: str
+) -> Invoice | None:
+    """Return the invoice already recorded for ``key`` in this tenant scope."""
+    return await session.scalar(
+        select(Invoice).where(
+            Invoice.business_id == business_id,
+            Invoice.branch_id == branch_id,
+            Invoice.idempotency_key == key,
+        )
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,18 +210,19 @@ async def create_pos_sale(
             async with session.begin_nested():
                 session.add(invoice)
                 await session.flush()
-        except IntegrityError:
+        except IntegrityError as exc:
+            # The savepoint rolled back only the invoice insert; the outer
+            # transaction is still usable. A concurrent request may have
+            # committed the same idempotency key first — replay its result
+            # instead of failing. Any other constraint violation (e.g. a
+            # duplicate invoice_no) surfaces as a typed conflict.
             if idempotency_key is not None:
-                existing = await session.scalar(
-                    select(Invoice).where(
-                        Invoice.business_id == business_id,
-                        Invoice.branch_id == branch_id,
-                        Invoice.idempotency_key == idempotency_key,
-                    )
+                existing = await _find_idempotent_invoice(
+                    session, business_id, branch_id, idempotency_key
                 )
                 if existing is not None:
                     return SaleResult.from_invoice(existing)
-            raise
+            raise ConflictError("Invoice number already exists for this branch") from exc
 
         prepared.sort(key=lambda item: str(item[0].product_id))
         for line, price, line_total in prepared:
