@@ -64,11 +64,10 @@ async def bootstrap_business(
     validate_password_policy(owner_password, "owner_password")
 
     # Serialize concurrent first-tenant provisioning for the same code on
-    # PostgreSQL. The database unique constraint remains the final invariant;
-    # this advisory lock keeps concurrent callers deterministic instead of
-    # racing on the pre-check. SQLite (used by unit/integration test suites)
-    # has no advisory locks and serializes writers instead.
-    if session.bind is not None and session.bind.dialect.name == "postgresql":
+    # PostgreSQL with a transaction-scoped advisory lock; SQLite has no
+    # advisory locks and serializes writers instead. The unique constraint on
+    # Business.code remains the final invariant on every backend.
+    if session.get_bind().dialect.name == "postgresql":
         await session.execute(select(func.pg_advisory_xact_lock(func.hashtext(business_code))))
 
     existing = await session.scalar(select(Business).where(Business.code == business_code))

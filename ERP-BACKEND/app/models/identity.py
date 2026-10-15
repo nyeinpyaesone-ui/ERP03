@@ -2,23 +2,22 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, String, Table, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, utcnow, uuid_pk
+from app.db.base import Base, GUID, utcnow, uuid_pk
 
 user_roles = Table(
     "user_roles",
     Base.metadata,
     Column(
         "user_id",
-        PGUUID(as_uuid=True),
+        GUID(),
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
     ),
     Column(
         "role_id",
-        PGUUID(as_uuid=True),
+        GUID(),
         ForeignKey("roles.id", ondelete="CASCADE"),
         primary_key=True,
     ),
@@ -29,13 +28,13 @@ role_permissions = Table(
     Base.metadata,
     Column(
         "role_id",
-        PGUUID(as_uuid=True),
+        GUID(),
         ForeignKey("roles.id", ondelete="CASCADE"),
         primary_key=True,
     ),
     Column(
         "permission_id",
-        PGUUID(as_uuid=True),
+        GUID(),
         ForeignKey("permissions.id", ondelete="CASCADE"),
         primary_key=True,
     ),
@@ -74,7 +73,7 @@ class Branch(Base):
 
     id: Mapped[UUID] = uuid_pk()
     business_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False
+        GUID(), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     code: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -105,7 +104,7 @@ class Role(Base):
 
     id: Mapped[UUID] = uuid_pk()
     business_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False
+        GUID(), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     permissions: Mapped[list[Permission]] = relationship(secondary=role_permissions)
@@ -120,10 +119,10 @@ class User(Base):
 
     id: Mapped[UUID] = uuid_pk()
     business_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False
+        GUID(), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False
     )
     branch_id: Mapped[UUID | None] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="RESTRICT")
+        GUID(), ForeignKey("branches.id", ondelete="RESTRICT")
     )
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)

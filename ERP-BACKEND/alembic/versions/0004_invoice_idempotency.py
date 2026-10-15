@@ -13,14 +13,21 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("invoices", sa.Column("idempotency_key", sa.String(length=255), nullable=True))
-    op.create_unique_constraint(
-        "uq_invoices_idempotency",
+    # SQLite cannot ALTER constraints in-place; batch mode rebuilds the table
+    # with the new unique constraint on both supported backends.
+    with op.batch_alter_table(
         "invoices",
-        ["business_id", "branch_id", "idempotency_key"],
-    )
+        recreate="auto",
+        naming_convention={"uq": "uq_invoices_idempotency"},
+    ) as batch_op:
+        batch_op.add_column(sa.Column("idempotency_key", sa.String(length=255), nullable=True))
+        batch_op.create_unique_constraint(
+            "uq_invoices_idempotency",
+            ["business_id", "branch_id", "idempotency_key"],
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint("uq_invoices_idempotency", "invoices", type_="unique")
-    op.drop_column("invoices", "idempotency_key")
+    with op.batch_alter_table("invoices", recreate="auto") as batch_op:
+        batch_op.drop_constraint("uq_invoices_idempotency", type_="unique")
+        batch_op.drop_column("idempotency_key")

@@ -19,10 +19,6 @@ class Settings(BaseSettings):
     db_max_overflow: int = Field(default=20, ge=0, le=200)
     db_pool_recycle: int = Field(default=1800, ge=60)
     db_echo: bool = False
-    redis_url: str = "redis://redis:6379/0"
-    ollama_base_url: str = "http://ollama:11434"
-    ollama_model: str = "qwen2.5:1.5b"
-    ollama_timeout_seconds: float = 10.0
     database_path: str = "/data/erp03.sqlite3"
 
     @field_validator("cors_origins")
@@ -59,7 +55,11 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    """Resolve settings once per process (cached)."""
     return Settings()
 
 
-settings = get_settings()
+# Single module-level accessor. Resolved eagerly on import; tests and tools
+# override values through environment variables *before* importing the app,
+# or call ``get_settings.cache_clear()`` after mutating the environment.
+settings: Settings = get_settings()

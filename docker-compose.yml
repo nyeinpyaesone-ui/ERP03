@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:15.14
+    profiles: ["full"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-erp03}
       POSTGRES_USER: ${POSTGRES_USER:-erp03}
@@ -14,20 +15,9 @@ services:
       retries: 10
     restart: unless-stopped
 
-  redis:
-    image: redis:7.2.11
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    restart: unless-stopped
-
   migrate:
     build: ./ERP-BACKEND
+    profiles: ["full"]
     environment:
       ENVIRONMENT: production
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
@@ -46,21 +36,23 @@ services:
     environment:
       ENVIRONMENT: production
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-erp03}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-erp03}
-      REDIS_URL: redis://redis:6379/0
-      OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: qwen2.5:1.5b
+      # Minimal profile (default): durable SQLite journal + transactional DB
+      # file on the shared volume. Full profile: managed PostgreSQL instance.
+      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///data/erp03.sqlite3}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
       DATABASE_PATH: /data/erp03.sqlite3
     volumes:
       - erp_data:/data
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
       migrate:
         condition: service_completed_successfully
+        required: false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
   frontend:
@@ -72,16 +64,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  ollama:
-    image: ollama/ollama:0.12.6
-    volumes:
-      - ollama:/root/.ollama
-    ports:
-      - "11434:11434"
-    restart: unless-stopped
-
 volumes:
   postgres_data:
-  redis_data:
   erp_data:
-  ollama:

@@ -12,10 +12,9 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, utcnow, uuid_pk
+from app.db.base import Base, GUID, utcnow, uuid_pk
 
 
 class Customer(Base):
@@ -27,10 +26,10 @@ class Customer(Base):
     )
     id: Mapped[UUID] = uuid_pk()
     business_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE")
+        GUID(), ForeignKey("businesses.id", ondelete="CASCADE")
     )
     branch_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="RESTRICT")
+        GUID(), ForeignKey("branches.id", ondelete="RESTRICT")
     )
     code: Mapped[str] = mapped_column(String(64))
     name: Mapped[str] = mapped_column(String(200))
@@ -53,10 +52,10 @@ class Supplier(Base):
     )
     id: Mapped[UUID] = uuid_pk()
     business_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE")
+        GUID(), ForeignKey("businesses.id", ondelete="CASCADE")
     )
     branch_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="RESTRICT")
+        GUID(), ForeignKey("branches.id", ondelete="RESTRICT")
     )
     code: Mapped[str] = mapped_column(String(64))
     name: Mapped[str] = mapped_column(String(200))
@@ -81,10 +80,10 @@ class Product(Base):
     )
     id: Mapped[UUID] = uuid_pk()
     business_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE")
+        GUID(), ForeignKey("businesses.id", ondelete="CASCADE")
     )
     branch_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="RESTRICT")
+        GUID(), ForeignKey("branches.id", ondelete="RESTRICT")
     )
     sku: Mapped[str] = mapped_column(String(80))
     barcode: Mapped[str | None] = mapped_column(String(80))
@@ -107,7 +106,7 @@ class Warehouse(Base):
     __table_args__ = (UniqueConstraint("branch_id", "code", name="uq_warehouses_branch_code"),)
     id: Mapped[UUID] = uuid_pk()
     branch_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="CASCADE")
+        GUID(), ForeignKey("branches.id", ondelete="CASCADE")
     )
     code: Mapped[str] = mapped_column(String(64))
     name: Mapped[str] = mapped_column(String(200))
@@ -122,10 +121,10 @@ class StockBalance(Base):
     )
     id: Mapped[UUID] = uuid_pk()
     warehouse_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("warehouses.id", ondelete="CASCADE")
+        GUID(), ForeignKey("warehouses.id", ondelete="CASCADE")
     )
     product_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT")
+        GUID(), ForeignKey("products.id", ondelete="RESTRICT")
     )
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 3), default=0)
     updated_at: Mapped[datetime] = mapped_column(
@@ -141,16 +140,16 @@ class StockMovement(Base):
     )
     id: Mapped[UUID] = uuid_pk()
     warehouse_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("warehouses.id", ondelete="RESTRICT")
+        GUID(), ForeignKey("warehouses.id", ondelete="RESTRICT")
     )
     product_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT")
+        GUID(), ForeignKey("products.id", ondelete="RESTRICT")
     )
     movement_type: Mapped[str] = mapped_column(String(32))
     quantity_delta: Mapped[Decimal] = mapped_column(Numeric(18, 3))
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
     reference_type: Mapped[str | None] = mapped_column(String(40))
-    reference_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    reference_id: Mapped[UUID | None] = mapped_column(GUID())
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
@@ -168,13 +167,13 @@ class Invoice(Base):
     )
     id: Mapped[UUID] = uuid_pk()
     business_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE")
+        GUID(), ForeignKey("businesses.id", ondelete="CASCADE")
     )
     branch_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="RESTRICT")
+        GUID(), ForeignKey("branches.id", ondelete="RESTRICT")
     )
     customer_id: Mapped[UUID | None] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("customers.id", ondelete="RESTRICT")
+        GUID(), ForeignKey("customers.id", ondelete="RESTRICT")
     )
     invoice_no: Mapped[str] = mapped_column(String(64))
     idempotency_key: Mapped[str | None] = mapped_column(String(255))
@@ -198,10 +197,10 @@ class InvoiceItem(Base):
     __table_args__ = (Index("ix_invoice_items_invoice", "invoice_id"),)
     id: Mapped[UUID] = uuid_pk()
     invoice_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("invoices.id", ondelete="CASCADE")
+        GUID(), ForeignKey("invoices.id", ondelete="CASCADE")
     )
     product_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT")
+        GUID(), ForeignKey("products.id", ondelete="RESTRICT")
     )
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 3))
     unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 2))
@@ -218,13 +217,13 @@ class Payment(Base):
     )
     id: Mapped[UUID] = uuid_pk()
     business_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE")
+        GUID(), ForeignKey("businesses.id", ondelete="CASCADE")
     )
     branch_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="RESTRICT")
+        GUID(), ForeignKey("branches.id", ondelete="RESTRICT")
     )
     invoice_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("invoices.id", ondelete="RESTRICT")
+        GUID(), ForeignKey("invoices.id", ondelete="RESTRICT")
     )
     method: Mapped[str] = mapped_column(String(32))
     currency: Mapped[str] = mapped_column(String(3), default="MMK")
