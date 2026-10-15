@@ -7,23 +7,28 @@ tenant state and never resets an existing user's password.
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import BootstrapConflictError, ValidationError
 from app.core.security import hash_password
 from app.models.erp import Warehouse
 from app.models.identity import Branch, Business, User
 from app.services.rbac import assign_role, ensure_default_roles
 
 
-class BootstrapConflictError(ValueError):
-    """Raised when bootstrap would mutate an existing tenant unexpectedly."""
-
-
-def _required(value: str, field: str, maximum: int) -> str:
+def validate_required(value: str, field: str, maximum: int) -> str:
+    """Return ``value`` stripped, or raise ValidationError when blank/oversized."""
     value = value.strip()
     if not value:
-        raise ValueError(f"{field} must not be empty")
+        raise ValidationError(f"{field} must not be empty")
     if len(value) > maximum:
-        raise ValueError(f"{field} exceeds maximum length")
+        raise ValidationError(f"{field} exceeds maximum length")
     return value
+
+
+def validate_password_policy(password: str, field: str = "password") -> str:
+    """Return ``password`` unchanged when it satisfies the length policy."""
+    if len(password) < 12 or len(password) > 256:
+        raise ValidationError(f"{field} must contain 12 to 256 characters")
+    return password
 
 
 async def bootstrap_business(
@@ -44,29 +49,29 @@ async def bootstrap_business(
     Existing business codes are rejected instead of silently mutating another
     tenant. The caller should execute this function inside one DB transaction.
     """
-    business_name = _required(business_name, "business_name", 200)
-    business_code = _required(business_code, "business_code", 64)
-    branch_name = _required(branch_name, "branch_name", 200)
-    branch_code = _required(branch_code, "branch_code", 64)
-    owner_name = _required(owner_name, "owner_name", 200)
-    owner_email = _required(owner_email, "owner_email", 320).lower()
-    warehouse_code = _required(warehouse_code, "warehouse_code", 64)
+    business_name = validate_required(business_name, "business_name", 200)
+    business_code = validate_required(business_code, "business_code", 64)
+    branch_name = validate_required(branch_name, "branch_name", 200)
+    branch_code = validate_required(branch_code, "branch_code", 64)
+    owner_name = validate_required(owner_name, "owner_name", 200)
+    owner_email = validate_required(owner_email, "owner_email", 320).lower()
+    warehouse_code = validate_required(warehouse_code, "warehouse_code", 64)
     warehouse_name = (
-        _required(warehouse_name, "warehouse_name", 200)
+        validate_required(warehouse_name, "warehouse_name", 200)
         if warehouse_name is not None
         else branch_name
     )
-    if len(owner_password) < 12 or len(owner_password) > 256:
-        raise ValueError("owner_password must contain 12 to 256 characters")
+    validate_password_policy(owner_password, "owner_password")
 
-    # Serialize concurrent first-tenant provisioning for the same code. The
-    # database unique constraint remains the final invariant; this lock keeps
-    # concurrent callers deterministic instead of racing on the pre-check.
-    await session.execute(select(func.pg_advisory_xact_lock(func.hashtext(business_code))))
+    # Serialize concurrent first-tenant provisioning for the same code on
+    # PostgreSQL. The database unique constraint remains the final invariant;
+    # this advisory lock keeps concurrent callers deterministic instead of
+    # racing on the pre-check. SQLite (used by unit/integration test suites)
+    # has no advisory locks and serializes writers instead.
+    if session.bind is not None and session.bind.dialect.name == "postgresql":
+        await session.execute(select(func.pg_advisory_xact_lock(func.hashtext(business_code))))
 
-    existing = await session.scalar(
-        select(Business).where(Business.code == business_code)
-    )
+    existing = await session.scalar(select(Business).where(Business.code == business_code))
     if existing is not None:
         raise BootstrapConflictError("Business code already exists")
 

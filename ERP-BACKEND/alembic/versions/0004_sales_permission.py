@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0004_sales_permission"
-down_revision: str | Sequence[str] | None = "0003_user_branch_scope"
+down_revision: str | Sequence[str] | None = "0004_invoice_idempotency"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

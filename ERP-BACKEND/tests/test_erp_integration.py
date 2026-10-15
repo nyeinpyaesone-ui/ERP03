@@ -2,59 +2,60 @@ import asyncio
 from decimal import Decimal
 from uuid import uuid4
 
+import app.models  # noqa: F401  (ensures all mappers are configured)
 import httpx
 import pytest
-from sqlalchemy import select
-from sqlalchemy.exc import DataError
 from app.db.session import SessionFactory
 from app.main import app
 from app.models.erp import Invoice, Product, StockBalance, Warehouse
 from app.models.identity import Branch
 from app.services.bootstrap import bootstrap_business
 from app.services.sales import SaleLine, SalePayment, create_pos_sale
+from sqlalchemy import select
+from sqlalchemy.exc import DataError
+
+pytestmark = pytest.mark.integration  # requires migrated PostgreSQL via DATABASE_URL
 
 
 async def _bootstrap(prefix: str):
-    async with SessionFactory() as session:
-        async with session.begin():
-            return await bootstrap_business(
-                session,
-                business_name=f"{prefix} Business",
-                business_code=f"{prefix}-{uuid4().hex[:8]}",
-                branch_name="Main Branch",
-                branch_code="MAIN",
-                owner_email=f"owner-{uuid4().hex[:8]}@example.com",
-                owner_password="Correct-Horse-123",
-                owner_name="Owner",
-            )
+    async with SessionFactory() as session, session.begin():
+        return await bootstrap_business(
+            session,
+            business_name=f"{prefix} Business",
+            business_code=f"{prefix}-{uuid4().hex[:8]}",
+            branch_name="Main Branch",
+            branch_code="MAIN",
+            owner_email=f"owner-{uuid4().hex[:8]}@example.com",
+            owner_password="Correct-Horse-123",
+            owner_name="Owner",
+        )
 
 
 @pytest.mark.asyncio
 async def test_bootstrap_login_and_pos_sale_round_trip():
     business, branch, warehouse, user = await _bootstrap("IT")
 
-    async with SessionFactory() as session:
-        async with session.begin():
-            product = Product(
-                business_id=business.id,
-                branch_id=branch.id,
-                sku=f"SKU-{uuid4().hex[:8]}",
-                name="Integration Product",
-                unit="pcs",
-                sale_price=Decimal("100.00"),
-                cost_price=Decimal("60.00"),
-                min_stock=Decimal("1"),
-                active=True,
+    async with SessionFactory() as session, session.begin():
+        product = Product(
+            business_id=business.id,
+            branch_id=branch.id,
+            sku=f"SKU-{uuid4().hex[:8]}",
+            name="Integration Product",
+            unit="pcs",
+            sale_price=Decimal("100.00"),
+            cost_price=Decimal("60.00"),
+            min_stock=Decimal("1"),
+            active=True,
+        )
+        session.add(product)
+        await session.flush()
+        session.add(
+            StockBalance(
+                warehouse_id=warehouse.id,
+                product_id=product.id,
+                quantity=Decimal("5"),
             )
-            session.add(product)
-            await session.flush()
-            session.add(
-                StockBalance(
-                    warehouse_id=warehouse.id,
-                    product_id=product.id,
-                    quantity=Decimal("5"),
-                )
-            )
+        )
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -73,7 +74,10 @@ async def test_bootstrap_login_and_pos_sale_round_trip():
 
         sale = await client.post(
             "/api/v1/sales",
-            headers={"Authorization": f"Bearer {token}", "X-Idempotency-Key": f"sale-{uuid4().hex}"},
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-Idempotency-Key": f"sale-{uuid4().hex}",
+            },
             json={
                 "branch_id": str(branch.id),
                 "warehouse_id": str(warehouse.id),
@@ -118,27 +122,26 @@ async def test_bootstrap_login_and_pos_sale_round_trip():
 @pytest.mark.asyncio
 async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
     business, branch, warehouse, _ = await _bootstrap("RB")
-    async with SessionFactory() as session:
-        async with session.begin():
-            product = Product(
-                business_id=business.id,
-                branch_id=branch.id,
-                sku=f"SKU-{uuid4().hex[:8]}",
-                name="Rollback Product",
-                unit="pcs",
-                sale_price=Decimal("50.00"),
-                cost_price=Decimal("25.00"),
-                active=True,
+    async with SessionFactory() as session, session.begin():
+        product = Product(
+            business_id=business.id,
+            branch_id=branch.id,
+            sku=f"SKU-{uuid4().hex[:8]}",
+            name="Rollback Product",
+            unit="pcs",
+            sale_price=Decimal("50.00"),
+            cost_price=Decimal("25.00"),
+            active=True,
+        )
+        session.add(product)
+        await session.flush()
+        session.add(
+            StockBalance(
+                warehouse_id=warehouse.id,
+                product_id=product.id,
+                quantity=Decimal("2"),
             )
-            session.add(product)
-            await session.flush()
-            session.add(
-                StockBalance(
-                    warehouse_id=warehouse.id,
-                    product_id=product.id,
-                    quantity=Decimal("2"),
-                )
-            )
+        )
 
     invoice_no = f"INV-{uuid4().hex[:8]}"
     async with SessionFactory() as session:
@@ -163,35 +166,32 @@ async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
         )
         assert balance is not None
         assert balance.quantity == Decimal("2")
-        assert await session.scalar(
-            select(Invoice).where(Invoice.invoice_no == invoice_no)
-        ) is None
+        assert await session.scalar(select(Invoice).where(Invoice.invoice_no == invoice_no)) is None
 
 
 @pytest.mark.asyncio
 async def test_concurrent_sales_cannot_oversell_stock():
     business, branch, warehouse, _ = await _bootstrap("CC")
-    async with SessionFactory() as session:
-        async with session.begin():
-            product = Product(
-                business_id=business.id,
-                branch_id=branch.id,
-                sku=f"SKU-{uuid4().hex[:8]}",
-                name="Concurrent Product",
-                unit="pcs",
-                sale_price=Decimal("100.00"),
-                cost_price=Decimal("50.00"),
-                active=True,
+    async with SessionFactory() as session, session.begin():
+        product = Product(
+            business_id=business.id,
+            branch_id=branch.id,
+            sku=f"SKU-{uuid4().hex[:8]}",
+            name="Concurrent Product",
+            unit="pcs",
+            sale_price=Decimal("100.00"),
+            cost_price=Decimal("50.00"),
+            active=True,
+        )
+        session.add(product)
+        await session.flush()
+        session.add(
+            StockBalance(
+                warehouse_id=warehouse.id,
+                product_id=product.id,
+                quantity=Decimal("1"),
             )
-            session.add(product)
-            await session.flush()
-            session.add(
-                StockBalance(
-                    warehouse_id=warehouse.id,
-                    product_id=product.id,
-                    quantity=Decimal("1"),
-                )
-            )
+        )
 
     async def attempt(invoice_no: str):
         async with SessionFactory() as session:
@@ -229,43 +229,42 @@ async def test_concurrent_sales_cannot_oversell_stock():
 @pytest.mark.asyncio
 async def test_owner_token_cannot_cross_branch_boundary():
     business, branch, warehouse, user = await _bootstrap("BR")
-    async with SessionFactory() as session:
-        async with session.begin():
-            other_branch = Branch(
-                business_id=business.id,
-                name="Other Branch",
-                code=f"OTHER-{uuid4().hex[:6]}",
-                active=True,
-            )
-            session.add(other_branch)
-            await session.flush()
+    async with SessionFactory() as session, session.begin():
+        other_branch = Branch(
+            business_id=business.id,
+            name="Other Branch",
+            code=f"OTHER-{uuid4().hex[:6]}",
+            active=True,
+        )
+        session.add(other_branch)
+        await session.flush()
 
-            other_warehouse = Warehouse(
-                branch_id=other_branch.id,
-                code="MAIN",
-                name="Other Warehouse",
-                active=True,
+        other_warehouse = Warehouse(
+            branch_id=other_branch.id,
+            code="MAIN",
+            name="Other Warehouse",
+            active=True,
+        )
+        session.add(other_warehouse)
+        product = Product(
+            business_id=business.id,
+            branch_id=other_branch.id,
+            sku=f"SKU-{uuid4().hex[:8]}",
+            name="Other Branch Product",
+            unit="pcs",
+            sale_price=Decimal("25.00"),
+            cost_price=Decimal("10.00"),
+            active=True,
+        )
+        session.add(product)
+        await session.flush()
+        session.add(
+            StockBalance(
+                warehouse_id=other_warehouse.id,
+                product_id=product.id,
+                quantity=Decimal("5"),
             )
-            session.add(other_warehouse)
-            product = Product(
-                business_id=business.id,
-                branch_id=other_branch.id,
-                sku=f"SKU-{uuid4().hex[:8]}",
-                name="Other Branch Product",
-                unit="pcs",
-                sale_price=Decimal("25.00"),
-                cost_price=Decimal("10.00"),
-                active=True,
-            )
-            session.add(product)
-            await session.flush()
-            session.add(
-                StockBalance(
-                    warehouse_id=other_warehouse.id,
-                    product_id=product.id,
-                    quantity=Decimal("5"),
-                )
-            )
+        )
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -300,29 +299,35 @@ async def test_owner_token_cannot_cross_branch_boundary():
 @pytest.mark.asyncio
 async def test_pos_sale_idempotency_replays_same_invoice_without_double_stock():
     business, branch, warehouse, user = await _bootstrap("ID")
-    async with SessionFactory() as session:
-        async with session.begin():
-            product = Product(
-                business_id=business.id,
-                branch_id=branch.id,
-                sku=f"SKU-{uuid4().hex[:8]}",
-                name="Idempotency Product",
-                unit="pcs",
-                sale_price=Decimal("100.00"),
-                cost_price=Decimal("60.00"),
-                active=True,
-            )
-            session.add(product)
-            await session.flush()
-            session.add(StockBalance(warehouse_id=warehouse.id, product_id=product.id, quantity=Decimal("5")))
+    async with SessionFactory() as session, session.begin():
+        product = Product(
+            business_id=business.id,
+            branch_id=branch.id,
+            sku=f"SKU-{uuid4().hex[:8]}",
+            name="Idempotency Product",
+            unit="pcs",
+            sale_price=Decimal("100.00"),
+            cost_price=Decimal("60.00"),
+            active=True,
+        )
+        session.add(product)
+        await session.flush()
+        session.add(
+            StockBalance(warehouse_id=warehouse.id, product_id=product.id, quantity=Decimal("5"))
+        )
 
     key = f"retry-{uuid4().hex}"
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        login = await client.post("/api/v1/auth/login", json={
-            "business_code": business.code,
-            "email": user.email,
-            "password": "Correct-Horse-123",
-        })
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        login = await client.post(
+            "/api/v1/auth/login",
+            json={
+                "business_code": business.code,
+                "email": user.email,
+                "password": "Correct-Horse-123",
+            },
+        )
         assert login.status_code == 200
         token = login.json()["access_token"]
         headers = {"Authorization": f"Bearer {token}", "X-Idempotency-Key": key}
@@ -336,14 +341,20 @@ async def test_pos_sale_idempotency_replays_same_invoice_without_double_stock():
         }
         first = await client.post("/api/v1/sales", headers=headers, json=payload)
         assert first.status_code == 201, first.text
-        second = await client.post("/api/v1/sales", headers=headers, json=payload | {"invoice_no": f"RETRY-{uuid4().hex[:8]}"})
+        second = await client.post(
+            "/api/v1/sales",
+            headers=headers,
+            json=payload | {"invoice_no": f"RETRY-{uuid4().hex[:8]}"},
+        )
         assert second.status_code == 201, second.text
         assert second.json()["invoice_id"] == first.json()["invoice_id"]
 
     async with SessionFactory() as session:
-        balance = await session.scalar(select(StockBalance).where(
-            StockBalance.warehouse_id == warehouse.id,
-            StockBalance.product_id == product.id,
-        ))
+        balance = await session.scalar(
+            select(StockBalance).where(
+                StockBalance.warehouse_id == warehouse.id,
+                StockBalance.product_id == product.id,
+            )
+        )
         assert balance is not None
         assert balance.quantity == Decimal("3")

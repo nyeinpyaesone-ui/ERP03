@@ -3,7 +3,6 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-
 from app.services.sales import SaleLine, SalePayment, SaleValidationError, create_pos_sale
 
 

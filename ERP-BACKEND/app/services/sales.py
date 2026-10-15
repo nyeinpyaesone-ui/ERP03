@@ -8,13 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import SaleValidationError
 from app.models.erp import Customer, Invoice, InvoiceItem, Payment, Product, Warehouse
 from app.models.identity import Branch
 from app.services.inventory import adjust_stock
-
-
-class SaleValidationError(ValueError):
-    """Raised when a POS sale violates a business invariant."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +37,16 @@ class SaleResult:
     total: Decimal
     paid: Decimal
     balance: Decimal
+
+    @classmethod
+    def from_invoice(cls, invoice: Invoice) -> "SaleResult":
+        """Build a replay result from an already-persisted invoice."""
+        return cls(
+            invoice_id=invoice.id,
+            total=invoice.total,
+            paid=invoice.paid,
+            balance=invoice.total - invoice.paid,
+        )
 
 
 async def create_pos_sale(
@@ -71,47 +78,66 @@ async def create_pos_sale(
     if any(payment.currency.upper() != currency.upper() for payment in payments):
         raise SaleValidationError("Payment currency must match invoice currency")
 
+    # Cheap invariant checks run before acquiring locks or opening a
+    # transaction so invalid requests never touch database resources.
+    if all(line.unit_price is not None for line in lines):
+        requested_total = sum(
+            (line.unit_price * line.quantity - line.discount + line.tax for line in lines),
+            Decimal("0"),
+        )
+        requested_paid = sum((payment.amount for payment in payments), Decimal("0"))
+        if requested_total >= 0 and requested_paid > requested_total:
+            raise SaleValidationError("Overpayment is not allowed")
+
     async with session.begin():
         branch = await session.scalar(
-            select(Branch).where(
+            select(Branch)
+            .where(
                 Branch.id == branch_id,
                 Branch.business_id == business_id,
                 Branch.active.is_(True),
-            ).with_for_update()
+            )
+            .with_for_update()
         )
         if branch is None:
             raise SaleValidationError("Branch is not valid for this business")
 
         warehouse = await session.scalar(
-            select(Warehouse).where(
+            select(Warehouse)
+            .where(
                 Warehouse.id == warehouse_id,
                 Warehouse.branch_id == branch_id,
                 Warehouse.active.is_(True),
-            ).with_for_update()
+            )
+            .with_for_update()
         )
         if warehouse is None:
             raise SaleValidationError("Warehouse is not valid for this branch")
 
         if customer_id is not None:
             customer = await session.scalar(
-                select(Customer).where(
+                select(Customer)
+                .where(
                     Customer.id == customer_id,
                     Customer.business_id == business_id,
                     Customer.branch_id == branch_id,
                     Customer.active.is_(True),
-                ).with_for_update()
+                )
+                .with_for_update()
             )
             if customer is None:
                 raise SaleValidationError("Customer is not valid for this branch")
 
         product_ids = sorted({line.product_id for line in lines}, key=str)
         products_result = await session.execute(
-            select(Product).where(
+            select(Product)
+            .where(
                 Product.id.in_(product_ids),
                 Product.business_id == business_id,
                 Product.branch_id == branch_id,
                 Product.active.is_(True),
-            ).with_for_update()
+            )
+            .with_for_update()
         )
         products = {product.id: product for product in products_result.scalars().all()}
         if len(products) != len(product_ids):
@@ -142,14 +168,16 @@ async def create_pos_sale(
 
         if idempotency_key is not None:
             existing = await session.scalar(
-                select(Invoice).where(
+                select(Invoice)
+                .where(
                     Invoice.business_id == business_id,
                     Invoice.branch_id == branch_id,
                     Invoice.idempotency_key == idempotency_key,
-                ).with_for_update()
+                )
+                .with_for_update()
             )
             if existing is not None:
-                return SaleResult(invoice_id=existing.id, total=existing.total, paid=existing.paid, balance=existing.total - existing.paid)
+                return SaleResult.from_invoice(existing)
 
         invoice = Invoice(
             business_id=business_id,
@@ -179,20 +207,22 @@ async def create_pos_sale(
                     )
                 )
                 if existing is not None:
-                    return SaleResult(invoice_id=existing.id, total=existing.total, paid=existing.paid, balance=existing.total - existing.paid)
+                    return SaleResult.from_invoice(existing)
             raise
 
         prepared.sort(key=lambda item: str(item[0].product_id))
         for line, price, line_total in prepared:
-            session.add(InvoiceItem(
-                invoice_id=invoice.id,
-                product_id=line.product_id,
-                quantity=line.quantity,
-                unit_price=price,
-                discount=line.discount,
-                tax=line.tax,
-                line_total=line_total,
-            ))
+            session.add(
+                InvoiceItem(
+                    invoice_id=invoice.id,
+                    product_id=line.product_id,
+                    quantity=line.quantity,
+                    unit_price=price,
+                    discount=line.discount,
+                    tax=line.tax,
+                    line_total=line_total,
+                )
+            )
             await adjust_stock(
                 session,
                 warehouse_id=warehouse_id,
@@ -205,15 +235,17 @@ async def create_pos_sale(
             )
 
         for payment in payments:
-            session.add(Payment(
-                business_id=business_id,
-                branch_id=branch_id,
-                invoice_id=invoice.id,
-                method=payment.method,
-                currency=payment.currency.upper(),
-                amount=payment.amount,
-                reference=payment.reference,
-            ))
+            session.add(
+                Payment(
+                    business_id=business_id,
+                    branch_id=branch_id,
+                    invoice_id=invoice.id,
+                    method=payment.method,
+                    currency=payment.currency.upper(),
+                    amount=payment.amount,
+                    reference=payment.reference,
+                )
+            )
 
         return SaleResult(
             invoice_id=invoice.id,

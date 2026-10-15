@@ -1,6 +1,4 @@
-import pytest
-
-from app.services.bootstrap import BootstrapConflictError
+from app.core.errors import BootstrapConflictError
 
 
 def test_bootstrap_conflict_is_explicit():

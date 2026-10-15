@@ -1,10 +1,9 @@
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-from app.models.identity import Base, Permission
+from app.models.identity import Base
 from app.services.rbac import ensure_default_roles
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 
 @pytest.mark.asyncio
