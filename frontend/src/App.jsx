@@ -1,17 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 
 export default function App() {
-  const [health, setHealth] = useState('checking');
+  const [health, setHealth] = useState("checking");
 
   useEffect(() => {
     fetch(`${API_BASE}/healthz`)
       .then((response) => {
-        if (!response.ok) throw new Error('unhealthy');
-        setHealth('online');
+        if (!response.ok) throw new Error("unhealthy");
+        setHealth("online");
       })
-      .catch(() => setHealth('offline'));
+      .catch(() => setHealth("offline"));
   }, []);
 
   return (
