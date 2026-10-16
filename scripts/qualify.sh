@@ -44,7 +44,9 @@ DATABASE_URL="$DATABASE_URL" pytest -q
 
 log "Frontend dependency/build"
 cd "$FRONTEND_DIR"
-npm install --no-audit --no-fund
+npm ci --no-audit --no-fund
+npm run lint
+npm run format:check
 npm run build
 
 log "ERP03 qualification passed"

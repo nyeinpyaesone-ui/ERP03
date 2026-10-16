@@ -1,0 +1,126 @@
+name: Rollback
+
+# Two rollback modes:
+#   digest  — pin a previously promoted immutable digest (preferred, reversible)
+#   undo    — kubectl rollout undo to the previous ReplicaSet revision
+# Database schema is never downgraded automatically; see docs/ROLLBACK_RUNBOOK.md.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to roll back"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      mode:
+        description: "Rollback mechanism"
+        required: true
+        type: choice
+        options:
+          - undo
+          - digest
+      backend_digest:
+        description: "Mode=digest: backend image digest (ghcr.io/...@sha256:...)"
+        required: false
+        type: string
+      frontend_digest:
+        description: "Mode=digest: frontend image digest (ghcr.io/...@sha256:...)"
+        required: false
+        type: string
+      incident_id:
+        description: "Incident or change reference justifying the rollback"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: rollback-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 30
+    env:
+      NAMESPACE: erp03-${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Validate inputs
+        run: |
+          if [[ "${{ inputs.mode }}" == "digest" ]]; then
+            [[ -n "${{ inputs.backend_digest }}" && -n "${{ inputs.frontend_digest }}" ]] || {
+              echo "backend_digest and frontend_digest are required in digest mode" >&2
+              exit 1
+            }
+          fi
+
+      - name: Install kustomize
+        run: |
+          KUSTOMIZE_VERSION="v5.7.1"
+          curl -sSLo /tmp/kustomize.tar.gz \
+            "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          sudo tar -xzf /tmp/kustomize.tar.gz -C /usr/local/bin kustomize
+
+      - name: Configure kubectl
+        env:
+          KUBE_CONFIG: ${{ secrets[format('KUBE_CONFIG_{0}', inputs.environment)] }}
+        run: |
+          if [[ -z "$KUBE_CONFIG" ]]; then
+            echo "Kubeconfig secret for ${{ inputs.environment }} is not configured" >&2
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          printf '%s' "$KUBE_CONFIG" | base64 --decode > "$HOME/.kube/config"
+          kubectl -n "$NAMESPACE" get deployments,statefulsets -o name
+
+      - name: Roll back workloads
+        run: |
+          case "${{ inputs.mode }}" in
+            undo)
+              kubectl -n "$NAMESPACE" rollout undo deployment/erp03-backend
+              kubectl -n "$NAMESPACE" rollout undo deployment/erp03-frontend
+              ;;
+            digest)
+              cd "infra/kubernetes/overlays/${{ inputs.environment }}"
+              kustomize edit set image \
+                "${{ inputs.backend_digest }}" "${{ inputs.frontend_digest }}"
+              kustomize build . > "/tmp/erp03-${{ inputs.environment }}-rollback.yaml"
+              kubectl apply -k .
+              ;;
+          esac
+
+      - name: Wait for rollback rollout
+        run: |
+          kubectl -n "$NAMESPACE" rollout status deployment/erp03-backend --timeout=600s
+          kubectl -n "$NAMESPACE" rollout status deployment/erp03-frontend --timeout=600s
+
+      - name: Verify rollback
+        run: |
+          kubectl -n "$NAMESPACE" run "erp03-rollback-smoke-${GITHUB_RUN_ID}" \
+            --rm -i --restart=Never \
+            --labels "app=erp03-smoke" \
+            --image=curlimages/curl:8.12.1 -- \
+            sh -c 'set -e
+              curl -fsS http://erp03-backend:8000/api/v1/healthz
+              echo
+              curl -fsS http://erp03-backend:8000/api/v1/readyz'
+
+      - name: Record rollback evidence
+        run: |
+          {
+            echo "## Rollback"
+            echo "- environment: \`${{ inputs.environment }}\`"
+            echo "- mode: \`${{ inputs.mode }}\`"
+            echo "- backend digest: \`${{ inputs.backend_digest }}\`"
+            echo "- frontend digest: \`${{ inputs.frontend_digest }}\`"
+            echo "- incident: \`${{ inputs.incident_id }}\`"
+            echo "- operator: \`${{ github.actor }}\`"
+            echo "- schema was NOT downgraded"
+          } >> "$GITHUB_STEP_SUMMARY"

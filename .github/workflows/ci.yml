@@ -37,8 +37,8 @@ jobs:
     env:
       DATABASE_URL: postgresql+asyncpg://erp03:erp03@127.0.0.1:5432/erp03
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12.13"
           cache: pip
@@ -46,7 +46,8 @@ jobs:
       - run: pip install --requirement requirements.txt
       - run: python -m compileall -q app alembic
       - run: alembic upgrade head
-      - run: pytest -q
+      - name: Run tests with coverage gate
+        run: pytest -q --cov=app --cov-report=term-missing --cov-fail-under=${{ vars.ERP03_MIN_COVERAGE || 70 }}
 
   frontend:
     runs-on: ubuntu-24.04
@@ -55,11 +56,11 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: frontend/package.json
-      - run: npm install --no-audit --no-fund
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
       - run: npm run build

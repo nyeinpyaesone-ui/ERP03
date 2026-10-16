@@ -9,29 +9,70 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: iac-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   terraform:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: infra/terraform
+    timeout-minutes: 12
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.13.4"
-      - run: terraform fmt -check -recursive
-      - run: terraform init -backend=false
-      - run: terraform validate
-      - run: terraform plan -input=false -var='environment=dev'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install terraform
+        run: |
+          TF_VERSION="1.13.4"
+          curl -sSLo /tmp/terraform.zip \
+            "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+          sudo unzip -o -d /usr/local/bin /tmp/terraform.zip
+          terraform version
+
+      - name: Format check
+        working-directory: infra/terraform
+        run: terraform fmt -check -recursive
+
+      - name: Validate contract root
+        working-directory: infra/terraform
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+      - name: Validate environment roots
+        working-directory: infra/terraform
+        run: |
+          for environment in dev staging production; do
+            echo "==> ${environment}"
+            ( cd "environments/${environment}"
+              terraform init -backend=false -input=false
+              terraform validate )
+          done
+
+      - name: Plan contract root
+        working-directory: infra/terraform
+        run: terraform plan -input=false -var='environment=dev'
 
   kustomize:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: imranismail/setup-kustomize@v2
-      - run: kustomize build infra/kubernetes/overlays/dev
-      - run: kustomize build infra/kubernetes/overlays/staging
-      - run: kustomize build infra/kubernetes/overlays/production
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install kustomize
+        run: |
+          KUSTOMIZE_VERSION="v5.7.1"
+          curl -sSLo /tmp/kustomize.tar.gz \
+            "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          sudo tar -xzf /tmp/kustomize.tar.gz -C /usr/local/bin kustomize
+          kustomize version
+
+      - name: Build base
+        run: kustomize build infra/kubernetes/base > /dev/null
+
+      - name: Build environment overlays
+        run: |
+          for environment in dev staging production; do
+            echo "==> ${environment}"
+            kustomize build "infra/kubernetes/overlays/${environment}" > "/tmp/erp03-${environment}.yaml"
+            grep -q '^kind: Ingress' "/tmp/erp03-${environment}.yaml"
+          done

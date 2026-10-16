@@ -1,10 +1,15 @@
 name: Release
 
+# Release tagging strategy:
+#   vX.Y.Z        — release candidate graduates to a stable release
+#   vX.Y.Z-rc.N   — release candidate cut from a commit already green in CI
+# Only versions whose qualification, security, container and IaC gates passed
+# may be tagged; see docs/RELEASE_PROCESS.md.
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "SemVer release, for example v1.0.1"
+        description: "SemVer release, for example v1.0.1 or v1.1.0-rc.1"
         required: true
         type: string
 
@@ -16,14 +21,45 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
       - name: Validate version
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-      - name: Create release
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || {
+            echo "version must match vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N" >&2
+            exit 1
+          }
+
+      - name: Check gates passed for the release commit
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
-        run: gh release create "$VERSION" --generate-notes
+        run: |
+          # Refuse to tag a commit whose other workflow runs did not succeed.
+          # This run is excluded because it is still in progress.
+          conclusion="$(
+            gh run list --commit "$GITHUB_SHA" \
+              --json databaseId,conclusion \
+              --jq '[.[] | select(.databaseId != '"$GITHUB_RUN_ID"' and .conclusion != null)][0].conclusion // "none"'
+          )"
+          if [[ "$conclusion" != "success" ]]; then
+            echo "Refusing to release: latest completed run for $GITHUB_SHA concluded '$conclusion'" >&2
+            exit 1
+          fi
+
+      - name: Create release candidate or release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          prerelease_args=()
+          if [[ "$VERSION" == *-rc.* ]]; then
+            prerelease_args=(--prerelease)
+          fi
+          gh release create "$VERSION" "${prerelease_args[@]}" \
+            --generate-notes \
+            --title "$VERSION"

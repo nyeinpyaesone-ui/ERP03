@@ -1,0 +1,144 @@
+name: Deploy Staging
+
+# Builds are promoted, not rebuilt: the image tag produced by the Container
+# workflow for this exact commit is resolved to its digest and pinned into the
+# staging overlay before applying it.
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Commit SHA or tag to promote; defaults to the triggering commit"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: staging
+    timeout-minutes: 30
+    env:
+      NAMESPACE: erp03-staging
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Resolve promotion target
+        id: target
+        env:
+          REPOSITORY: ${{ github.repository }}
+          INPUT_TAG: ${{ inputs.image_tag }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          tag="${INPUT_TAG:-$COMMIT_SHA}"
+          registry_prefix="ghcr.io/$(printf '%s' "$REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "backend_image=${registry_prefix}-backend" >> "$GITHUB_OUTPUT"
+          echo "frontend_image=${registry_prefix}-frontend" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve immutable digests
+        id: digests
+        env:
+          BACKEND_IMAGE: ${{ steps.target.outputs.backend_image }}
+          FRONTEND_IMAGE: ${{ steps.target.outputs.frontend_image }}
+          TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          printf '%s' "${{ secrets.GITHUB_TOKEN }}" | \
+            docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+          backend_digest="$(docker buildx imagetools inspect "${BACKEND_IMAGE}:${TAG}" --format '{{.Manifest.Digest}}')"
+          frontend_digest="$(docker buildx imagetools inspect "${FRONTEND_IMAGE}:${TAG}" --format '{{.Manifest.Digest}}')"
+          echo "backend=${backend_digest}" >> "$GITHUB_OUTPUT"
+          echo "frontend=${frontend_digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Install kustomize
+        run: |
+          KUSTOMIZE_VERSION="v5.7.1"
+          curl -sSLo /tmp/kustomize.tar.gz \
+            "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          sudo tar -xzf /tmp/kustomize.tar.gz -C /usr/local/bin kustomize
+
+      - name: Pin digests into the staging overlay
+        env:
+          BACKEND_DIGEST: ${{ steps.digests.outputs.backend }}
+          FRONTEND_DIGEST: ${{ steps.digests.outputs.frontend }}
+        run: |
+          cd infra/kubernetes/overlays/staging
+          kustomize edit set image \
+            "${{ steps.target.outputs.backend_image }}@${BACKEND_DIGEST}" \
+            "${{ steps.target.outputs.frontend_image }}@${FRONTEND_DIGEST}"
+          kustomize build . > /tmp/erp03-staging.yaml
+          grep -A1 "name: erp03-backend$" /tmp/erp03-staging.yaml | grep image:
+
+      - name: Configure kubectl
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_STAGING }}
+        run: |
+          if [[ -z "$KUBE_CONFIG" ]]; then
+            echo "KUBE_CONFIG_STAGING secret is not configured" >&2
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          printf '%s' "$KUBE_CONFIG" | base64 --decode > "$HOME/.kube/config"
+          kubectl cluster-info
+
+      - name: Apply migrations
+        env:
+          BACKEND_IMAGE: ${{ steps.target.outputs.backend_image }}
+          TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          kubectl -n "$NAMESPACE" apply -f infra/kubernetes/base/configmap.yaml --dry-run=client -o name >/dev/null
+          kubectl -n "$NAMESPACE" run "erp03-migrate-${GITHUB_RUN_ID}" \
+            --rm -i --restart=Never \
+            --labels "app=erp03-migrate" \
+            --image="${BACKEND_IMAGE}:${TAG}" \
+            --env-from=configmap/erp03-runtime \
+            --env-from=secret/erp03-secrets \
+            --command -- alembic upgrade head
+
+      - name: Apply staging overlay
+        run: kubectl apply -k infra/kubernetes/overlays/staging
+
+      - name: Wait for rollout
+        run: |
+          kubectl -n "$NAMESPACE" rollout status deployment/erp03-backend --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deployment/erp03-frontend --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status statefulset/erp03-postgres --timeout=300s
+
+      - name: Smoke test
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          kubectl -n "$NAMESPACE" run "erp03-smoke-${RUN_ID}" \
+            --rm -i --restart=Never \
+            --labels "app=erp03-smoke" \
+            --image=curlimages/curl:8.12.1 -- \
+            sh -c 'set -e
+              curl -fsS http://erp03-backend:8000/api/v1/healthz
+              echo
+              curl -fsS http://erp03-backend:8000/api/v1/readyz
+              echo
+              curl -fsS http://erp03-backend:8000/metrics >/dev/null
+              curl -fsSI https://staging.erp.example.invalid/ -k >/dev/null'
+
+      - name: Record promotion evidence
+        env:
+          TAG: ${{ steps.target.outputs.tag }}
+          BACKEND_DIGEST: ${{ steps.digests.outputs.backend }}
+          FRONTEND_DIGEST: ${{ steps.digests.outputs.frontend }}
+        run: |
+          {
+            echo "## Staging promotion"
+            echo "- commit/tag: \`${TAG}\`"
+            echo "- backend digest: \`${BACKEND_DIGEST}\`"
+            echo "- frontend digest: \`${FRONTEND_DIGEST}\`"
+            echo "- namespace: \`${NAMESPACE}\`"
+            echo "- smoke test: passed"
+          } >> "$GITHUB_STEP_SUMMARY"

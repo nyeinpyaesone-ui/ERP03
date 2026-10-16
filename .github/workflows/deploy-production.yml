@@ -1,0 +1,170 @@
+name: Deploy Production
+
+# Production promotion is manual, gated by the protected `production`
+# environment, and only ever re-tags an already-validated build — it never
+# rebuilds. Pass the exact commit SHA that passed staging qualification.
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Staging-validated commit SHA or release tag to promote"
+        required: true
+        type: string
+      migration_note:
+        description: "Reason and evidence link for this promotion"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Verify the candidate build passed its gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.image_tag }}
+        run: |
+          sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG}" --jq .sha)"
+          echo "resolved_sha=${sha}" >> "$GITHUB_OUTPUT"
+          conclusion="$(
+            gh run list --commit "$sha" \
+              --json conclusion \
+              --jq '[.[] | select(.conclusion != null)][0].conclusion // "none"'
+          )"
+          if [[ "$conclusion" != "success" ]]; then
+            echo "Refusing to promote ${sha}: latest completed run concluded '${conclusion}'" >&2
+            exit 1
+          fi
+          echo "Candidate ${sha} passed its gates."
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 40
+    env:
+      NAMESPACE: erp03-production
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Resolve immutable digests
+        id: digests
+        env:
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ inputs.image_tag }}
+        run: |
+          registry_prefix="ghcr.io/$(printf '%s' "$REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          printf '%s' "${{ secrets.GITHUB_TOKEN }}" | \
+            docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+          backend_digest="$(docker buildx imagetools inspect "${registry_prefix}-backend:${TAG}" --format '{{.Manifest.Digest}}')"
+          frontend_digest="$(docker buildx imagetools inspect "${registry_prefix}-frontend:${TAG}" --format '{{.Manifest.Digest}}')"
+          echo "backend=${backend_digest}" >> "$GITHUB_OUTPUT"
+          echo "frontend=${frontend_digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Install kustomize
+        run: |
+          KUSTOMIZE_VERSION="v5.7.1"
+          curl -sSLo /tmp/kustomize.tar.gz \
+            "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          sudo tar -xzf /tmp/kustomize.tar.gz -C /usr/local/bin kustomize
+
+      - name: Pin digests into the production overlay
+        env:
+          REPOSITORY: ${{ github.repository }}
+          BACKEND_DIGEST: ${{ steps.digests.outputs.backend }}
+          FRONTEND_DIGEST: ${{ steps.digests.outputs.frontend }}
+        run: |
+          registry_prefix="ghcr.io/$(printf '%s' "$REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          cd infra/kubernetes/overlays/production
+          kustomize edit set image \
+            "${registry_prefix}-backend@${BACKEND_DIGEST}" \
+            "${registry_prefix}-frontend@${FRONTEND_DIGEST}"
+          kustomize build . > /tmp/erp03-production.yaml
+
+      - name: Configure kubectl
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_PRODUCTION }}
+        run: |
+          if [[ -z "$KUBE_CONFIG" ]]; then
+            echo "KUBE_CONFIG_PRODUCTION secret is not configured" >&2
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          printf '%s' "$KUBE_CONFIG" | base64 --decode > "$HOME/.kube/config"
+          kubectl cluster-info
+
+      - name: Verify pre-rollout health of the current release
+        run: |
+          # Do not roll out over an unhealthy deployment: record state first so
+          # the operator can decide with evidence.
+          kubectl -n "$NAMESPACE" get deployments,statefulsets -o wide | tee /tmp/pre-rollout-state.txt
+          kubectl -n "$NAMESPACE" run "erp03-prerollcheck-${GITHUB_RUN_ID}" \
+            --rm -i --restart=Never \
+            --labels "app=erp03-smoke" \
+            --image=curlimages/curl:8.12.1 -- \
+            sh -c 'curl -fsS -o /dev/null -w "current_healthz=%{http_code}\n" http://erp03-backend:8000/api/v1/healthz' || {
+              echo "Current release is unhealthy; inspect before promoting." >&2
+              exit 1
+            }
+
+      - name: Apply migrations
+        env:
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ inputs.image_tag }}
+        run: |
+          registry_prefix="ghcr.io/$(printf '%s' "$REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          kubectl -n "$NAMESPACE" run "erp03-migrate-${GITHUB_RUN_ID}" \
+            --rm -i --restart=Never \
+            --labels "app=erp03-migrate" \
+            --image="${registry_prefix}-backend:${TAG}" \
+            --env-from=configmap/erp03-runtime \
+            --env-from=secret/erp03-secrets \
+            --command -- alembic upgrade head
+
+      - name: Apply production overlay
+        run: kubectl apply -k infra/kubernetes/overlays/production
+
+      - name: Wait for rollout
+        run: |
+          kubectl -n "$NAMESPACE" rollout status deployment/erp03-backend --timeout=600s
+          kubectl -n "$NAMESPACE" rollout status deployment/erp03-frontend --timeout=600s
+
+      - name: Smoke test
+        run: |
+          kubectl -n "$NAMESPACE" run "erp03-smoke-${GITHUB_RUN_ID}" \
+            --rm -i --restart=Never \
+            --labels "app=erp03-smoke" \
+            --image=curlimages/curl:8.12.1 -- \
+            sh -c 'set -e
+              curl -fsS http://erp03-backend:8000/api/v1/healthz
+              echo
+              curl -fsS http://erp03-backend:8000/api/v1/readyz
+              echo
+              curl -fsSI https://erp.example.invalid/ -k >/dev/null'
+
+      - name: Record promotion evidence
+        env:
+          TAG: ${{ inputs.image_tag }}
+          NOTE: ${{ inputs.migration_note }}
+          BACKEND_DIGEST: ${{ steps.digests.outputs.backend }}
+          FRONTEND_DIGEST: ${{ steps.digests.outputs.frontend }}
+        run: |
+          {
+            echo "## Production promotion"
+            echo "- candidate: \`${TAG}\`"
+            echo "- backend digest: \`${BACKEND_DIGEST}\`"
+            echo "- frontend digest: \`${FRONTEND_DIGEST}\`"
+            echo "- namespace: \`${NAMESPACE}\`"
+            echo "- note: ${NOTE}"
+            echo "- operator: \`${{ github.actor }}\`"
+            echo "- smoke test: passed"
+          } >> "$GITHUB_STEP_SUMMARY"
