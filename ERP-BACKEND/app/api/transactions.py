@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.config import settings
+from app.core.security import current_claims
 from app.core.transaction_store import TransactionStore
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -38,8 +39,13 @@ class TransactionResponse(BaseModel):
 def create_transaction(
     payload: TransactionRequest,
     x_idempotency_key: str | None = Header(default=None),
+    claims: dict = Depends(current_claims),
 ) -> TransactionResponse:
     """Record a transaction or return the original for a reused idempotency key.
+
+    The idempotency key is scoped to the authenticated business so two tenants
+    cannot collide on the same key; unauthenticated callers receive HTTP 401
+    from the ``current_claims`` dependency.
 
     Round the amount to two decimal places using the current decimal context
     before looking up the key; even a positive amount can round to zero.

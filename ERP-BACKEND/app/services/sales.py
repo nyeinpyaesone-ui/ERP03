@@ -42,6 +42,33 @@ class SaleResult:
     balance: Decimal
 
 
+def _line_total(price: Decimal, line: SaleLine) -> Decimal:
+    """Validate one line against its unit price and return its payable total.
+
+    Shared by the pre-transaction total check and the in-transaction
+    calculation so both apply identical discount, tax and price validation.
+    """
+    if price < 0:
+        raise SaleValidationError("Unit price cannot be negative")
+    line_subtotal = price * line.quantity
+    line_total = line_subtotal - line.discount + line.tax
+    if line.discount > line_subtotal or line_total < 0:
+        raise SaleValidationError("Invalid line discount/tax")
+    return line_total
+
+
+def _precomputed_total(lines: list[SaleLine]) -> Decimal | None:
+    """Invoice total when every line carries an explicit price, otherwise None.
+
+    When prices are explicit the total is pure input, so overpayment can be
+    rejected before a database transaction is opened. Lines priced from the
+    product catalogue return None and are re-checked inside the transaction.
+    """
+    if any(line.unit_price is None for line in lines):
+        return None
+    return sum((_line_total(line.unit_price, line) for line in lines), Decimal("0"))
+
+
 async def create_pos_sale(
     session: AsyncSession,
     *,
@@ -71,47 +98,60 @@ async def create_pos_sale(
     if any(payment.currency.upper() != currency.upper() for payment in payments):
         raise SaleValidationError("Payment currency must match invoice currency")
 
+    paid = sum((payment.amount for payment in payments), Decimal("0"))
+    precomputed_total = _precomputed_total(lines)
+    if precomputed_total is not None and paid > precomputed_total:
+        raise SaleValidationError("Overpayment is not allowed")
+
     async with session.begin():
         branch = await session.scalar(
-            select(Branch).where(
+            select(Branch)
+            .where(
                 Branch.id == branch_id,
                 Branch.business_id == business_id,
                 Branch.active.is_(True),
-            ).with_for_update()
+            )
+            .with_for_update()
         )
         if branch is None:
             raise SaleValidationError("Branch is not valid for this business")
 
         warehouse = await session.scalar(
-            select(Warehouse).where(
+            select(Warehouse)
+            .where(
                 Warehouse.id == warehouse_id,
                 Warehouse.branch_id == branch_id,
                 Warehouse.active.is_(True),
-            ).with_for_update()
+            )
+            .with_for_update()
         )
         if warehouse is None:
             raise SaleValidationError("Warehouse is not valid for this branch")
 
         if customer_id is not None:
             customer = await session.scalar(
-                select(Customer).where(
+                select(Customer)
+                .where(
                     Customer.id == customer_id,
                     Customer.business_id == business_id,
                     Customer.branch_id == branch_id,
                     Customer.active.is_(True),
-                ).with_for_update()
+                )
+                .with_for_update()
             )
             if customer is None:
                 raise SaleValidationError("Customer is not valid for this branch")
 
         product_ids = sorted({line.product_id for line in lines}, key=str)
         products_result = await session.execute(
-            select(Product).where(
+            select(Product)
+            .where(
                 Product.id.in_(product_ids),
                 Product.business_id == business_id,
                 Product.branch_id == branch_id,
                 Product.active.is_(True),
-            ).with_for_update()
+            )
+            .with_for_update()
         )
         products = {product.id: product for product in products_result.scalars().all()}
         if len(products) != len(product_ids):
@@ -124,32 +164,33 @@ async def create_pos_sale(
         for line in lines:
             product = products[line.product_id]
             price = product.sale_price if line.unit_price is None else line.unit_price
-            if price < 0:
-                raise SaleValidationError("Unit price cannot be negative")
-            line_subtotal = price * line.quantity
-            line_total = line_subtotal - line.discount + line.tax
-            if line.discount > line_subtotal or line_total < 0:
-                raise SaleValidationError("Invalid line discount/tax")
-            subtotal += line_subtotal
+            line_total = _line_total(price, line)
+            subtotal += price * line.quantity
             discount_total += line.discount
             tax_total += line.tax
             prepared.append((line, price, line_total))
 
         total = subtotal - discount_total + tax_total
-        paid = sum((payment.amount for payment in payments), Decimal("0"))
         if paid > total:
             raise SaleValidationError("Overpayment is not allowed")
 
         if idempotency_key is not None:
             existing = await session.scalar(
-                select(Invoice).where(
+                select(Invoice)
+                .where(
                     Invoice.business_id == business_id,
                     Invoice.branch_id == branch_id,
                     Invoice.idempotency_key == idempotency_key,
-                ).with_for_update()
+                )
+                .with_for_update()
             )
             if existing is not None:
-                return SaleResult(invoice_id=existing.id, total=existing.total, paid=existing.paid, balance=existing.total - existing.paid)
+                return SaleResult(
+                    invoice_id=existing.id,
+                    total=existing.total,
+                    paid=existing.paid,
+                    balance=existing.total - existing.paid,
+                )
 
         invoice = Invoice(
             business_id=business_id,
@@ -179,20 +220,27 @@ async def create_pos_sale(
                     )
                 )
                 if existing is not None:
-                    return SaleResult(invoice_id=existing.id, total=existing.total, paid=existing.paid, balance=existing.total - existing.paid)
+                    return SaleResult(
+                        invoice_id=existing.id,
+                        total=existing.total,
+                        paid=existing.paid,
+                        balance=existing.total - existing.paid,
+                    )
             raise
 
         prepared.sort(key=lambda item: str(item[0].product_id))
         for line, price, line_total in prepared:
-            session.add(InvoiceItem(
-                invoice_id=invoice.id,
-                product_id=line.product_id,
-                quantity=line.quantity,
-                unit_price=price,
-                discount=line.discount,
-                tax=line.tax,
-                line_total=line_total,
-            ))
+            session.add(
+                InvoiceItem(
+                    invoice_id=invoice.id,
+                    product_id=line.product_id,
+                    quantity=line.quantity,
+                    unit_price=price,
+                    discount=line.discount,
+                    tax=line.tax,
+                    line_total=line_total,
+                )
+            )
             await adjust_stock(
                 session,
                 warehouse_id=warehouse_id,
@@ -205,15 +253,17 @@ async def create_pos_sale(
             )
 
         for payment in payments:
-            session.add(Payment(
-                business_id=business_id,
-                branch_id=branch_id,
-                invoice_id=invoice.id,
-                method=payment.method,
-                currency=payment.currency.upper(),
-                amount=payment.amount,
-                reference=payment.reference,
-            ))
+            session.add(
+                Payment(
+                    business_id=business_id,
+                    branch_id=branch_id,
+                    invoice_id=invoice.id,
+                    method=payment.method,
+                    currency=payment.currency.upper(),
+                    amount=payment.amount,
+                    reference=payment.reference,
+                )
+            )
 
         return SaleResult(
             invoice_id=invoice.id,
