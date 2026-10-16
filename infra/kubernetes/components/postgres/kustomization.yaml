@@ -1,0 +1,13 @@
+# Stateful data tier used by dev and staging.
+#
+# Production uses a managed database supplied by the operator's provider
+# (see infra/terraform/modules/database); this component exists so lower
+# environments can run the full stack with real persistence.
+#
+# Requires the `erp03-secrets` Secret — see base/secret.example.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - pvc.yaml
+  - statefulset.yaml
+  - service.yaml

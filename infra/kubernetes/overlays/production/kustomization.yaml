@@ -1,0 +1,38 @@
+# production — the release target. Image digests are set by the promotion
+# workflow (kustomize edit set image) so only the validated build runs.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: erp03-production
+
+resources:
+  - ../../base
+  - ../../components/redis
+
+images:
+  - name: ghcr.io/nyeinpyaesone-ui/erp03-backend
+    newTag: main
+  - name: ghcr.io/nyeinpyaesone-ui/erp03-frontend
+    newTag: main
+
+patches:
+  - target:
+      kind: Namespace
+      name: erp03
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: erp03-production
+  - target:
+      kind: Deployment
+      name: erp03-backend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: ConfigMap
+      name: erp03-runtime
+    patch: |-
+      - op: replace
+        path: /data/CORS_ORIGINS
+        value: https://erp.example.invalid

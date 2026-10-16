@@ -15,18 +15,21 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: ghcr.io/nyeinpyaesone-ui/erp03-frontend@sha256:REPLACE_WITH_REAL_DIGEST
+          image: ghcr.io/nyeinpyaesone-ui/erp03-frontend:main
           ports:
-            - containerPort: 80
+            - containerPort: 8080
+          env:
+            - name: BACKEND_UPSTREAM
+              value: http://erp03-backend:8000
           readinessProbe:
             httpGet:
-              path: /
-              port: 80
+              path: /healthz
+              port: 8080
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /
-              port: 80
+              path: /healthz
+              port: 8080
             periodSeconds: 20
           resources:
             requests:

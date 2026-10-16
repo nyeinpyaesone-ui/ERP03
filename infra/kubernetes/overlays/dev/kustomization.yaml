@@ -1,0 +1,58 @@
+# dev — single replica per tier, in-cluster data tier, local-style origins.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: erp03-dev
+
+resources:
+  - ../../base
+  - ../../components/postgres
+  - ../../components/redis
+
+images:
+  - name: ghcr.io/nyeinpyaesone-ui/erp03-backend
+    newTag: dev
+  - name: ghcr.io/nyeinpyaesone-ui/erp03-frontend
+    newTag: dev
+
+patches:
+  - target:
+      kind: Namespace
+      name: erp03
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: erp03-dev
+  - target:
+      kind: Deployment
+      name: erp03-backend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: Deployment
+      name: erp03-frontend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: ConfigMap
+      name: erp03-runtime
+    patch: |-
+      - op: replace
+        path: /data/ENVIRONMENT
+        value: development
+      - op: replace
+        path: /data/CORS_ORIGINS
+        value: http://localhost:3000,http://localhost:5173
+  - target:
+      kind: Ingress
+      name: erp03
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: dev.erp.example.invalid
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: dev.erp.example.invalid

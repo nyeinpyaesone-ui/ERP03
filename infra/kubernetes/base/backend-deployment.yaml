@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ghcr.io/nyeinpyaesone-ui/erp03-backend@sha256:REPLACE_WITH_REAL_DIGEST
+          image: ghcr.io/nyeinpyaesone-ui/erp03-backend:main
           ports:
             - containerPort: 8000
           envFrom:

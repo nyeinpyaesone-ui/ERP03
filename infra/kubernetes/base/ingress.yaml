@@ -1,0 +1,35 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: erp03
+  namespace: erp03
+  annotations:
+    # TLS is mandatory for external traffic; the certificate secret is supplied
+    # by the operator's certificate manager or secret manager.
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - erp.example.invalid
+      secretName: erp03-tls
+  rules:
+    - host: erp.example.invalid
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: erp03-backend
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: erp03-frontend
+                port:
+                  number: 80

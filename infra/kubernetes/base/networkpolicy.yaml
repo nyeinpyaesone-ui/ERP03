@@ -1,0 +1,215 @@
+# Default-deny ingress with explicit allow-list.
+#
+# Only the ingress controller and in-cluster callers may reach the workloads.
+# Egress is restricted to DNS plus the data tier; add explicit rules when a new
+# dependency is introduced rather than opening the policy broadly.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: erp03-backend-allow
+  namespace: erp03
+spec:
+  podSelector:
+    matchLabels:
+      app: erp03-backend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+        - podSelector:
+            matchLabels:
+              app: erp03-frontend
+        - podSelector:
+            matchLabels:
+              app: erp03-smoke
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app: erp03-postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app: erp03-redis
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: erp03-frontend-allow
+  namespace: erp03
+spec:
+  podSelector:
+    matchLabels:
+      app: erp03-frontend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # nginx serves /api/ by proxying to the backend service
+    - to:
+        - podSelector:
+            matchLabels:
+              app: erp03-backend
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: erp03-redis-allow
+  namespace: erp03
+spec:
+  podSelector:
+    matchLabels:
+      app: erp03-redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: erp03-backend
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: erp03-postgres-deny
+  namespace: erp03
+spec:
+  podSelector:
+    matchLabels:
+      app: erp03-postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: erp03-backend
+        - podSelector:
+            matchLabels:
+              app: erp03-migrate
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# Short-lived verification pods created by the deploy and rollback workflows.
+# They may reach the API and the ingress host, and nothing else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: erp03-smoke-allow
+  namespace: erp03
+spec:
+  podSelector:
+    matchLabels:
+      app: erp03-smoke
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app: erp03-backend
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+---
+# Migration pods run Alembic before a rollout; they only need DNS and the
+# database.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: erp03-migrate-allow
+  namespace: erp03
+spec:
+  podSelector:
+    matchLabels:
+      app: erp03-migrate
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app: erp03-postgres
+      ports:
+        - protocol: TCP
+          port: 5432

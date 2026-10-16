@@ -1,0 +1,83 @@
+# Cache tier used by dev and staging. Production may substitute a managed
+# cache; the service name stays erp03-redis so application configuration is
+# identical across environments.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: erp03-redis-data
+  namespace: erp03
+  labels:
+    app: erp03-redis
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: erp03-redis
+  namespace: erp03
+  labels:
+    app: erp03-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: erp03-redis
+  template:
+    metadata:
+      labels:
+        app: erp03-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.2.11
+          command: ["redis-server", "--appendonly", "yes"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 512Mi
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: erp03-redis-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: erp03-redis
+  namespace: erp03
+  labels:
+    app: erp03-redis
+spec:
+  type: ClusterIP
+  selector:
+    app: erp03-redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
