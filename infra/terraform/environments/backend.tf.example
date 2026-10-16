@@ -1,0 +1,35 @@
+# Remote state contract — copy to backend.tf and complete for your state service.
+#
+# Remote state is mandatory for every environment: local state cannot be shared,
+# locked, or audited. Choose ONE backend below, uncomment it, and supply the
+# partial configuration at init time:
+#
+#   terraform init -backend-config=backend.hcl
+#
+# backend.hcl must never be committed with credentials. Store state access
+# material in your secret manager and enable state encryption and locking.
+#
+# Variant A — object storage with a locking table (operator supplies bucket and
+# lock identifiers):
+#
+# terraform {
+#   backend "s3" {
+#     encrypt = true
+#   }
+# }
+#
+# Variant B — HTTP state service (Terraform Cloud, or any compatible HTTP state
+# endpoint), token supplied via TF_TOKEN:
+#
+# terraform {
+#   backend "http" {
+#     address = "https://state.example.invalid/erp03/ENVIRONMENT"
+#   }
+# }
+#
+# Example backend.hcl (keep out of version control if it names internal systems):
+#
+#   key     = "erp03/ENVIRONMENT/terraform.tfstate"
+#   region  = "eu-west-1"
+#   bucket  = "erp03-terraform-state"
+#   encrypt = true
