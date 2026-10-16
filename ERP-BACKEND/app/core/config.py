@@ -3,8 +3,11 @@ from functools import lru_cache
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="ignore", case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_file=".env", env_prefix="", extra="ignore", case_sensitive=False
+    )
     secret_key: SecretStr = SecretStr("development-only-change-me")
     app_name: str = "ERP03 API"
     version: str = "1.0.0"
@@ -36,9 +39,18 @@ class Settings(BaseSettings):
     def validate_production_security(self) -> "Settings":
         if self.environment.lower() in {"production", "prod"}:
             secret = self.secret_key.get_secret_value()
-            if secret in {"", "development-only-change-me", "change-me-in-production"} or len(secret) < 32:
-                raise ValueError("SECRET_KEY must be explicitly configured with at least 32 characters in production")
-            if any(origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1") for origin in self.cors_origin_list):
+            if (
+                secret in {"", "development-only-change-me", "change-me-in-production"}
+                or len(secret) < 32
+            ):
+                raise ValueError(
+                    "SECRET_KEY must be explicitly configured with at least "
+                    "32 characters in production"
+                )
+            if any(
+                origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1")
+                for origin in self.cors_origin_list
+            ):
                 raise ValueError("Production CORS_ORIGINS must not contain localhost/127.0.0.1")
         return self
 
@@ -54,8 +66,10 @@ class Settings(BaseSettings):
     def effective_celery_result_backend(self) -> str:
         return self.celery_result_backend or self.redis_url
 
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
+
 
 settings = get_settings()

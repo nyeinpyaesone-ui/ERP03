@@ -1,5 +1,3 @@
-import pytest
-
 from app.services.bootstrap import BootstrapConflictError
 
 

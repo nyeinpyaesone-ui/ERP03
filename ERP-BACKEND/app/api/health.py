@@ -31,9 +31,21 @@ async def readyz() -> JSONResponse:
         )
 
     if revision is None:
-        return JSONResponse(status_code=503, content={"status": "not_ready", "service": "erp03-api", "dependency": "database_schema"})
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "service": "erp03-api",
+                "dependency": "database_schema",
+            },
+        )
 
     return JSONResponse(
         status_code=200,
-        content={"status": "ready", "service": "erp03-api", "schema_revision": revision, "ai_dependency": "optional"},
+        content={
+            "status": "ready",
+            "service": "erp03-api",
+            "schema_revision": revision,
+            "ai_dependency": "optional",
+        },
     )

@@ -1,5 +1,5 @@
-from app.db.base import Base
 import app.models  # noqa: F401
+from app.db.base import Base
 
 
 def test_identity_metadata_is_registered() -> None:

@@ -4,7 +4,7 @@ The service owns stock mutations so POS and inventory workflows can share one
 transaction boundary. Callers must commit or roll back the supplied session.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -49,7 +49,7 @@ async def adjust_stock(
             warehouse_id=warehouse_id,
             product_id=product_id,
             quantity=Decimal("0"),
-            updated_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(UTC),
         )
         session.add(balance)
         await session.flush()
@@ -59,7 +59,7 @@ async def adjust_stock(
         raise InsufficientStockError("Insufficient stock")
 
     balance.quantity = new_quantity
-    balance.updated_at = datetime.now(timezone.utc)
+    balance.updated_at = datetime.now(UTC)
     session.add(
         StockMovement(
             warehouse_id=warehouse_id,
@@ -69,7 +69,7 @@ async def adjust_stock(
             unit_cost=unit_cost,
             reference_type=reference_type,
             reference_id=reference_id,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
     )
     return balance

@@ -49,10 +49,15 @@ async def create_sale(
         business_id = UUID(claims["business_id"])
         claim_branch = claims.get("branch_id")
         if claim_branch and claim_branch != str(payload.branch_id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Branch access denied")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Branch access denied"
+            )
 
         if not x_idempotency_key or len(x_idempotency_key) > 255:
-            raise HTTPException(status_code=400, detail="X-Idempotency-Key is required and must be <= 255 characters")
+            raise HTTPException(
+                status_code=400,
+                detail="X-Idempotency-Key is required and must be <= 255 characters",
+            )
 
         result = await create_pos_sale(
             session,
@@ -70,7 +75,9 @@ async def create_sale(
         raise
     except IntegrityError as exc:
         await session.rollback()
-        raise HTTPException(status_code=409, detail="Invoice number already exists for this branch") from exc
+        raise HTTPException(
+            status_code=409, detail="Invoice number already exists for this branch"
+        ) from exc
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {

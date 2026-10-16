@@ -1,0 +1,17 @@
+# Keep the backend build context minimal and reproducible.
+.git
+.github
+.venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.env
+.env.*
+!.env.example
+*.tfstate*
+.terraform
+node_modules
+docs
+infra
+frontend
+README.md

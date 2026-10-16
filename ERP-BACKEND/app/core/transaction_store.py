@@ -1,8 +1,9 @@
+import contextlib
 import json
 import sqlite3
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -116,7 +117,7 @@ class TransactionStore:
                         amount,
                         currency,
                         json.dumps(metadata, sort_keys=True, separators=(",", ":")),
-                        datetime.now(timezone.utc).isoformat(),
+                        datetime.now(UTC).isoformat(),
                     ),
                 )
                 connection.execute("COMMIT")
@@ -128,10 +129,8 @@ class TransactionStore:
                     raise RuntimeError("Transaction committed but could not be reloaded")
                 return self._result(row, replay=False)
             except Exception:
-                try:
+                with contextlib.suppress(sqlite3.Error):
                     connection.execute("ROLLBACK")
-                except sqlite3.Error:
-                    pass
                 raise
             finally:
                 connection.close()

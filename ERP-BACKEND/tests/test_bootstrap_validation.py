@@ -1,5 +1,4 @@
 import pytest
-
 from app.services.bootstrap import _required
 
 

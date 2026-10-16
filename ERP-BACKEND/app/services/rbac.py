@@ -5,8 +5,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.identity import Permission, Role, User, role_permissions, user_roles
-
+from app.models.identity import Permission, Role, User, user_roles
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
     "Owner": ("sales.create",),
@@ -22,9 +21,11 @@ async def ensure_default_roles(session: AsyncSession, *, business_id: UUID) -> l
     """
     permissions = (
         await session.scalars(
-            select(Permission).where(Permission.code.in_(
-                {code for codes in DEFAULT_ROLE_PERMISSIONS.values() for code in codes}
-            ))
+            select(Permission).where(
+                Permission.code.in_(
+                    {code for codes in DEFAULT_ROLE_PERMISSIONS.values() for code in codes}
+                )
+            )
         )
     ).all()
     permission_by_code = {item.code: item for item in permissions}
@@ -59,9 +60,13 @@ async def assign_role(
 ) -> None:
     """Assign a role only when both user and role belong to the same business."""
     user = await session.scalar(
-        select(User).where(User.id == user_id, User.business_id == business_id, User.active.is_(True))
+        select(User).where(
+            User.id == user_id, User.business_id == business_id, User.active.is_(True)
+        )
     )
-    role = await session.scalar(select(Role).where(Role.id == role_id, Role.business_id == business_id))
+    role = await session.scalar(
+        select(Role).where(Role.id == role_id, Role.business_id == business_id)
+    )
     if user is None or role is None:
         raise ValueError("User and role must belong to the same active business")
 

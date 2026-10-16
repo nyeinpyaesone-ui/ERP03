@@ -64,9 +64,7 @@ async def bootstrap_business(
     # concurrent callers deterministic instead of racing on the pre-check.
     await session.execute(select(func.pg_advisory_xact_lock(func.hashtext(business_code))))
 
-    existing = await session.scalar(
-        select(Business).where(Business.code == business_code)
-    )
+    existing = await session.scalar(select(Business).where(Business.code == business_code))
     if existing is not None:
         raise BootstrapConflictError("Business code already exists")
 
