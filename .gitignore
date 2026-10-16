@@ -1,6 +1,9 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
 .venv/
 .env
 .env.*
@@ -11,3 +14,13 @@ frontend/dist/
 .vscode/
 .idea/
 .DS_Store
+
+# Terraform: never commit local state, plugin caches or lock secrets.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+override.tf
+override.tf.json
