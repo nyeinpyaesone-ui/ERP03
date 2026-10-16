@@ -1,0 +1,115 @@
+# ERP03 alert rules.
+#
+# Thresholds mirror infra/terraform/modules/monitoring defaults and are
+# overridden per environment by the operator. Every alert names the runbook to
+# follow: docs/INCIDENT_RESPONSE_RUNBOOK.md unless stated otherwise.
+groups:
+  - name: erp03-availability
+    rules:
+      - alert: Erp03ApiDown
+        expr: up{job="erp03-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend scrape target down in {{ $labels.environment }}"
+          description: "Prometheus has not been able to scrape {{ $labels.instance }} for two minutes."
+          runbook: "docs/INCIDENT_RESPONSE_RUNBOOK.md"
+
+      - alert: Erp03ReadinessFailing
+        expr: probe_success{job="erp03-readyz"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Readiness failing in {{ $labels.environment }}"
+          description: "The API is up but reports a transactional dependency as unready."
+
+  - name: erp03-errors
+    rules:
+      - alert: Erp03HighErrorRate
+        expr: |
+          sum by (environment) (rate(erp03_http_requests_total{status=~"5.."}[5m]))
+          /
+          sum by (environment) (rate(erp03_http_requests_total[5m]))
+          > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "5xx ratio above 1% in {{ $labels.environment }}"
+          description: "Server error ratio has exceeded the production threshold for five minutes."
+
+      - alert: Erp03ElevatedClientErrors
+        expr: |
+          sum by (environment) (rate(erp03_http_requests_total{status=~"4.."}[10m]))
+          >
+          5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sustained 4xx volume in {{ $labels.environment }}"
+          description: "Check authentication, idempotency key handling and client regressions."
+
+  - name: erp03-latency
+    rules:
+      - alert: Erp03HighLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, environment) (rate(erp03_http_request_duration_seconds_bucket[5m]))
+          ) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 latency above 800ms in {{ $labels.environment }}"
+          description: "Latency SLO breach; correlate with saturation and database health."
+
+  - name: erp03-saturation
+    rules:
+      - alert: Erp03BackendCpuSaturation
+        expr: |
+          sum by (environment) (
+            rate(container_cpu_usage_seconds_total{container="backend",namespace=~"erp03-.*"}[5m])
+          )
+          /
+          sum by (environment) (
+            kube_pod_container_resource_limits{resource="cpu",container="backend",namespace=~"erp03-.*"}
+          ) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backend CPU saturation in {{ $labels.environment }}"
+          description: "CPU is above 80% of the configured limit for ten minutes."
+
+      - alert: Erp03BackendMemoryNearLimit
+        expr: |
+          sum by (environment) (
+            container_memory_working_set_bytes{container="backend",namespace=~"erp03-.*"}
+          )
+          /
+          sum by (environment) (
+            kube_pod_container_resource_limits{resource="memory",container="backend",namespace=~"erp03-.*"}
+          ) > 0.9
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend memory within 10% of limit in {{ $labels.environment }}"
+          description: "An out-of-memory kill is imminent; roll back or scale out."
+
+  - name: erp03-database
+    rules:
+      - alert: Erp03DatabaseConnectionsHigh
+        expr: |
+          sum by (environment) (pg_stat_activity_count{datname="erp03"})
+          >
+          0.8 * sum by (environment) (pg_settings_max_connections)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL connection pool near saturation"
+          description: "Connections exceed 80% of the configured maximum."

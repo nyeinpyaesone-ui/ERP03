@@ -1,0 +1,44 @@
+# Prometheus scrape configuration for ERP03.
+#
+# The backend exposes GET /metrics (Prometheus format) on port 8000, and the
+# NetworkPolicies already allow the `monitoring` namespace to reach it.
+# Scrape targets are discovered per environment namespace so dev, staging and
+# production never mix in the same series without a distinguishing label.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    system: erp03
+
+rule_files:
+  - alerts.yml
+
+scrape_configs:
+  - job_name: erp03-backend
+    metrics_path: /metrics
+    kubernetes_sd_configs:
+      - namespaces:
+          names: [erp03-dev, erp03-staging, erp03-production]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: environment
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        target_label: app
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: instance
+
+  - job_name: erp03-kube-state
+    kubernetes_sd_configs:
+      - namespaces:
+          names: [erp03-dev, erp03-staging, erp03-production]
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: environment
+
+  - job_name: erp03-node
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - target_label: environment
+        replacement: infrastructure
