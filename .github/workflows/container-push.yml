@@ -1,0 +1,122 @@
+name: Container Push
+
+# On-demand registry push of the backend and frontend images built from the
+# triggering branch. Complements the `Container` workflow, which pushes to
+# GHCR only on `main`.
+#
+# Registry setup:
+#   ghcr      : no setup. GHCR is accessed with the built-in GITHUB_TOKEN.
+#   dockerhub : set the repository secrets DOCKERHUB_USERNAME and
+#               DOCKERHUB_TOKEN. The job fails fast when they are missing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      registry:
+        description: "Registry to push backend and frontend images to"
+        type: choice
+        default: "ghcr"
+        options:
+          - ghcr
+          - dockerhub
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: container-push-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-scan-push:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      matrix:
+        include:
+          - name: backend
+            context: ERP-BACKEND
+            file: ERP-BACKEND/Dockerfile
+          - name: frontend
+            context: frontend
+            file: frontend/Dockerfile
+    env:
+      TARGET_REGISTRY: ${{ inputs.registry }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Resolve image coordinates
+        id: image
+        env:
+          REPOSITORY: ${{ github.repository }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          COMPONENT: ${{ matrix.name }}
+        run: |
+          owner_repo="$(printf '%s' "${REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          case "${TARGET_REGISTRY}" in
+            ghcr)
+              echo "registry_host=ghcr.io" >> "$GITHUB_OUTPUT"
+              echo "registry_image=ghcr.io/${owner_repo}-${COMPONENT}" >> "$GITHUB_OUTPUT"
+              ;;
+            dockerhub)
+              if [ -z "${DOCKERHUB_USERNAME}" ]; then
+                echo "::error::Docker Hub push requires the repository secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN."
+                exit 1
+              fi
+              echo "registry_host=docker.io" >> "$GITHUB_OUTPUT"
+              echo "registry_image=docker.io/${DOCKERHUB_USERNAME}/${owner_repo}-${COMPONENT}" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::Unsupported registry: ${TARGET_REGISTRY}"
+              exit 1
+              ;;
+          esac
+
+      - name: Build image
+        run: |
+          docker build --file "${{ matrix.file }}" \
+            --tag "${{ steps.image.outputs.registry_image }}:${{ github.sha }}" \
+            "${{ matrix.context }}"
+
+      - name: Install trivy
+        run: |
+          TRIVY_VERSION="0.63.0"
+          curl -sSLo /tmp/trivy.tar.gz \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+          sudo install -m 0755 /tmp/trivy /usr/local/bin/trivy
+
+      - name: Scan image
+        run: |
+          trivy image \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --scanners vuln \
+            "${{ steps.image.outputs.registry_image }}:${{ github.sha }}"
+
+      - name: Log in to GHCR
+        if: env.TARGET_REGISTRY == 'ghcr'
+        run: |
+          printf '%s' "${{ secrets.GITHUB_TOKEN }}" | \
+            docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+      - name: Log in to Docker Hub
+        if: env.TARGET_REGISTRY == 'dockerhub'
+        run: |
+          printf '%s' "${{ secrets.DOCKERHUB_TOKEN }}" | \
+            docker login docker.io --username "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Push image
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          image="${{ steps.image.outputs.registry_image }}"
+          branch_tag="$(printf '%s' "${REF_NAME}" | tr '[:upper:]' '[:lower:]' | tr '/' '-')"
+          docker push "${image}:${{ github.sha }}"
+          docker tag "${image}:${{ github.sha }}" "${image}:${branch_tag}"
+          docker push "${image}:${branch_tag}"
+          digest="$(docker inspect --format '{{index .RepoDigests 0}}' "${image}:${{ github.sha }}")"
+          echo "${digest}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pushed ${digest}"

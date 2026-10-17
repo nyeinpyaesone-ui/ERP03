@@ -20,7 +20,8 @@ Only a commit whose gates have already run and passed:
 1. CI (backend tests + coverage gate, frontend build)
 2. Quality (ruff lint/format, eslint, prettier, shellcheck)
 3. Security (secret scan, dependency audit, CodeQL)
-4. Container (build + Trivy image scan, push to GHCR on `main`)
+4. Container (build + Trivy image scan, push to GHCR on `main`; on-demand pushes
+   from any branch via the `Container Push` workflow with `ghcr` or `dockerhub`)
 5. Infrastructure Validation (terraform fmt/validate/plan, kustomize builds)
 6. ERP03 Qualification (`scripts/qualify.sh`)
 

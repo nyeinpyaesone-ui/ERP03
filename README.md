@@ -4,8 +4,9 @@ Production-focused AI ERP modular-monolith foundation.
 
 ## Current runtime
 - FastAPI API on port 8000
-- React/Vite client on port 8000 behind nginx (host port 3000)
-- Ollama integration endpoint for local AI readiness
+- React/Vite client served by nginx on 8080 in-container, exposed on host port 3000
+- PostgreSQL and Redis services under Compose, schema migrations via Alembic
+- Ollama sidecar provisioned for future AI work (configuration and port only today)
 - Docker Compose for local system integration
 - Deterministic Python and JavaScript dependency versions with committed lockfiles
 - CI qualification for backend compile/tests (with a coverage gate) and frontend lint/build
@@ -41,7 +42,7 @@ Without Docker, the backend can be developed directly:
 ```bash
 make setup        # venv + ruff + npm install
 make lint         # ruff, eslint, prettier
-make coverage     # pytest with the coverage gate (needs DATABASE_URL)
+make coverage     # pytest with the coverage gate (temporary SQLite database by default)
 make build        # vite build
 ```
 
@@ -59,6 +60,14 @@ Staging deploys automatically from `main`; production is promoted manually
 through the protected `production` environment using the image digests that
 staging validated. See `docs/DEPLOYMENT_RUNBOOK.md`, `docs/RELEASE_PROCESS.md`
 and `docs/PRODUCTION_READINESS_MATRIX.md`.
+
+### Container images
+- GHCR (default): `Container` pushes `ghcr.io/<owner>/<repo>-{backend,frontend}`
+  on every `main` push; `Container Push` (Actions → Run workflow) pushes the
+  current branch on demand. GHCR needs no extra setup.
+- Docker Hub: run `Container Push` with `registry: dockerhub` and set the
+  repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
+- Locally: `make env-setup && make container-push` (same build + Trivy scan gate).
 
 ## Security and operations
 - Secrets are supplied at runtime through environment variables and a cluster

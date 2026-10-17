@@ -1,7 +1,7 @@
 # ERP03 developer and CI entry points.
 # Every target here mirrors a gate that runs in GitHub Actions.
 
-.PHONY: help setup lint format test coverage build qualify up down clean
+.PHONY: help setup lint format test coverage build qualify up down clean env-setup container-push
 
 help:
 	@egrep -h '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -19,7 +19,7 @@ format: ## Apply ruff + prettier formatting
 	.venv/bin/ruff format ERP-BACKEND/app ERP-BACKEND/tests ERP-BACKEND/alembic
 	cd frontend && npm run format
 
-test: ## Run backend tests (requires DATABASE_URL)
+test: ## Run backend tests (temporary SQLite database by default)
 	cd ERP-BACKEND && DATABASE_PATH=$${DATABASE_PATH:-/tmp/erp03-dev.sqlite3} ../.venv/bin/pytest -q
 
 coverage: ## Run backend tests with the coverage gate
@@ -40,6 +40,12 @@ up: ## Start the full local stack
 
 down: ## Stop the local stack and remove volumes
 	docker compose down -v
+
+env-setup: ## Configure registry credentials for container-push (.env.container)
+	bash scripts/env-setup.sh
+
+container-push: ## Build, scan and push current images (GHCR default; dockerhub supported)
+	bash scripts/container-push.sh
 
 clean: ## Remove build artifacts
 	rm -rf frontend/dist .coverage ERP-BACKEND/.pytest_cache

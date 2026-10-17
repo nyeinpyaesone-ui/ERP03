@@ -4,7 +4,8 @@
 1. CI, Quality, Security, Container and Qualification checks are green for the
    exact commit (`gh run list --commit <sha>`).
 2. Image digests exist in GHCR for that commit (`Container` pushes them on
-   `main`).
+   `main`; any branch can be pushed on demand with the `Container Push`
+   workflow or, locally, `make container-push`).
 3. Database backup completed and its checksum verified (`scripts/backup.sh`).
 4. Staging deployment of the same commit is live and smoke-tested.
 5. Staging sign-off recorded before any production promotion.
