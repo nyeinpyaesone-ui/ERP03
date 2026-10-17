@@ -64,3 +64,9 @@ class ForbiddenError(AppError):
 
     status_code = 403
     code = "FORBIDDEN"
+
+
+class PaymentError(ValidationError):
+    """A payment record violated a business invariant."""
+
+    code = "PAYMENT_ERROR"

@@ -6,7 +6,7 @@ from uuid import uuid4
 import app.models  # noqa: F401  (ensures all mappers are configured)
 import httpx
 import pytest
-from app.core.errors import SaleValidationError
+from app.core.errors import PaymentError
 from app.db.session import SessionFactory
 from app.main import app
 from app.models.erp import Invoice, Product, StockBalance, Warehouse
@@ -153,7 +153,7 @@ async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
 
     invoice_no = f"INV-{uuid4().hex[:8]}"
     async with SessionFactory() as session:
-        with pytest.raises(SaleValidationError):
+        with pytest.raises(PaymentError):
             await create_pos_sale(
                 session,
                 business_id=business.id,

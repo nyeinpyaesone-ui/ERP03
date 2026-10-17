@@ -3,13 +3,14 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from app.services.sales import SaleLine, SalePayment, SaleValidationError, create_pos_sale
+from app.core.errors import PaymentError
+from app.services.sales import SaleLine, SalePayment, create_pos_sale
 
 
 @pytest.mark.asyncio
 async def test_pos_sale_rejects_overpayment_before_transaction():
     session = AsyncMock()
-    with pytest.raises(SaleValidationError, match="Overpayment"):
+    with pytest.raises(PaymentError, match="Overpayment"):
         await create_pos_sale(
             session,
             business_id=uuid4(),

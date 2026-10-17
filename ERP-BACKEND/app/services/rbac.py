@@ -9,7 +9,13 @@ from app.core.errors import ValidationError
 from app.models.identity import Permission, Role, User, role_permissions, user_roles
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
-    "Owner": ("sales.create",),
+    "Owner": (
+        "sales.create",
+        "products.manage",
+        "customers.manage",
+        "suppliers.manage",
+        "purchases.receive",
+    ),
     "Cashier": ("sales.create",),
 }
 

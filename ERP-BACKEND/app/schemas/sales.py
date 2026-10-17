@@ -24,7 +24,7 @@ class SalePaymentRequest(BaseModel):
 class CreateSaleRequest(BaseModel):
     branch_id: UUID
     warehouse_id: UUID
-    invoice_no: str = Field(min_length=1, max_length=64)
+    invoice_no: str | None = Field(default=None, min_length=1, max_length=64)
     customer_id: UUID | None = None
     currency: str = Field(default="MMK", min_length=3, max_length=3)
     lines: list[SaleLineRequest] = Field(min_length=1, max_length=200)

@@ -1,14 +1,15 @@
 """Atomic POS sale application service."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ConflictError, SaleValidationError
+from app.core.errors import ConflictError, PaymentError, SaleValidationError
 from app.models.erp import Customer, Invoice, InvoiceItem, Payment, Product, Warehouse
 from app.models.identity import Branch
 from app.services.inventory import adjust_stock
@@ -25,6 +26,23 @@ async def _find_idempotent_invoice(
             Invoice.idempotency_key == key,
         )
     )
+
+
+async def next_invoice_no(session: AsyncSession, *, branch_id: UUID) -> str:
+    """Allocate a gap-free per-branch invoice number (``INV-YYYYMM-000001``).
+
+    Callers must invoke this inside the same transaction that inserts the
+    invoice; the branch-row lock taken by ``create_pos_sale`` serialises
+    allocation per branch so concurrent tills never reuse a number.
+    """
+    prefix = f"INV-{datetime.now(UTC):%Y%m}-"
+    last = await session.scalar(
+        select(func.max(Invoice.invoice_no)).where(
+            Invoice.branch_id == branch_id, Invoice.invoice_no.like(f"{prefix}%")
+        )
+    )
+    sequence = int(last[len(prefix) :]) + 1 if last else 1
+    return f"{prefix}{sequence:06d}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +86,7 @@ async def create_pos_sale(
     business_id: UUID,
     branch_id: UUID,
     warehouse_id: UUID,
-    invoice_no: str,
+    invoice_no: str | None = None,
     lines: list[SaleLine],
     payments: list[SalePayment],
     customer_id: UUID | None = None,
@@ -78,14 +96,16 @@ async def create_pos_sale(
     """Create invoice, inventory movements and payments in one DB transaction."""
     if not lines:
         raise SaleValidationError("A sale must contain at least one line")
+    if invoice_no is not None and (not invoice_no.strip() or len(invoice_no) > 64):
+        raise SaleValidationError("invoice_no must be 1-64 characters")
     if any(line.quantity <= 0 for line in lines):
         raise SaleValidationError("Line quantities must be positive")
     if any(line.discount < 0 or line.tax < 0 for line in lines):
         raise SaleValidationError("Discount and tax cannot be negative")
     if any(payment.amount <= 0 for payment in payments):
-        raise SaleValidationError("Payment amounts must be positive")
+        raise PaymentError("Payment amounts must be positive")
     if any(not payment.method.strip() or len(payment.method) > 32 for payment in payments):
-        raise SaleValidationError("Payment method must be 1-32 characters")
+        raise PaymentError("Payment method must be 1-32 characters")
     if idempotency_key is not None and not idempotency_key.strip():
         raise SaleValidationError("Idempotency key cannot be empty")
     if idempotency_key is not None and len(idempotency_key) > 255:
@@ -102,7 +122,7 @@ async def create_pos_sale(
         )
         requested_paid = sum((payment.amount for payment in payments), Decimal("0"))
         if requested_total >= 0 and requested_paid > requested_total:
-            raise SaleValidationError("Overpayment is not allowed")
+            raise PaymentError("Overpayment is not allowed")
 
     async with session.begin():
         branch = await session.scalar(
@@ -143,6 +163,9 @@ async def create_pos_sale(
             if customer is None:
                 raise SaleValidationError("Customer is not valid for this branch")
 
+        if invoice_no is None:
+            invoice_no = await next_invoice_no(session, branch_id=branch_id)
+
         product_ids = sorted({line.product_id for line in lines}, key=str)
         products_result = await session.execute(
             select(Product)
@@ -179,7 +202,7 @@ async def create_pos_sale(
         total = subtotal - discount_total + tax_total
         paid = sum((payment.amount for payment in payments), Decimal("0"))
         if paid > total:
-            raise SaleValidationError("Overpayment is not allowed")
+            raise PaymentError("Overpayment is not allowed")
 
         if idempotency_key is not None:
             existing = await session.scalar(
