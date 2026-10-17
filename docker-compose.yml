@@ -29,7 +29,7 @@ services:
   migrate:
     build: ./ERP-BACKEND
     environment:
-      ENVIRONMENT: production
+      ENVIRONMENT: ${ENVIRONMENT:-production}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-erp03}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-erp03}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
@@ -44,7 +44,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      ENVIRONMENT: production
+      ENVIRONMENT: ${ENVIRONMENT:-production}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-erp03}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-erp03}
       REDIS_URL: redis://redis:6379/0
