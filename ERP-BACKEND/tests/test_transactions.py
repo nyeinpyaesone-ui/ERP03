@@ -1,16 +1,23 @@
 import threading
+from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
-
 from app.api.transactions import store
 from app.core.security import current_claims
 from app.main import app
+from fastapi.testclient import TestClient
+
+pytestmark = (
+    pytest.mark.requires_database
+)  # durable SQLite journal under /tmp, no PostgreSQL needed
 
 
 @pytest.fixture(autouse=True)
 def authenticated_transaction_requests():
-    app.dependency_overrides[current_claims] = lambda: {"sub": "test-user", "business_id": "test-business"}
+    app.dependency_overrides[current_claims] = lambda: {
+        "sub": "test-user",
+        "business_id": "test-business",
+    }
     yield
     app.dependency_overrides.pop(current_claims, None)
 
@@ -31,7 +38,9 @@ def test_transaction_is_idempotent():
         "currency": "mmk",
         "metadata": {"invoice": "INV-001"},
     }
-    headers = {"X-Idempotency-Key": "invoice-create-001"}
+    # Unique key per run: the journal file outlives the process, so a fixed
+    # key would replay a stale entry from an earlier run and break assertions.
+    headers = {"X-Idempotency-Key": f"invoice-create-{uuid4().hex}"}
 
     with TestClient(app) as client:
         first = client.post("/api/v1/transactions", json=payload, headers=headers)
@@ -51,7 +60,7 @@ def test_concurrent_same_key_commits_once():
         "currency": "MMK",
         "metadata": {"sku": "SKU-001"},
     }
-    key = "stock-reserve-concurrent-001"
+    key = f"stock-reserve-concurrent-{uuid4().hex}"
     responses = []
 
     def request():
@@ -78,10 +87,11 @@ def test_concurrent_same_key_commits_once():
 
 
 def test_failed_write_rolls_back_and_key_can_be_retried():
-    key = "rollback-retry-001"
+    key = f"rollback-retry-{uuid4().hex}"
     try:
         store.execute(
-            transaction_id="failed-write-001",
+            transaction_id=f"failed-write-{uuid4().hex}",
+            business_id="test-business",
             idempotency_key=key,
             operation="finance.post",
             amount="10.00",
@@ -94,15 +104,16 @@ def test_failed_write_rolls_back_and_key_can_be_retried():
         raise AssertionError("Expected metadata serialization to fail")
 
     result = store.execute(
-        transaction_id="successful-retry-001",
+        transaction_id=f"successful-retry-{uuid4().hex}",
+        business_id="test-business",
         idempotency_key=key,
         operation="finance.post",
         amount="10.00",
         currency="MMK",
         metadata={"retry": True},
     )
-    assert result.transaction_id == "successful-retry-001"
-    assert result.idempotent_replay is False
+    assert not result.idempotent_replay
+    assert result.metadata == {"retry": True}
 
 
 def test_transaction_survives_store_reinitialization(tmp_path):
@@ -112,6 +123,7 @@ def test_transaction_survives_store_reinitialization(tmp_path):
     first_store = TransactionStore(database)
     created = first_store.execute(
         transaction_id="persistent-001",
+        business_id="business-a",
         idempotency_key="persistent-key-001",
         operation="order.create",
         amount="25.00",
@@ -120,7 +132,9 @@ def test_transaction_survives_store_reinitialization(tmp_path):
     )
 
     second_store = TransactionStore(database)
-    loaded = second_store.get(created.transaction_id)
+    loaded = second_store.get(created.transaction_id, business_id="business-a")
     assert loaded is not None
     assert loaded.transaction_id == created.transaction_id
     assert loaded.metadata == {"order": "ORD-001"}
+    # Foreign tenants cannot read the entry even when they know its ID.
+    assert second_store.get(created.transaction_id, business_id="business-b") is None

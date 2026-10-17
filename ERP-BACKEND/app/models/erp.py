@@ -1,16 +1,20 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base
-
-
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+from app.db.base import GUID, Base, utcnow, uuid_pk
 
 
 class Customer(Base):
@@ -20,16 +24,22 @@ class Customer(Base):
         Index("ix_customers_branch_active", "branch_id", "active"),
         Index("ix_customers_business_name", "business_id", "name"),
     )
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    business_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"))
-    branch_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="RESTRICT"))
+    id: Mapped[UUID] = uuid_pk()
+    business_id: Mapped[UUID] = mapped_column(
+        GUID(), ForeignKey("businesses.id", ondelete="CASCADE")
+    )
+    branch_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("branches.id", ondelete="RESTRICT"))
     code: Mapped[str] = mapped_column(String(64))
     name: Mapped[str] = mapped_column(String(200))
     phone: Mapped[str | None] = mapped_column(String(32))
     credit_limit: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
 
 
 class Supplier(Base):
@@ -38,16 +48,22 @@ class Supplier(Base):
         UniqueConstraint("business_id", "code", name="uq_suppliers_business_code"),
         Index("ix_suppliers_branch_active", "branch_id", "active"),
     )
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    business_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"))
-    branch_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="RESTRICT"))
+    id: Mapped[UUID] = uuid_pk()
+    business_id: Mapped[UUID] = mapped_column(
+        GUID(), ForeignKey("businesses.id", ondelete="CASCADE")
+    )
+    branch_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("branches.id", ondelete="RESTRICT"))
     code: Mapped[str] = mapped_column(String(64))
     name: Mapped[str] = mapped_column(String(200))
     phone: Mapped[str | None] = mapped_column(String(32))
     payable_balance: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
 
 
 class Product(Base):
@@ -58,9 +74,11 @@ class Product(Base):
         Index("ix_products_business_name", "business_id", "name"),
         Index("ix_products_barcode", "business_id", "barcode"),
     )
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    business_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"))
-    branch_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="RESTRICT"))
+    id: Mapped[UUID] = uuid_pk()
+    business_id: Mapped[UUID] = mapped_column(
+        GUID(), ForeignKey("businesses.id", ondelete="CASCADE")
+    )
+    branch_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("branches.id", ondelete="RESTRICT"))
     sku: Mapped[str] = mapped_column(String(80))
     barcode: Mapped[str | None] = mapped_column(String(80))
     name: Mapped[str] = mapped_column(String(240))
@@ -69,15 +87,19 @@ class Product(Base):
     cost_price: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
     min_stock: Mapped[Decimal] = mapped_column(Numeric(18, 3), default=0)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
 
 
 class Warehouse(Base):
     __tablename__ = "warehouses"
     __table_args__ = (UniqueConstraint("branch_id", "code", name="uq_warehouses_branch_code"),)
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    branch_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="CASCADE"))
+    id: Mapped[UUID] = uuid_pk()
+    branch_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("branches.id", ondelete="CASCADE"))
     code: Mapped[str] = mapped_column(String(64))
     name: Mapped[str] = mapped_column(String(200))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -89,11 +111,15 @@ class StockBalance(Base):
         UniqueConstraint("warehouse_id", "product_id", name="uq_stock_balances_warehouse_product"),
         Index("ix_stock_balances_product", "product_id"),
     )
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    warehouse_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("warehouses.id", ondelete="CASCADE"))
-    product_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT"))
+    id: Mapped[UUID] = uuid_pk()
+    warehouse_id: Mapped[UUID] = mapped_column(
+        GUID(), ForeignKey("warehouses.id", ondelete="CASCADE")
+    )
+    product_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("products.id", ondelete="RESTRICT"))
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 3), default=0)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
 
 
 class StockMovement(Base):
@@ -102,29 +128,39 @@ class StockMovement(Base):
         Index("ix_stock_movements_warehouse_created", "warehouse_id", "created_at"),
         Index("ix_stock_movements_product_created", "product_id", "created_at"),
     )
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    warehouse_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("warehouses.id", ondelete="RESTRICT"))
-    product_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT"))
+    id: Mapped[UUID] = uuid_pk()
+    warehouse_id: Mapped[UUID] = mapped_column(
+        GUID(), ForeignKey("warehouses.id", ondelete="RESTRICT")
+    )
+    product_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("products.id", ondelete="RESTRICT"))
     movement_type: Mapped[str] = mapped_column(String(32))
     quantity_delta: Mapped[Decimal] = mapped_column(Numeric(18, 3))
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
     reference_type: Mapped[str | None] = mapped_column(String(40))
-    reference_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    reference_id: Mapped[UUID | None] = mapped_column(GUID())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
 
 
 class Invoice(Base):
     __tablename__ = "invoices"
     __table_args__ = (
         UniqueConstraint("branch_id", "invoice_no", name="uq_invoices_branch_no"),
-        UniqueConstraint("business_id", "branch_id", "idempotency_key", name="uq_invoices_idempotency"),
+        UniqueConstraint(
+            "business_id", "branch_id", "idempotency_key", name="uq_invoices_idempotency"
+        ),
         Index("ix_invoices_branch_status_created", "branch_id", "status", "created_at"),
         Index("ix_invoices_customer_created", "customer_id", "created_at"),
     )
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    business_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"))
-    branch_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="RESTRICT"))
-    customer_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("customers.id", ondelete="RESTRICT"))
+    id: Mapped[UUID] = uuid_pk()
+    business_id: Mapped[UUID] = mapped_column(
+        GUID(), ForeignKey("businesses.id", ondelete="CASCADE")
+    )
+    branch_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("branches.id", ondelete="RESTRICT"))
+    customer_id: Mapped[UUID | None] = mapped_column(
+        GUID(), ForeignKey("customers.id", ondelete="RESTRICT")
+    )
     invoice_no: Mapped[str] = mapped_column(String(64))
     idempotency_key: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(24), default="draft")
@@ -134,16 +170,20 @@ class Invoice(Base):
     tax: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
     total: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
     paid: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
 
 
 class InvoiceItem(Base):
     __tablename__ = "invoice_items"
     __table_args__ = (Index("ix_invoice_items_invoice", "invoice_id"),)
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    invoice_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("invoices.id", ondelete="CASCADE"))
-    product_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT"))
+    id: Mapped[UUID] = uuid_pk()
+    invoice_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("invoices.id", ondelete="CASCADE"))
+    product_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("products.id", ondelete="RESTRICT"))
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 3))
     unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     discount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
@@ -157,13 +197,17 @@ class Payment(Base):
         Index("ix_payments_branch_created", "branch_id", "created_at"),
         Index("ix_payments_invoice", "invoice_id"),
     )
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    business_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"))
-    branch_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id", ondelete="RESTRICT"))
-    invoice_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("invoices.id", ondelete="RESTRICT"))
+    id: Mapped[UUID] = uuid_pk()
+    business_id: Mapped[UUID] = mapped_column(
+        GUID(), ForeignKey("businesses.id", ondelete="CASCADE")
+    )
+    branch_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("branches.id", ondelete="RESTRICT"))
+    invoice_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("invoices.id", ondelete="RESTRICT"))
     method: Mapped[str] = mapped_column(String(32))
     currency: Mapped[str] = mapped_column(String(3), default="MMK")
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     reference: Mapped[str | None] = mapped_column(String(120))
     note: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )

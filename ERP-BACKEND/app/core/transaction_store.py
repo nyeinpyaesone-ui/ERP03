@@ -1,8 +1,9 @@
+import contextlib
 import json
 import sqlite3
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -49,13 +50,14 @@ class TransactionStore:
         return connection
 
     def _initialize(self) -> None:
-        """Create the journal table if absent, propagating SQLite errors."""
+        """Create the journal table and indexes if absent, propagating SQLite errors."""
         with self._connect() as connection:
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS transactions (
                     transaction_id TEXT PRIMARY KEY,
-                    idempotency_key TEXT NOT NULL UNIQUE,
+                    business_id TEXT NOT NULL,
+                    idempotency_key TEXT NOT NULL,
                     operation TEXT NOT NULL,
                     amount TEXT NOT NULL,
                     currency TEXT NOT NULL,
@@ -65,11 +67,58 @@ class TransactionStore:
                 )
                 """
             )
+            # Tenant-scoped idempotency: the same client key in two businesses
+            # must not collide. Legacy databases may still hold the old global
+            # UNIQUE constraint on idempotency_key; migrate by rebuilding the
+            # table when its column set is outdated.
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(transactions)")}
+            if "business_id" not in columns:
+                connection.execute("BEGIN IMMEDIATE")
+                try:
+                    connection.execute(
+                        """
+                        CREATE TABLE transactions_new (
+                            transaction_id TEXT PRIMARY KEY,
+                            business_id TEXT NOT NULL DEFAULT '',
+                            idempotency_key TEXT NOT NULL,
+                            operation TEXT NOT NULL,
+                            amount TEXT NOT NULL,
+                            currency TEXT NOT NULL,
+                            metadata_json TEXT NOT NULL,
+                            status TEXT NOT NULL,
+                            created_at TEXT NOT NULL
+                        )
+                        """
+                    )
+                    connection.execute(
+                        """
+                        INSERT INTO transactions_new
+                        SELECT transaction_id, '', substr(idempotency_key,
+                               instr(idempotency_key, ':') + 1),
+                               operation, amount, currency, metadata_json,
+                               status, created_at
+                        FROM transactions
+                        """
+                    )
+                    connection.execute("DROP TABLE transactions")
+                    connection.execute("ALTER TABLE transactions_new RENAME TO transactions")
+                    connection.execute("COMMIT")
+                except Exception:
+                    connection.execute("ROLLBACK")
+                    raise
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_transactions_business_idempotency "
+                "ON transactions (business_id, idempotency_key)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS ix_transactions_business ON transactions (business_id)"
+            )
 
     def execute(
         self,
         *,
         transaction_id: str,
+        business_id: str,
         idempotency_key: str,
         operation: str,
         amount: str,
@@ -78,12 +127,14 @@ class TransactionStore:
     ) -> TransactionResult:
         """Atomically record a committed entry or replay an existing key's entry.
 
-        A reused idempotency key returns the original fields with
-        ``idempotent_replay=True``, ignoring all other supplied fields. New
-        entries use the supplied transaction ID and return the flag as False.
-        The amount is stored as supplied, without rounding or validation;
-        metadata must be JSON-serializable. This only writes the journal and
-        does not perform the named business operation.
+        Idempotency keys are scoped to ``business_id``: a reused key within one
+        business returns the original fields with ``idempotent_replay=True``,
+        ignoring all other supplied fields, while the same key in another
+        business records a new entry. New entries use the supplied transaction
+        ID and return the flag as False. The amount is stored as supplied,
+        without rounding or validation; metadata must be JSON-serializable.
+        This only writes the journal and does not perform the named business
+        operation.
 
         SQLite and metadata encoding/decoding errors propagate. Failures during
         transaction handling trigger an attempted rollback; rollback errors are
@@ -94,9 +145,13 @@ class TransactionStore:
             connection = self._connect()
             try:
                 connection.execute("BEGIN IMMEDIATE")
+                # Serialize metadata *inside* the write transaction so a
+                # non-serializable payload fails before any row is inserted;
+                # this keeps failed writes fully rolled back and retryable.
+                metadata_json = json.dumps(metadata, sort_keys=True, separators=(",", ":"))
                 existing = connection.execute(
-                    "SELECT * FROM transactions WHERE idempotency_key = ?",
-                    (idempotency_key,),
+                    "SELECT * FROM transactions WHERE business_id = ? AND idempotency_key = ?",
+                    (business_id, idempotency_key),
                 ).fetchone()
                 if existing:
                     connection.execute("COMMIT")
@@ -105,18 +160,19 @@ class TransactionStore:
                 connection.execute(
                     """
                     INSERT INTO transactions
-                    (transaction_id, idempotency_key, operation, amount, currency,
-                     metadata_json, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, 'committed', ?)
+                    (transaction_id, business_id, idempotency_key, operation, amount,
+                     currency, metadata_json, status, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'committed', ?)
                     """,
                     (
                         transaction_id,
+                        business_id,
                         idempotency_key,
                         operation,
                         amount,
                         currency,
-                        json.dumps(metadata, sort_keys=True, separators=(",", ":")),
-                        datetime.now(timezone.utc).isoformat(),
+                        metadata_json,
+                        datetime.now(UTC).isoformat(),
                     ),
                 )
                 connection.execute("COMMIT")
@@ -128,10 +184,8 @@ class TransactionStore:
                     raise RuntimeError("Transaction committed but could not be reloaded")
                 return self._result(row, replay=False)
             except Exception:
-                try:
+                with contextlib.suppress(sqlite3.Error):
                     connection.execute("ROLLBACK")
-                except sqlite3.Error:
-                    pass
                 raise
             finally:
                 connection.close()
@@ -153,14 +207,16 @@ class TransactionStore:
             idempotent_replay=replay,
         )
 
-    def get(self, transaction_id: str) -> TransactionResult | None:
-        """Return the entry with its replay flag False, or None if absent.
+    def get(self, transaction_id: str, *, business_id: str) -> TransactionResult | None:
+        """Return the entry owned by ``business_id``, or None if absent/foreign.
 
-        SQLite errors and metadata JSON decoding errors propagate to callers.
+        Entries belonging to another tenant are reported as missing so that
+        existence is never leaked across businesses. SQLite errors and
+        metadata JSON decoding errors propagate to callers.
         """
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT * FROM transactions WHERE transaction_id = ?",
-                (transaction_id,),
+                "SELECT * FROM transactions WHERE transaction_id = ? AND business_id = ?",
+                (transaction_id, business_id),
             ).fetchone()
             return self._result(row, replay=False) if row else None
