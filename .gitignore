@@ -19,3 +19,7 @@ Thumbs.db
 .coverage
 htmlcov/
 coverage/
+
+# linter/type-checker caches
+.ruff_cache/
+.mypy_cache/
