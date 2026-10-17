@@ -31,7 +31,7 @@ jobs:
 
       - name: Validate YAML syntax
         run: |
-          python -m pip install --disable-pip-version-check PyYAML
+          python -m pip install --disable-pip-version-check PyYAML==6.0.3
           python - <<'PY'
           from pathlib import Path
           import yaml
@@ -44,5 +44,5 @@ jobs:
               print(f"YAML OK: {path}")
           PY
 
-      - name: Check patch whitespace
-        run: git diff --check
+      - name: Check committed patch whitespace
+        run: git diff --check HEAD^ HEAD
