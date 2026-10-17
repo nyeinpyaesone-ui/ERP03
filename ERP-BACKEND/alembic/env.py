@@ -1,11 +1,10 @@
 from logging.config import fileConfig
 
 import app.models  # noqa: F401 - register canonical ORM metadata
+import sqlalchemy
 from alembic import context
-from alembic.runtime.environment import EnvironmentContext
 from app.core.config import settings
 from app.db.base import Base
-import sqlalchemy
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
@@ -68,27 +67,13 @@ def do_run_migrations(connection: Connection) -> None:
 def run_migrations_online() -> None:
     import asyncio
 
-    # Embedded invocation (pytest conftest provisions the test database by
-    # executing this module from inside a running event loop): dispatching an
-    # async engine here would raise "asyncio.run() cannot be called from a
-    # running event loop". The embedded caller invokes `do_run_migrations`
-    # directly on its own greenlet connection, so this must be a no-op.
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        asyncio.run(run_async_migrations())  # CLI path: alembic upgrade head
-    else:
-        return
+    # Canonical Alembic async dispatch (CLI path: `alembic upgrade head`).
+    # Test provisioning shells out to this same CLI, so env.py never needs
+    # an embedded-caller special case.
+    asyncio.run(run_async_migrations())
 
 
-# A pre-installed proxy context marks an *embedded* caller (pytest conftest
-# provisions the test database this way and drives `do_run_migrations`
-# itself); only the standalone CLI runs the dispatch here. The check must be
-# a call: `EnvironmentContext.get_current` is a classmethod, and referencing
-# it without calling is always truthy.
-_embedded = getattr(EnvironmentContext, "get_current", None)
-if not (callable(_embedded) and _embedded() is not None):
-    if context.is_offline_mode():
-        run_migrations_offline()
-    else:
-        run_migrations_online()
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()

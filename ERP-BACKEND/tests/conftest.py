@@ -19,6 +19,15 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 os.environ.setdefault("DATABASE_PATH", "/tmp/erp03-tests.sqlite3")
+# Hermetic default: a fresh SQLite file per session unless the caller
+# explicitly provides DATABASE_URL (PostgreSQL in CI, or a custom target).
+os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{os.environ['DATABASE_PATH']}")
+# A pre-set DATABASE_URL (e.g. an exported shell profile) silently overrides
+# the hermetic default above; log the effective target for traceability.
+print(
+    f"[conftest] provisioning test database: {os.environ['DATABASE_URL']}",
+    file=sys.stderr,
+)
 
 _INTEGRATION_MARKERS = ("integration", "requires_database")
 
@@ -38,71 +47,65 @@ def event_loop_policy():
 
 
 async def _probe_and_migrate() -> bool:
-    """Verify DATABASE_URL is reachable and bring it to the latest head.
+    """Bring the session test database to the latest Alembic head.
 
-    Running the real migration chain here makes integration tests exercise
-    the same schema as production (including seeded permissions), on either
-    PostgreSQL or SQLite. The project's own ``alembic/env.py`` is reused so
-    test provisioning and deployment migrations can never diverge; it runs
-    through ``run_sync`` inside the *current* event loop (no nested loops).
+    The target URL is resolved by this module at import (hermetic SQLite
+    default, or an explicit DATABASE_URL for PostgreSQL in CI). Provisioning
+    shells out to ``alembic upgrade head`` — the exact CLI path used at
+    deployment — which keeps migration execution fully independent of
+    pytest-asyncio's running event loop and guarantees test provisioning
+    and production migrations can never diverge. A stale/mismatched schema
+    file is rebuilt from scratch so every run starts deterministic.
     """
-    url = os.environ.get(
-        "DATABASE_URL",
-        "postgresql+asyncpg://erp03:erp03@postgres:5432/erp03",
-    )
+    url = os.environ["DATABASE_URL"]
     try:
         engine = create_async_engine(url, pool_pre_ping=True)
         async with engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
+            if connection.dialect.name == "sqlite":
+                stamped = await connection.execute(
+                    text(
+                        "SELECT count(*) FROM sqlite_master "
+                        "WHERE type='table' AND name='permissions'"
+                    )
+                )
+                needs_rebuild = stamped.scalar() == 0
+            else:
+                needs_rebuild = False
     except Exception:
         return False
 
+    # The app's own engine (imported by integration tests via
+    # app.db.session) resolves settings.database_url at import time; pin it
+    # to the same URL we just probed so provisioning and application share
+    # one database on every platform.
+    os.environ["DATABASE_URL"] = url
+
+    from app.core.config import settings
+
+    if str(settings.database_url) != url:
+        raise RuntimeError(f"app engine URL {str(settings.database_url)!r} != provisioned {url!r}")
+
     try:
-        import logging
+        import subprocess
 
-        logging.getLogger("alembic").handlers.clear()  # keep pytest capture clean
-
-        from pathlib import Path as _Path
-
-        import importlib.util
-
-        from alembic.config import Config as AlembicConfig
-        from alembic.runtime.environment import EnvironmentContext
-        from alembic.script import ScriptDirectory
-
-        backend_dir = _Path(__file__).resolve().parents[1]
-        config = AlembicConfig(str(backend_dir / "alembic.ini"))
-        config.set_main_option("script_location", str(backend_dir / "alembic"))
-
-        # Load the project's own env.py (it is a script, not an importable
-        # module) so test provisioning and deployment migrations never diverge.
-        spec = importlib.util.spec_from_file_location(
-            "erp03_alembic_env", str(backend_dir / "alembic" / "env.py")
+        backend_dir = Path(__file__).resolve().parents[1]
+        if needs_rebuild:
+            db_path = url.split("///", 1)[-1].lstrip("/")
+            Path(db_path).unlink(missing_ok=True)
+        result = subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            cwd=str(backend_dir),
+            env={**os.environ},
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
-        env_module = importlib.util.module_from_spec(spec)
-
-        def _load_and_run(sync_connection) -> None:
-            script = ScriptDirectory.from_config(config)
-
-            # Phase 1: install a proxy-backed EnvironmentContext *before*
-            # executing env.py, because env.py reads `context.config` at
-            # module level. Its bottom dispatch detects the proxy context and
-            # stays inert, so nothing runs against a second engine here.
-            with EnvironmentContext(config, script):
-                spec.loader.exec_module(env_module)
-
-            # Phase 2: run the full migration chain on THIS greenlet-bound
-            # connection — identical wiring to the CLI async path, which
-            # invokes do_run_migrations inside the live EnvironmentContext
-            # created by `alembic upgrade`. The fn= hook receives our
-            # connection; do_run_migrations then calls context.configure(
-            # connection=...) itself and executes every upgrade step.
-            with EnvironmentContext(
-                config, script, fn=env_module.do_run_migrations, connection=sync_connection
-            ) as ec:
-                ec.run_migrations()
-
-        await connection.run_sync(_load_and_run)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"alembic upgrade head failed ({result.returncode}): "
+                f"{result.stderr.strip() or result.stdout.strip()}"
+            )
         return True
     except Exception as exc:  # pragma: no cover - provisioning diagnostics
         import traceback
@@ -131,6 +134,5 @@ def pytest_collection_modifyitems(session, config, items):
         reason="Test database unavailable/unmigratable (set DATABASE_URL)"
     )
     for item in items:
-        if item.get_closest_marker(_INTEGRATION_MARKERS):
-            if not database_ready:
-                item.add_marker(skip_database)
+        if item.get_closest_marker(_INTEGRATION_MARKERS) and not database_ready:
+            item.add_marker(skip_database)

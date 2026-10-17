@@ -48,7 +48,11 @@ class GUID(TypeDecorator):
             return None
         if isinstance(value, UUID):
             return value
-        return UUID(str(value))
+        text_value = str(value)
+        # Legacy databases (created before GUID adoption) store canonical
+        # hyphenated strings; freshly created CHAR(32) columns store bare hex.
+        # Accept both transparently on every dialect.
+        return UUID(text_value.replace("-", ""))
 
 
 class Base(DeclarativeBase):

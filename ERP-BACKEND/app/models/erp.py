@@ -14,7 +14,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, GUID, utcnow, uuid_pk
+from app.db.base import GUID, Base, utcnow, uuid_pk
 
 
 class Customer(Base):
@@ -28,9 +28,7 @@ class Customer(Base):
     business_id: Mapped[UUID] = mapped_column(
         GUID(), ForeignKey("businesses.id", ondelete="CASCADE")
     )
-    branch_id: Mapped[UUID] = mapped_column(
-        GUID(), ForeignKey("branches.id", ondelete="RESTRICT")
-    )
+    branch_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("branches.id", ondelete="RESTRICT"))
     code: Mapped[str] = mapped_column(String(64))
     name: Mapped[str] = mapped_column(String(200))
     phone: Mapped[str | None] = mapped_column(String(32))
@@ -54,9 +52,7 @@ class Supplier(Base):
     business_id: Mapped[UUID] = mapped_column(
         GUID(), ForeignKey("businesses.id", ondelete="CASCADE")
     )
-    branch_id: Mapped[UUID] = mapped_column(
-        GUID(), ForeignKey("branches.id", ondelete="RESTRICT")
-    )
+    branch_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("branches.id", ondelete="RESTRICT"))
     code: Mapped[str] = mapped_column(String(64))
     name: Mapped[str] = mapped_column(String(200))
     phone: Mapped[str | None] = mapped_column(String(32))
@@ -82,9 +78,7 @@ class Product(Base):
     business_id: Mapped[UUID] = mapped_column(
         GUID(), ForeignKey("businesses.id", ondelete="CASCADE")
     )
-    branch_id: Mapped[UUID] = mapped_column(
-        GUID(), ForeignKey("branches.id", ondelete="RESTRICT")
-    )
+    branch_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("branches.id", ondelete="RESTRICT"))
     sku: Mapped[str] = mapped_column(String(80))
     barcode: Mapped[str | None] = mapped_column(String(80))
     name: Mapped[str] = mapped_column(String(240))
@@ -105,9 +99,7 @@ class Warehouse(Base):
     __tablename__ = "warehouses"
     __table_args__ = (UniqueConstraint("branch_id", "code", name="uq_warehouses_branch_code"),)
     id: Mapped[UUID] = uuid_pk()
-    branch_id: Mapped[UUID] = mapped_column(
-        GUID(), ForeignKey("branches.id", ondelete="CASCADE")
-    )
+    branch_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("branches.id", ondelete="CASCADE"))
     code: Mapped[str] = mapped_column(String(64))
     name: Mapped[str] = mapped_column(String(200))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -123,9 +115,7 @@ class StockBalance(Base):
     warehouse_id: Mapped[UUID] = mapped_column(
         GUID(), ForeignKey("warehouses.id", ondelete="CASCADE")
     )
-    product_id: Mapped[UUID] = mapped_column(
-        GUID(), ForeignKey("products.id", ondelete="RESTRICT")
-    )
+    product_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("products.id", ondelete="RESTRICT"))
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 3), default=0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
@@ -142,9 +132,7 @@ class StockMovement(Base):
     warehouse_id: Mapped[UUID] = mapped_column(
         GUID(), ForeignKey("warehouses.id", ondelete="RESTRICT")
     )
-    product_id: Mapped[UUID] = mapped_column(
-        GUID(), ForeignKey("products.id", ondelete="RESTRICT")
-    )
+    product_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("products.id", ondelete="RESTRICT"))
     movement_type: Mapped[str] = mapped_column(String(32))
     quantity_delta: Mapped[Decimal] = mapped_column(Numeric(18, 3))
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
@@ -169,9 +157,7 @@ class Invoice(Base):
     business_id: Mapped[UUID] = mapped_column(
         GUID(), ForeignKey("businesses.id", ondelete="CASCADE")
     )
-    branch_id: Mapped[UUID] = mapped_column(
-        GUID(), ForeignKey("branches.id", ondelete="RESTRICT")
-    )
+    branch_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("branches.id", ondelete="RESTRICT"))
     customer_id: Mapped[UUID | None] = mapped_column(
         GUID(), ForeignKey("customers.id", ondelete="RESTRICT")
     )
@@ -196,12 +182,8 @@ class InvoiceItem(Base):
     __tablename__ = "invoice_items"
     __table_args__ = (Index("ix_invoice_items_invoice", "invoice_id"),)
     id: Mapped[UUID] = uuid_pk()
-    invoice_id: Mapped[UUID] = mapped_column(
-        GUID(), ForeignKey("invoices.id", ondelete="CASCADE")
-    )
-    product_id: Mapped[UUID] = mapped_column(
-        GUID(), ForeignKey("products.id", ondelete="RESTRICT")
-    )
+    invoice_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("invoices.id", ondelete="CASCADE"))
+    product_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("products.id", ondelete="RESTRICT"))
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 3))
     unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     discount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
@@ -219,12 +201,8 @@ class Payment(Base):
     business_id: Mapped[UUID] = mapped_column(
         GUID(), ForeignKey("businesses.id", ondelete="CASCADE")
     )
-    branch_id: Mapped[UUID] = mapped_column(
-        GUID(), ForeignKey("branches.id", ondelete="RESTRICT")
-    )
-    invoice_id: Mapped[UUID] = mapped_column(
-        GUID(), ForeignKey("invoices.id", ondelete="RESTRICT")
-    )
+    branch_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("branches.id", ondelete="RESTRICT"))
+    invoice_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("invoices.id", ondelete="RESTRICT"))
     method: Mapped[str] = mapped_column(String(32))
     currency: Mapped[str] = mapped_column(String(3), default="MMK")
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))

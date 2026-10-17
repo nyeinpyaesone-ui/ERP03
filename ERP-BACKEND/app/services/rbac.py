@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ValidationError
-from app.models.identity import Permission, Role, User, user_roles
+from app.models.identity import Permission, Role, User, role_permissions, user_roles
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
     "Owner": ("sales.create",),
@@ -50,7 +50,18 @@ async def ensure_default_roles(session: AsyncSession, *, business_id: UUID) -> l
             session.add(role)
             await session.flush()
 
-        role.permissions = [permission_by_code[code] for code in permission_codes]
+        # Replace the association rows with plain SQL instead of reassigning
+        # role.permissions: on an AsyncSession a fresh object's lazy-loaded
+        # collection cannot emit IO outside greenlet context (MissingGreenlet).
+        desired_ids = [permission_by_code[code].id for code in permission_codes]
+        await session.execute(
+            role_permissions.delete().where(role_permissions.c.role_id == role.id)
+        )
+        for permission_id in desired_ids:
+            await session.execute(
+                role_permissions.insert().values(role_id=role.id, permission_id=permission_id)
+            )
+        await session.flush()
         roles.append(role)
 
     return roles

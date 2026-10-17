@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, String, Table, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, GUID, utcnow, uuid_pk
+from app.db.base import GUID, Base, utcnow, uuid_pk
 
 user_roles = Table(
     "user_roles",

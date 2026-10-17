@@ -1,10 +1,12 @@
 import asyncio
+import os
 from decimal import Decimal
 from uuid import uuid4
 
 import app.models  # noqa: F401  (ensures all mappers are configured)
 import httpx
 import pytest
+from app.core.errors import SaleValidationError
 from app.db.session import SessionFactory
 from app.main import app
 from app.models.erp import Invoice, Product, StockBalance, Warehouse
@@ -12,9 +14,15 @@ from app.models.identity import Branch
 from app.services.bootstrap import bootstrap_business
 from app.services.sales import SaleLine, SalePayment, create_pos_sale
 from sqlalchemy import select
-from sqlalchemy.exc import DataError
 
-pytestmark = pytest.mark.integration  # requires migrated PostgreSQL via DATABASE_URL
+pytestmark = pytest.mark.integration  # migrated DB provisioned by conftest (SQLite or PostgreSQL)
+
+# Concurrency guard: SQLite serialises writers at the file level, so the
+# oversell test only proves row-lock semantics on a real client/server DB.
+_requires_concurrent_db = pytest.mark.skipif(
+    os.environ.get("DATABASE_URL", "").startswith("sqlite"),
+    reason="concurrent row-lock semantics require PostgreSQL (SQLite serialises writers)",
+)
 
 
 async def _bootstrap(prefix: str):
@@ -145,7 +153,7 @@ async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
 
     invoice_no = f"INV-{uuid4().hex[:8]}"
     async with SessionFactory() as session:
-        with pytest.raises(DataError):
+        with pytest.raises(SaleValidationError):
             await create_pos_sale(
                 session,
                 business_id=business.id,
@@ -170,6 +178,7 @@ async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
 
 
 @pytest.mark.asyncio
+@_requires_concurrent_db
 async def test_concurrent_sales_cannot_oversell_stock():
     business, branch, warehouse, _ = await _bootstrap("CC")
     async with SessionFactory() as session, session.begin():

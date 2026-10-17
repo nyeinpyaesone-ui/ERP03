@@ -18,9 +18,7 @@ async def readyz() -> JSONResponse:
     try:
         async for session in get_db_session():
             await session.execute(text("SELECT 1"))
-            revision = await session.scalar(
-                text("SELECT version_num FROM alembic_version LIMIT 1")
-            )
+            revision = await session.scalar(text("SELECT version_num FROM alembic_version LIMIT 1"))
     except Exception as exc:
         return JSONResponse(
             status_code=503,

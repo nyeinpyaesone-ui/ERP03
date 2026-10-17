@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import (
 
 from app.core.config import settings
 
+
 def _create_engine():
     """Build the async engine with driver-appropriate pooling.
 

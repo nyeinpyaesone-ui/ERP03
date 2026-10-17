@@ -84,6 +84,8 @@ async def create_pos_sale(
         raise SaleValidationError("Discount and tax cannot be negative")
     if any(payment.amount <= 0 for payment in payments):
         raise SaleValidationError("Payment amounts must be positive")
+    if any(not payment.method.strip() or len(payment.method) > 32 for payment in payments):
+        raise SaleValidationError("Payment method must be 1-32 characters")
     if idempotency_key is not None and not idempotency_key.strip():
         raise SaleValidationError("Idempotency key cannot be empty")
     if idempotency_key is not None and len(idempotency_key) > 255:
@@ -249,17 +251,23 @@ async def create_pos_sale(
             )
 
         for payment in payments:
-            session.add(
-                Payment(
-                    business_id=business_id,
-                    branch_id=branch_id,
-                    invoice_id=invoice.id,
-                    method=payment.method,
-                    currency=payment.currency.upper(),
-                    amount=payment.amount,
-                    reference=payment.reference,
+            # Flush inside a savepoint so a rejected payment row (e.g. a
+            # database-level DataError/IntegrityError) rolls back only this
+            # statement; the outer transaction stays usable and the caller's
+            # rollback restores every earlier mutation (stock included).
+            async with session.begin_nested():
+                session.add(
+                    Payment(
+                        business_id=business_id,
+                        branch_id=branch_id,
+                        invoice_id=invoice.id,
+                        method=payment.method,
+                        currency=payment.currency.upper(),
+                        amount=payment.amount,
+                        reference=payment.reference,
+                    )
                 )
-            )
+                await session.flush()
 
         return SaleResult(
             invoice_id=invoice.id,
