@@ -50,3 +50,17 @@ class BootstrapConflictError(ConflictError):
     """Bootstrap would mutate an existing tenant unexpectedly."""
 
     code = "BOOTSTRAP_CONFLICT"
+
+
+class NotFoundError(AppError):
+    """The requested resource does not exist in this tenant scope."""
+
+    status_code = 404
+    code = "NOT_FOUND"
+
+
+class ForbiddenError(AppError):
+    """The caller is authenticated but not permitted to perform this action."""
+
+    status_code = 403
+    code = "FORBIDDEN"
