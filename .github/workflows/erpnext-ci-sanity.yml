@@ -3,7 +3,10 @@ name: ERPNext CI Sanity
 on:
   push:
     branches:
-      - feat/erpnext-production
+      - feat/erpnext-isolated
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -15,12 +18,31 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Validate apps metadata
+
+      - name: Validate app metadata
         run: python -m json.tool infra/erpnext/apps.json >/dev/null
-      - name: Validate GitOps manifests exist
+
+      - name: Validate GitOps manifests
         run: |
           set -eu
-          for f in deployment.yaml service.yaml ingress.yaml migrate-job.yaml kustomization.yaml external-secret.yaml servicemonitor.yaml alert-rules.yaml; do
+          for f in deployment.yaml service.yaml ingress.yaml migrate-job.yaml kustomization.yaml external-secret.yaml servicemonitor.yaml alert-rules.yaml argocd-application.yaml; do
             test -f "infra/erpnext/gitops/$f"
           done
-      # Force a fresh post-incident Actions registration on the branch.
+
+      - name: Validate YAML syntax
+        run: |
+          python -m pip install --disable-pip-version-check PyYAML
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          paths = sorted(Path("infra/erpnext/gitops").glob("*.yaml"))
+          paths += [Path(".github/workflows/erpnext-ci-sanity.yml")]
+          for path in paths:
+              with path.open(encoding="utf-8") as stream:
+                  list(yaml.safe_load_all(stream))
+              print(f"YAML OK: {path}")
+          PY
+
+      - name: Check patch whitespace
+        run: git diff --check
