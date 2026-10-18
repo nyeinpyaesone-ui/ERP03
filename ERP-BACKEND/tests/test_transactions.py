@@ -242,7 +242,6 @@ def test_existing_journal_is_migrated_and_legacy_tenant_is_recovered(tmp_path):
     assert foreign is None
 
 
-
 def test_same_idempotency_key_with_different_payload_returns_conflict():
     key = f"payload-conflict-{uuid4().hex}"
     headers = {"X-Idempotency-Key": key}
