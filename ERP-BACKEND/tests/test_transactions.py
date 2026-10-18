@@ -174,7 +174,6 @@ def test_transaction_survives_store_reinitialization(tmp_path):
     first_store = TransactionStore(database)
     created = first_store.execute(
         transaction_id="persistent-001",
-        business_id="business-a",
         idempotency_key="persistent-key-001",
         operation="order.create",
         amount="25.00",
