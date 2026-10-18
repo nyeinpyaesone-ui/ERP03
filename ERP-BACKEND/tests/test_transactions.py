@@ -174,7 +174,6 @@ def test_transaction_survives_store_reinitialization(tmp_path):
     first_store = TransactionStore(database)
     created = first_store.execute(
         transaction_id="persistent-001",
-        business_id="business-a",
         idempotency_key="persistent-key-001",
         operation="order.create",
         amount="25.00",
@@ -241,7 +240,6 @@ def test_existing_journal_is_migrated_and_legacy_tenant_is_recovered(tmp_path):
     assert owned is not None
     assert owned.metadata == {"invoice": "LEGACY-001"}
     assert foreign is None
-
 
 
 def test_same_idempotency_key_with_different_payload_returns_conflict():

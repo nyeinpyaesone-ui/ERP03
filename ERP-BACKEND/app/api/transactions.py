@@ -10,12 +10,12 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Header, HTTPException, status
+from pydantic import BaseModel, Field, field_validator
 
 from app.api.dependencies import Claims
 from app.api.validation import validate_idempotency_key
 from app.core.config import settings
-from app.core.security import current_claims
-from app.core.transaction_store import IdempotencyConflict, TransactionStore
+from app.core.transaction_store import IdempotencyConflict, TransactionResult, TransactionStore
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 store = TransactionStore(settings.database_path)
@@ -66,7 +66,7 @@ def _business_id(claims: dict[str, Any]) -> str:
 @router.post("", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
 def create_transaction(
     payload: TransactionRequest,
-    claims: dict[str, Any] = Depends(current_claims),
+    claims: Claims,
     x_idempotency_key: str | None = Header(default=None),
 ) -> TransactionResponse:
     """Record a journal entry or return the original entry for a repeated key.
@@ -75,12 +75,7 @@ def create_transaction(
     verified access token, never from request metadata. Amounts are stored at
     two decimal places; a positive input that rounds to zero is rejected.
     """
-    idempotency_key = (x_idempotency_key or "").strip()
-    if not idempotency_key or len(idempotency_key) > 255:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="X-Idempotency-Key is required and must be <= 255 characters",
-        )
+    idempotency_key = validate_idempotency_key(x_idempotency_key)
 
     try:
         amount = payload.amount.quantize(Decimal("0.01"))
@@ -105,6 +100,10 @@ def create_transaction(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "IDEMPOTENCY_KEY_REUSED", "message": str(exc)},
         ) from exc
+    return _to_response(result)
+
+
+def _to_response(result: TransactionResult) -> TransactionResponse:
     return TransactionResponse(
         transaction_id=result.transaction_id,
         status=result.status,
@@ -119,7 +118,7 @@ def create_transaction(
 @router.get("/{transaction_id}", response_model=TransactionResponse)
 def get_transaction(
     transaction_id: str,
-    claims: dict[str, Any] = Depends(current_claims),
+    claims: Claims,
 ) -> TransactionResponse:
     """Return a journal entry owned by the authenticated caller's business.
 
