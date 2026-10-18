@@ -1,0 +1,20 @@
+name: Actions Checkout Diagnostic
+
+on:
+  push:
+    branches: ["diag/actions-smoke-2026-10-18"]
+
+permissions:
+  contents: read
+
+jobs:
+  checkout-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Confirm checkout completed
+        run: |
+          echo "CHECKOUT_SMOKE_STARTED=true"
+          test -f .github/workflows/actions-checkout-probe.yml
