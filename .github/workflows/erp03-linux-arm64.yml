@@ -154,4 +154,4 @@ jobs:
         run: |
           set -Eeuo pipefail
           test "$(uname -m)" = "aarch64" || test "$(uname -m)" = "arm64"
-          sudo -n bash "$SOURCE_DIR/scripts/deploy-linux-arm64.sh" "$GITHUB_SHA"
+          sudo -n bash "$SOURCE_DIR/scripts/deploy-linux-arm64.sh" "$GITHUB_SHA" "$SOURCE_DIR"
