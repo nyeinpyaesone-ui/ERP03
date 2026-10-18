@@ -86,6 +86,8 @@ jobs:
           "$RUNNER_TEMP/erp03-venv/bin/ruff" check app tests alembic
           "$RUNNER_TEMP/erp03-venv/bin/ruff" format --check app tests alembic
           "$RUNNER_TEMP/erp03-venv/bin/python" -m compileall -q app alembic
+          bash -n "$SOURCE_DIR/scripts/deploy-linux-arm64.sh"
+          bash -n "$SOURCE_DIR/scripts/qualify.sh"
       - name: Verify production configuration and critical routes
         run: |
           set -Eeuo pipefail
