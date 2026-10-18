@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import json
 import sqlite3
@@ -91,10 +92,8 @@ class TransactionStore:
             )
             connection.execute("COMMIT")
         except Exception:
-            try:
+            with contextlib.suppress(sqlite3.Error):
                 connection.execute("ROLLBACK")
-            except sqlite3.Error:
-                pass
             raise
         finally:
             connection.close()
@@ -130,7 +129,6 @@ class TransactionStore:
         amount: str,
         currency: str,
         metadata: dict[str, Any],
-        business_id: str = "",
     ) -> TransactionResult:
         """Atomically persist a journal entry or replay an identical command.
 
@@ -169,15 +167,14 @@ class TransactionStore:
                     """,
                     (
                         transaction_id,
-                        business_id,
                         idempotency_key,
                         business_id,
                         operation,
                         amount,
                         currency,
-                        json.dumps(metadata, sort_keys=True, separators=(",", ":")),
+                        metadata_json,
                         fingerprint,
-                        datetime.now(timezone.utc).isoformat(),
+                        datetime.now(UTC).isoformat(),
                     ),
                 )
                 connection.execute("COMMIT")
