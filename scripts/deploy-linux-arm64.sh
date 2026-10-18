@@ -53,7 +53,9 @@ grep -q '^CORS_ORIGINS=.\+' "$ENV_FILE" || die "CORS_ORIGINS is missing from $EN
 if ! id erp03 >/dev/null 2>&1; then
   useradd --system --home-dir "$ROOT" --create-home --shell /usr/sbin/nologin erp03
 fi
-install -d -o root -g erp03 -m 0750 "$ROOT" "$RELEASES" /etc/erp03
+install -d -o root -g root -m 0755 "$ROOT" "$RELEASES"
+install -d -o root -g erp03 -m 0750 /etc/erp03
+install -d -o erp03 -g erp03 -m 0750 /var/lib/erp03
 chown root:erp03 "$ENV_FILE"
 chmod 0640 "$ENV_FILE"
 
@@ -63,7 +65,7 @@ readonly RELEASE="$RELEASES/$SHA"
 [[ ! -e "$RELEASE" ]] || die "release already exists: $RELEASE (immutable releases are not overwritten)"
 
 log "Stage immutable release $SHA"
-install -d -o erp03 -g erp03 -m 0750 "$RELEASE"
+install -d -o erp03 -g erp03 -m 0755 "$RELEASE"
 cp -a "$SOURCE_DIR/." "$RELEASE/"
 chown -R erp03:erp03 "$RELEASE"
 
@@ -75,6 +77,8 @@ log "Build frontend assets for the target host"
 cd "$RELEASE/frontend"
 runuser -u erp03 -- npm install --no-audit --no-fund
 runuser -u erp03 -- npm run build
+find "$RELEASE/frontend" -type d -exec chmod 0755 {} +
+find "$RELEASE/frontend" -type f -exec chmod 0644 {} +
 [[ -s "$RELEASE/frontend/dist/index.html" ]] || die "frontend build did not produce dist/index.html"
 
 # Extract DATABASE_URL as data, never source/execute the environment file.
