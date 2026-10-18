@@ -1,0 +1,18 @@
+name: Actions Multi-job Diagnostic
+
+on:
+  push:
+    branches: ["diag/actions-smoke-2026-10-18"]
+
+permissions:
+  contents: read
+
+jobs:
+  first:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "MULTIJOB_FIRST_STARTED=true"
+  second:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "MULTIJOB_SECOND_STARTED=true"
