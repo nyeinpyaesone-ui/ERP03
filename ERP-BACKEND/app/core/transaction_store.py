@@ -66,17 +66,14 @@ class TransactionStore:
                 """
             )
             columns = {
-                column["name"]
-                for column in connection.execute("PRAGMA table_info(transactions)")
+                column["name"] for column in connection.execute("PRAGMA table_info(transactions)")
             }
             if "business_id" not in columns:
                 connection.execute(
                     "ALTER TABLE transactions ADD COLUMN business_id TEXT NOT NULL DEFAULT ''"
                 )
             if "request_fingerprint" not in columns:
-                connection.execute(
-                    "ALTER TABLE transactions ADD COLUMN request_fingerprint TEXT"
-                )
+                connection.execute("ALTER TABLE transactions ADD COLUMN request_fingerprint TEXT")
             connection.execute(
                 """
                 UPDATE transactions
