@@ -1,0 +1,147 @@
+name: ERP03 Linux ARM64 CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_production:
+        description: Deploy this commit to the registered Linux ARM64 production runner
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: erp03-\${{ github.workflow }}-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    name: Native ARM64 qualification
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:15.14
+        env:
+          POSTGRES_DB: erp03
+          POSTGRES_USER: erp03
+          POSTGRES_PASSWORD: erp03
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U erp03 -d erp03"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      DATABASE_URL: postgresql+asyncpg://erp03:erp03@127.0.0.1:5432/erp03
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      CI: "true"
+    steps:
+      - name: Fetch exact event commit without third-party Actions
+        env:
+          GH_TOKEN: \${{ github.token }}
+          GH_REPOSITORY: \${{ github.repository }}
+          GH_SHA: \${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/erp03-source"
+          curl --fail --location --retry 3 --retry-all-errors \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GH_REPOSITORY/tarball/$GH_SHA" \
+            -o "$RUNNER_TEMP/erp03-source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/erp03-source.tar.gz" \
+            --strip-components=1 -C "$RUNNER_TEMP/erp03-source"
+          test -f "$RUNNER_TEMP/erp03-source/ERP-BACKEND/requirements.txt"
+          echo "SOURCE_DIR=$RUNNER_TEMP/erp03-source" >> "$GITHUB_ENV"
+      - name: Verify runner architecture and runtime
+        run: |
+          set -Eeuo pipefail
+          test "$(uname -m)" = "aarch64" || test "$(uname -m)" = "arm64"
+          python3 -c 'import sys; assert sys.version_info >= (3, 12), sys.version'
+          node -e 'const v=process.versions.node.split(".").map(Number); if(v[0] < 22) process.exit(1)'
+          npm --version
+          docker version
+      - name: Install backend dependencies and quality tools
+        run: |
+          set -Eeuo pipefail
+          python3 -m venv "$RUNNER_TEMP/erp03-venv"
+          "$RUNNER_TEMP/erp03-venv/bin/python" -m pip install --upgrade pip
+          "$RUNNER_TEMP/erp03-venv/bin/pip" install \
+            -r "$SOURCE_DIR/ERP-BACKEND/requirements.txt" ruff==0.17.1 pip-audit
+      - name: Lint and compile backend
+        run: |
+          set -Eeuo pipefail
+          cd "$SOURCE_DIR/ERP-BACKEND"
+          "$RUNNER_TEMP/erp03-venv/bin/ruff" check app tests alembic
+          "$RUNNER_TEMP/erp03-venv/bin/ruff" format --check app tests alembic
+          "$RUNNER_TEMP/erp03-venv/bin/python" -m compileall -q app alembic
+      - name: Apply migrations and run backend tests
+        run: |
+          set -Eeuo pipefail
+          cd "$SOURCE_DIR/ERP-BACKEND"
+          "$RUNNER_TEMP/erp03-venv/bin/alembic" upgrade head
+          "$RUNNER_TEMP/erp03-venv/bin/pytest" -q
+      - name: Build frontend
+        run: |
+          set -Eeuo pipefail
+          cd "$SOURCE_DIR/frontend"
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Audit Python dependencies
+        run: |
+          set -Eeuo pipefail
+          "$RUNNER_TEMP/erp03-venv/bin/pip-audit" -r "$SOURCE_DIR/ERP-BACKEND/requirements.txt"
+      - name: Build native ARM64 container images
+        run: |
+          set -Eeuo pipefail
+          docker build --pull --platform linux/arm64 \
+            --tag "erp03-backend:$GITHUB_SHA" "$SOURCE_DIR/ERP-BACKEND"
+          docker build --pull --platform linux/arm64 \
+            --tag "erp03-frontend:$GITHUB_SHA" "$SOURCE_DIR/frontend"
+          docker image inspect "erp03-backend:$GITHUB_SHA" \
+            --format '{{.Os}}/{{.Architecture}}' | grep -Fx 'linux/arm64'
+          docker image inspect "erp03-frontend:$GITHUB_SHA" \
+            --format '{{.Os}}/{{.Architecture}}' | grep -Fx 'linux/arm64'
+
+  deploy-production:
+    name: Approved production deployment (Linux ARM64)
+    needs: qualify
+    if: \${{ github.event_name == 'workflow_dispatch' && inputs.deploy_production == true }}
+    runs-on: [self-hosted, Linux, ARM64, erp03-production]
+    environment: production
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Fetch qualified commit
+        env:
+          GH_TOKEN: \${{ github.token }}
+          GH_REPOSITORY: \${{ github.repository }}
+          GH_SHA: \${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/erp03-source"
+          curl --fail --location --retry 3 --retry-all-errors \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GH_REPOSITORY/tarball/$GH_SHA" \
+            -o "$RUNNER_TEMP/erp03-source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/erp03-source.tar.gz" \
+            --strip-components=1 -C "$RUNNER_TEMP/erp03-source"
+          echo "SOURCE_DIR=$RUNNER_TEMP/erp03-source" >> "$GITHUB_ENV"
+      - name: Verify target and deploy with rollback guard
+        run: |
+          set -Eeuo pipefail
+          test "$(uname -m)" = "aarch64" || test "$(uname -m)" = "arm64"
+          sudo -n bash "$SOURCE_DIR/scripts/deploy-linux-arm64.sh" "$GITHUB_SHA"
