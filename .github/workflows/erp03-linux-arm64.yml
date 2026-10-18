@@ -43,6 +43,7 @@ jobs:
           --health-retries 15
     env:
       DATABASE_URL: postgresql+asyncpg://erp03:erp03@127.0.0.1:5432/erp03
+      DATABASE_PATH: ${{ runner.temp }}/erp03-transactions.sqlite3
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PYTHONDONTWRITEBYTECODE: "1"
       CI: "true"
