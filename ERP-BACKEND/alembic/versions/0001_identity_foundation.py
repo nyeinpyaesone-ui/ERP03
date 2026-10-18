@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+from app.db.base import GUID
 
 revision: str = "0001_identity"
 down_revision: str | Sequence[str] | None = None
@@ -13,7 +13,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    uuid = postgresql.UUID(as_uuid=True)
+    uuid = GUID()
 
     op.create_table(
         "businesses",

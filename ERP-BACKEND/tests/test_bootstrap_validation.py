@@ -1,6 +1,6 @@
 import pytest
-
-from app.services.bootstrap import _required
+from app.core.errors import ValidationError
+from app.services.bootstrap import validate_required
 
 
 @pytest.mark.parametrize(
@@ -12,9 +12,9 @@ from app.services.bootstrap import _required
     ],
 )
 def test_required_rejects_invalid_identifier(value, field, maximum):
-    with pytest.raises(ValueError):
-        _required(value, field, maximum)
+    with pytest.raises(ValidationError):
+        validate_required(value, field, maximum)
 
 
 def test_required_strips_valid_identifier():
-    assert _required("  ERP03  ", "business_code", 64) == "ERP03"
+    assert validate_required("  ERP03  ", "business_code", 64) == "ERP03"

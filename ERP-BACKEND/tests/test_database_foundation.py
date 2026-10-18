@@ -1,5 +1,8 @@
+import app.models  # noqa: F401  (registers identity + ERP tables on Base.metadata)
+import pytest
 from app.db.base import Base
-import app.models  # noqa: F401
+
+pytestmark = pytest.mark.integration  # requires migrated PostgreSQL via DATABASE_URL
 
 
 def test_identity_metadata_is_registered() -> None:

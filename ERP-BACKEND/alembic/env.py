@@ -1,13 +1,13 @@
 from logging.config import fileConfig
 
+import app.models  # noqa: F401 - register canonical ORM metadata
+import sqlalchemy
 from alembic import context
+from app.core.config import settings
+from app.db.base import Base
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
-
-from app.core.config import settings
-from app.db.base import Base
-import app.models  # noqa: F401 - register canonical ORM metadata
 
 target_metadata = Base.metadata
 
@@ -24,8 +24,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        compare_type=True,
-        compare_server_default=True,
+        **_migration_context_opts(sqlalchemy.make_url(settings.database_url).get_backend_name()),
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -42,12 +41,24 @@ async def run_async_migrations() -> None:
     await connectable.dispose()
 
 
+def _migration_context_opts(dialect_name: str) -> dict[str, bool]:
+    """Dialect-aware Alembic options.
+
+    SQLite cannot ALTER constraints in-place; enabling Alembic's batch mode
+    (copy-and-move rebuild) makes the whole migration chain portable so the
+    same schema evolves on both PostgreSQL and SQLite deployments.
+    """
+    opts: dict[str, bool] = {"compare_type": True, "compare_server_default": True}
+    if dialect_name == "sqlite":
+        opts["render_as_batch"] = True
+    return opts
+
+
 def do_run_migrations(connection: Connection) -> None:
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
-        compare_type=True,
-        compare_server_default=True,
+        **_migration_context_opts(connection.dialect.name),
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -56,6 +67,9 @@ def do_run_migrations(connection: Connection) -> None:
 def run_migrations_online() -> None:
     import asyncio
 
+    # Canonical Alembic async dispatch (CLI path: `alembic upgrade head`).
+    # Test provisioning shells out to this same CLI, so env.py never needs
+    # an embedded-caller special case.
     asyncio.run(run_async_migrations())
 
 
