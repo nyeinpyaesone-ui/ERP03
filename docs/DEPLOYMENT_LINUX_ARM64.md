@@ -30,7 +30,7 @@ sudo chown root:root /etc/erp03/erp03.env
 sudo chmod 0600 /etc/erp03/erp03.env
 ```
 
-Replace all placeholders. Set `DATABASE_URL`, `SECRET_KEY`, and `CORS_ORIGINS` to real production values. Never commit the production environment file. The deployment script adjusts the environment file to root:erp03 mode 0640 after checking it.
+Replace all placeholders. Set `DATABASE_URL`, `SECRET_KEY`, `CORS_ORIGINS`, and `PUBLIC_HOSTNAME` to real production values. `PUBLIC_HOSTNAME` must be the DNS hostname routed to this nginx instance. Never commit the production environment file. The deployment script adjusts the environment file to root:erp03 mode 0640 after checking it.
 
 ## Runbook
 
