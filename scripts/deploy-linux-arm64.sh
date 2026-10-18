@@ -50,6 +50,8 @@ done
 grep -q '^SECRET_KEY=.\+' "$ENV_FILE" || die "SECRET_KEY is missing from $ENV_FILE"
 grep -q '^DATABASE_URL=.\+' "$ENV_FILE" || die "DATABASE_URL is missing from $ENV_FILE"
 grep -q '^CORS_ORIGINS=.\+' "$ENV_FILE" || die "CORS_ORIGINS is missing from $ENV_FILE"
+PUBLIC_HOSTNAME="$(sed -n 's/^PUBLIC_HOSTNAME=//p' "$ENV_FILE" | head -n 1)"
+[[ "$PUBLIC_HOSTNAME" =~ ^[A-Za-z0-9.-]+$ ]] || die "PUBLIC_HOSTNAME is missing or invalid in $ENV_FILE"
 
 if ! id erp03 >/dev/null 2>&1; then
   useradd --system --home-dir "$ROOT" --create-home --shell /usr/sbin/nologin erp03
@@ -121,10 +123,10 @@ UMask=0027
 WantedBy=multi-user.target
 UNIT
 
-cat > "$NGINX_FILE" <<'NGINX'
+cat > "$NGINX_FILE.template" <<'NGINX'
 server {
     listen 80;
-    server_name _;
+    server_name __PUBLIC_HOSTNAME__;
     root /opt/erp03/current/frontend/dist;
     index index.html;
     server_tokens off;
@@ -152,6 +154,8 @@ server {
     }
 }
 NGINX
+sed "s/__PUBLIC_HOSTNAME__/$PUBLIC_HOSTNAME/" "$NGINX_FILE.template" > "$NGINX_FILE"
+rm -f "$NGINX_FILE.template"
 ln -sfn "$NGINX_FILE" "$NGINX_ENABLED"
 nginx -t
 
