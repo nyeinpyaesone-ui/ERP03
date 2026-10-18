@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: erp03-\${{ github.workflow }}-\${{ github.ref }}
+  group: erp03-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -49,9 +49,9 @@ jobs:
     steps:
       - name: Fetch exact event commit without third-party Actions
         env:
-          GH_TOKEN: \${{ github.token }}
-          GH_REPOSITORY: \${{ github.repository }}
-          GH_SHA: \${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
         run: |
           set -Eeuo pipefail
           mkdir -p "$RUNNER_TEMP/erp03-source"
@@ -117,7 +117,7 @@ jobs:
   deploy-production:
     name: Approved production deployment (Linux ARM64)
     needs: qualify
-    if: \${{ github.event_name == 'workflow_dispatch' && inputs.deploy_production == true }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_production == true }}
     runs-on: [self-hosted, Linux, ARM64, erp03-production]
     environment: production
     timeout-minutes: 30
@@ -126,9 +126,9 @@ jobs:
     steps:
       - name: Fetch qualified commit
         env:
-          GH_TOKEN: \${{ github.token }}
-          GH_REPOSITORY: \${{ github.repository }}
-          GH_SHA: \${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
         run: |
           set -Eeuo pipefail
           mkdir -p "$RUNNER_TEMP/erp03-source"
