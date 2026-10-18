@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+from app.db.base import GUID
 
 revision: str = "0002_transactional_erp"
 down_revision: str | Sequence[str] | None = "0001_identity"
@@ -12,7 +12,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def _uuid():
-    return postgresql.UUID(as_uuid=True)
+    return GUID()
 
 
 def upgrade() -> None:

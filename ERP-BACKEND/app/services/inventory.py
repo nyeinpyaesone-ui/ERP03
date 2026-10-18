@@ -4,18 +4,15 @@ The service owns stock mutations so POS and inventory workflows can share one
 transaction boundary. Callers must commit or roll back the supplied session.
 """
 
-from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import InsufficientStockError, ValidationError
+from app.db.base import utcnow
 from app.models.erp import StockBalance, StockMovement
-
-
-class InsufficientStockError(ValueError):
-    """Raised when a stock deduction would make inventory negative."""
 
 
 async def adjust_stock(
@@ -31,7 +28,7 @@ async def adjust_stock(
 ) -> StockBalance:
     """Atomically adjust one warehouse/product balance using a row lock."""
     if quantity_delta == 0:
-        raise ValueError("quantity_delta must not be zero")
+        raise ValidationError("quantity_delta must not be zero")
 
     result = await session.execute(
         select(StockBalance)
@@ -49,7 +46,7 @@ async def adjust_stock(
             warehouse_id=warehouse_id,
             product_id=product_id,
             quantity=Decimal("0"),
-            updated_at=datetime.now(timezone.utc),
+            updated_at=utcnow(),
         )
         session.add(balance)
         await session.flush()
@@ -59,7 +56,7 @@ async def adjust_stock(
         raise InsufficientStockError("Insufficient stock")
 
     balance.quantity = new_quantity
-    balance.updated_at = datetime.now(timezone.utc)
+    balance.updated_at = utcnow()
     session.add(
         StockMovement(
             warehouse_id=warehouse_id,
@@ -69,7 +66,7 @@ async def adjust_stock(
             unit_cost=unit_cost,
             reference_type=reference_type,
             reference_id=reference_id,
-            created_at=datetime.now(timezone.utc),
+            created_at=utcnow(),
         )
     )
     return balance

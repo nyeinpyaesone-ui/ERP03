@@ -3,12 +3,15 @@ import threading
 from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
-
 from app.api.transactions import store
 from app.core.security import current_claims
 from app.core.transaction_store import TransactionStore
 from app.main import app
+from fastapi.testclient import TestClient
+
+pytestmark = (
+    pytest.mark.requires_database
+)  # durable SQLite journal under /tmp, no PostgreSQL needed
 
 
 @pytest.fixture(autouse=True)
@@ -144,7 +147,8 @@ def test_failed_write_rolls_back_and_key_can_be_retried():
     key = f"rollback-retry-{uuid4().hex}"
     with pytest.raises(TypeError):
         store.execute(
-            transaction_id="failed-write-001",
+            transaction_id=f"failed-write-{uuid4().hex}",
+            business_id="test-business",
             idempotency_key=key,
             operation="finance.post",
             amount="10.00",
@@ -153,15 +157,16 @@ def test_failed_write_rolls_back_and_key_can_be_retried():
         )
 
     result = store.execute(
-        transaction_id="successful-retry-001",
+        transaction_id=f"successful-retry-{uuid4().hex}",
+        business_id="test-business",
         idempotency_key=key,
         operation="finance.post",
         amount="10.00",
         currency="MMK",
         metadata={"retry": True},
     )
-    assert result.transaction_id == "successful-retry-001"
-    assert result.idempotent_replay is False
+    assert not result.idempotent_replay
+    assert result.metadata == {"retry": True}
 
 
 def test_transaction_survives_store_reinitialization(tmp_path):
@@ -169,6 +174,7 @@ def test_transaction_survives_store_reinitialization(tmp_path):
     first_store = TransactionStore(database)
     created = first_store.execute(
         transaction_id="persistent-001",
+        business_id="business-a",
         idempotency_key="persistent-key-001",
         operation="order.create",
         amount="25.00",

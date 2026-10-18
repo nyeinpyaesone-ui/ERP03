@@ -1,10 +1,18 @@
+"""Authenticated transaction journal endpoints.
+
+Every write is idempotent: a reused ``X-Idempotency-Key`` (scoped to the
+caller's business) replays the original entry instead of recording a new one.
+Reads are scoped to the caller's business as well.
+"""
+
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel, Field, field_validator
+from fastapi import APIRouter, Header, HTTPException, status
 
+from app.api.dependencies import Claims
+from app.api.validation import validate_idempotency_key
 from app.core.config import settings
 from app.core.security import current_claims
 from app.core.transaction_store import IdempotencyConflict, TransactionStore
@@ -122,12 +130,4 @@ def get_transaction(
     result = store.get(transaction_id, business_id=business_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    return TransactionResponse(
-        transaction_id=result.transaction_id,
-        status=result.status,
-        operation=result.operation,
-        amount=result.amount,
-        currency=result.currency,
-        metadata=result.metadata,
-        idempotent_replay=False,
-    )
+    return _to_response(result)

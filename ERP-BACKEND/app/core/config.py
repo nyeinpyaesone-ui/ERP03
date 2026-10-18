@@ -3,8 +3,11 @@ from functools import lru_cache
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="ignore", case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_file=".env", env_prefix="", extra="ignore", case_sensitive=False
+    )
     secret_key: SecretStr = SecretStr("development-only-change-me")
     app_name: str = "ERP03 API"
     version: str = "1.0.0"
@@ -16,12 +19,6 @@ class Settings(BaseSettings):
     db_max_overflow: int = Field(default=20, ge=0, le=200)
     db_pool_recycle: int = Field(default=1800, ge=60)
     db_echo: bool = False
-    redis_url: str = "redis://redis:6379/0"
-    celery_broker_url: str | None = None
-    celery_result_backend: str | None = None
-    ollama_base_url: str = "http://ollama:11434"
-    ollama_model: str = "qwen2.5:1.5b"
-    ollama_timeout_seconds: float = 10.0
     database_path: str = "/data/erp03.sqlite3"
 
     @field_validator("cors_origins")
@@ -36,9 +33,18 @@ class Settings(BaseSettings):
     def validate_production_security(self) -> "Settings":
         if self.environment.lower() in {"production", "prod"}:
             secret = self.secret_key.get_secret_value()
-            if secret in {"", "development-only-change-me", "change-me-in-production"} or len(secret) < 32:
-                raise ValueError("SECRET_KEY must be explicitly configured with at least 32 characters in production")
-            if any(origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1") for origin in self.cors_origin_list):
+            if (
+                secret in {"", "development-only-change-me", "change-me-in-production"}
+                or len(secret) < 32
+            ):
+                raise ValueError(
+                    "SECRET_KEY must be explicitly configured "
+                    "with at least 32 characters in production"
+                )
+            if any(
+                origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1")
+                for origin in self.cors_origin_list
+            ):
                 raise ValueError("Production CORS_ORIGINS must not contain localhost/127.0.0.1")
         return self
 
@@ -46,16 +52,14 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
-    @property
-    def effective_celery_broker_url(self) -> str:
-        return self.celery_broker_url or self.redis_url
-
-    @property
-    def effective_celery_result_backend(self) -> str:
-        return self.celery_result_backend or self.redis_url
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    """Resolve settings once per process (cached)."""
     return Settings()
 
-settings = get_settings()
+
+# Single module-level accessor. Resolved eagerly on import; tests and tools
+# override values through environment variables *before* importing the app,
+# or call ``get_settings.cache_clear()`` after mutating the environment.
+settings: Settings = get_settings()

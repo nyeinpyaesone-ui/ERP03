@@ -3,7 +3,7 @@ import json
 import sqlite3
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -124,6 +124,7 @@ class TransactionStore:
         self,
         *,
         transaction_id: str,
+        business_id: str,
         idempotency_key: str,
         operation: str,
         amount: str,
@@ -142,9 +143,13 @@ class TransactionStore:
             connection = self._connect()
             try:
                 connection.execute("BEGIN IMMEDIATE")
+                # Serialize metadata *inside* the write transaction so a
+                # non-serializable payload fails before any row is inserted;
+                # this keeps failed writes fully rolled back and retryable.
+                metadata_json = json.dumps(metadata, sort_keys=True, separators=(",", ":"))
                 existing = connection.execute(
-                    "SELECT * FROM transactions WHERE idempotency_key = ?",
-                    (idempotency_key,),
+                    "SELECT * FROM transactions WHERE business_id = ? AND idempotency_key = ?",
+                    (business_id, idempotency_key),
                 ).fetchone()
                 if existing:
                     previous = existing["request_fingerprint"]
@@ -164,6 +169,7 @@ class TransactionStore:
                     """,
                     (
                         transaction_id,
+                        business_id,
                         idempotency_key,
                         business_id,
                         operation,
@@ -183,10 +189,8 @@ class TransactionStore:
                     raise RuntimeError("Transaction committed but could not be reloaded")
                 return self._result(row, replay=False)
             except Exception:
-                try:
+                with contextlib.suppress(sqlite3.Error):
                     connection.execute("ROLLBACK")
-                except sqlite3.Error:
-                    pass
                 raise
             finally:
                 connection.close()
