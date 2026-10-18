@@ -1,0 +1,21 @@
+name: Actions Startup Diagnostic
+
+on:
+  push:
+    branches:
+      - diag/actions-smoke-2026-10-18
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Confirm job graph and runner startup
+        run: |
+          echo "ACTIONS_SMOKE_STARTED=true"
+          echo "event=${GITHUB_EVENT_NAME}"
+          echo "sha=${GITHUB_SHA}"
