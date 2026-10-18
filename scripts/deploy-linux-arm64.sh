@@ -36,8 +36,9 @@ rollback_on_error() {
 trap rollback_on_error EXIT
 
 [[ "$(id -u)" -eq 0 ]] || die "must run as root"
-[[ $# -eq 1 ]] || die "usage: deploy-linux-arm64.sh <40-character-git-sha>"
+[[ $# -eq 2 ]] || die "usage: deploy-linux-arm64.sh <40-character-git-sha> <source-directory>"
 readonly SHA="$1"
+readonly SOURCE_DIR="$2"
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || die "invalid commit SHA"
 case "$(uname -m)" in aarch64|arm64) ;; *) die "Linux ARM64 required; found $(uname -m)" ;; esac
 
@@ -59,8 +60,7 @@ install -d -o erp03 -g erp03 -m 0750 /var/lib/erp03
 chown root:erp03 "$ENV_FILE"
 chmod 0640 "$ENV_FILE"
 
-readonly SOURCE_DIR="\${SOURCE_DIR:-}"
-[[ -n "$SOURCE_DIR" && -f "$SOURCE_DIR/ERP-BACKEND/requirements.txt" ]] || die "SOURCE_DIR must contain the downloaded ERP03 source"
+[[ -d "$SOURCE_DIR" && -f "$SOURCE_DIR/ERP-BACKEND/requirements.txt" ]] || die "source directory must contain the downloaded ERP03 source"
 readonly RELEASE="$RELEASES/$SHA"
 [[ ! -e "$RELEASE" ]] || die "release already exists: $RELEASE (immutable releases are not overwritten)"
 
