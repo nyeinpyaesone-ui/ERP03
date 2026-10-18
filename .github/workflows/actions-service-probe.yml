@@ -1,0 +1,33 @@
+name: Actions Service Diagnostic
+
+on:
+  push:
+    branches: ["diag/actions-smoke-2026-10-18"]
+
+permissions:
+  contents: read
+
+jobs:
+  service-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    services:
+      postgres:
+        image: postgres:15.14
+        env:
+          POSTGRES_DB: erp03
+          POSTGRES_USER: erp03
+          POSTGRES_PASSWORD: erp03
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U erp03 -d erp03"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Verify runner and service initialization
+        run: |
+          echo "ACTIONS_SERVICE_SMOKE_STARTED=true"
+          echo "event=${GITHUB_EVENT_NAME}"
+          echo "sha=${GITHUB_SHA}"
