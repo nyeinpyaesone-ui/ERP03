@@ -1,0 +1,20 @@
+name: Actions Setup-Python Diagnostic
+
+on:
+  push:
+    branches: ["diag/actions-smoke-2026-10-18"]
+
+permissions:
+  contents: read
+
+jobs:
+  setup-python-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Setup Python without checkout
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.13"
+      - name: Confirm setup-python action executed
+        run: python --version
