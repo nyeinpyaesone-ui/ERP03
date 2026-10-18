@@ -1,0 +1,24 @@
+name: Actions Defaults Diagnostic
+
+on:
+  push:
+    branches: ["diag/actions-smoke-2026-10-18"]
+
+permissions:
+  contents: read
+
+jobs:
+  defaults-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    defaults:
+      run:
+        working-directory: ERP-BACKEND
+    env:
+      DATABASE_URL: postgresql+asyncpg://erp03:erp03@127.0.0.1:5432/erp03
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          echo "DEFAULTS_SMOKE_STARTED=true"
+          pwd
+          test -f requirements.txt
