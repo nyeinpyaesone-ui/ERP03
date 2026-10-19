@@ -350,11 +350,7 @@ async def test_pos_sale_idempotency_replays_same_invoice_without_double_stock():
         }
         first = await client.post("/api/v1/sales", headers=headers, json=payload)
         assert first.status_code == 201, first.text
-        second = await client.post(
-            "/api/v1/sales",
-            headers=headers,
-            json=payload | {"invoice_no": f"RETRY-{uuid4().hex[:8]}"},
-        )
+        second = await client.post("/api/v1/sales", headers=headers, json=payload)
         assert second.status_code == 201, second.text
         assert second.json()["invoice_id"] == first.json()["invoice_id"]
 

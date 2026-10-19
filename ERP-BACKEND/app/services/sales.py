@@ -1,5 +1,7 @@
 """Atomic POS sale application service."""
 
+import hashlib
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -43,6 +45,55 @@ async def next_invoice_no(session: AsyncSession, *, branch_id: UUID) -> str:
     )
     sequence = int(last[len(prefix) :]) + 1 if last else 1
     return f"{prefix}{sequence:06d}"
+
+
+def _sale_fingerprint(
+    *,
+    business_id: UUID,
+    branch_id: UUID,
+    warehouse_id: UUID,
+    invoice_no: str | None,
+    lines: list["SaleLine"],
+    payments: list["SalePayment"],
+    customer_id: UUID | None,
+    currency: str,
+) -> str:
+    """Canonical SHA-256 digest of the sale command for idempotency conflict detection."""
+    payload = {
+        "business_id": str(business_id),
+        "branch_id": str(branch_id),
+        "warehouse_id": str(warehouse_id),
+        "invoice_no": invoice_no,
+        "customer_id": str(customer_id) if customer_id else None,
+        "currency": currency.upper(),
+        "lines": sorted(
+            [
+                {
+                    "product_id": str(line.product_id),
+                    "quantity": str(line.quantity),
+                    "unit_price": str(line.unit_price) if line.unit_price is not None else None,
+                    "discount": str(line.discount),
+                    "tax": str(line.tax),
+                }
+                for line in lines
+            ],
+            key=lambda item: item["product_id"],
+        ),
+        "payments": sorted(
+            [
+                {
+                    "method": payment.method,
+                    "amount": str(payment.amount),
+                    "currency": payment.currency,
+                    "reference": payment.reference,
+                }
+                for payment in payments
+            ],
+            key=lambda item: item["method"],
+        ),
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,6 +174,17 @@ async def create_pos_sale(
         requested_paid = sum((payment.amount for payment in payments), Decimal("0"))
         if requested_total >= 0 and requested_paid > requested_total:
             raise PaymentError("Overpayment is not allowed")
+
+    fingerprint = _sale_fingerprint(
+        business_id=business_id,
+        branch_id=branch_id,
+        warehouse_id=warehouse_id,
+        invoice_no=invoice_no,
+        lines=lines,
+        payments=payments,
+        customer_id=customer_id,
+        currency=currency,
+    )
 
     async with session.begin():
         branch = await session.scalar(
@@ -215,6 +277,11 @@ async def create_pos_sale(
                 .with_for_update()
             )
             if existing is not None:
+                if (
+                    existing.request_fingerprint is not None
+                    and existing.request_fingerprint != fingerprint
+                ):
+                    raise ConflictError("Idempotency key was already used for a different sale")
                 return SaleResult.from_invoice(existing)
 
         invoice = Invoice(
@@ -223,6 +290,7 @@ async def create_pos_sale(
             customer_id=customer_id,
             invoice_no=invoice_no,
             idempotency_key=idempotency_key,
+            request_fingerprint=fingerprint,
             status="paid" if paid == total else ("partial" if paid else "confirmed"),
             currency=currency.upper(),
             subtotal=subtotal,

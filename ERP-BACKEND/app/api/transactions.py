@@ -9,15 +9,12 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import uuid4
 
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
-
-from app.api.dependencies import Claims
-from app.api.validation import validate_idempotency_key
 from app.core.config import settings
 from app.core.security import current_claims
-from app.core.transaction_store import IdempotencyConflict, TransactionStore
+from app.core.transaction_store import IdempotencyConflict, TransactionResult, TransactionStore
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 store = TransactionStore(settings.database_path)
@@ -52,6 +49,18 @@ class TransactionResponse(BaseModel):
     currency: str
     metadata: dict[str, Any]
     idempotent_replay: bool
+
+
+def _to_response(result: TransactionResult) -> TransactionResponse:
+    return TransactionResponse(
+        transaction_id=result.transaction_id,
+        status=result.status,
+        operation=result.operation,
+        amount=result.amount,
+        currency=result.currency,
+        metadata=result.metadata,
+        idempotent_replay=result.idempotent_replay,
+    )
 
 
 def _business_id(claims: dict[str, Any]) -> str:
@@ -104,7 +113,11 @@ def create_transaction(
         )
     except IdempotencyConflict as exc:
         msg = str(exc)
-        code = "IDEMPOTENCY_PAYLOAD_MISMATCH" if "different request" in msg else "IDEMPOTENCY_KEY_REUSED"
+        code = (
+            "IDEMPOTENCY_PAYLOAD_MISMATCH"
+            if "different request" in msg
+            else "IDEMPOTENCY_KEY_REUSED"
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": code, "message": msg},

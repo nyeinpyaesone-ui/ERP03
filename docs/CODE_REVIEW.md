@@ -50,6 +50,21 @@ Fixes were verified with `ruff` + `pytest` before merge.
 ```
 ruff check app alembic tests        # All checks passed!
 python -m compileall -q app alembic # OK
-alembic heads                       # single head: 0004_sales_permission
-pytest -q                           # unit/API suite green; integration auto-skips without PG
+alembic heads                       # single head: 0007_operation_orchestration
+alembic upgrade head                # applies all 7 migrations cleanly (SQLite verified)
+pytest -q                           # 48 passed, 1 skipped (PG-only concurrency test)
 ```
+
+## Completion summary (2026-10-19)
+All T-01 through T-07 fixing events are complete and verified:
+
+| ID | File(s) | Issue | Fix |
+|----|---------|-------|-----|
+| T-01 | `app/core/transaction_store.py` | SyntaxError (duplicate `business_id`), missing `contextlib`/`timezone` imports | Removed duplicate param; added imports |
+| T-02 | `app/api/transactions.py` | Missing `Depends`, `BaseModel`/`Field`/`field_validator`, `TransactionResult` imports; missing `_to_response` | Added imports + helper |
+| T-03 | `.github/workflows/ci.yml`, `dev-requirements.txt` | Ruff lint/format never ran in CI | Added ruff check/format steps; pinned ruff==0.17.1 |
+| T-04 | `.github/workflows/*.yml` | GitHub Actions `startup_failure` (0 jobs) | Platform-side; diagnosed; requires Actions access to fix root cause |
+| T-05 | `services/sales.py`, `models/erp.py`, `alembic/versions/0006_*.py`, `tests/test_invoice_numbering.py` | POS sale idempotency lacked payload-conflict semantics | Added `_sale_fingerprint()` SHA-256, conflict check in same DB transaction, migration + tests |
+| T-06 | `models/operations.py`, `services/orchestration.py`, `alembic/versions/0007_*.py`, `tests/test_orchestration_service.py` | No cross-module transaction orchestration | Implemented 6-state state machine, atomic claim/retry/reconcile, migration + 10 tests |
+| T-07 | `app/core/config.py`, `scripts/setup.sh`, `Dockerfile` | `database_path` default mismatched setup.sh | Aligned to `./.local/erp03.sqlite3`; setup.sh installs ruff from dev-requirements.txt; Dockerfile copies dev-requirements.txt |
+

@@ -12,6 +12,7 @@ from app.models.erp import (
     Warehouse,
 )
 from app.models.identity import Branch, Business, Permission, Role, User
+from app.models.operations import Operation
 
 __all__ = [
     "Business",
@@ -28,4 +29,5 @@ __all__ = [
     "Invoice",
     "InvoiceItem",
     "Payment",
+    "Operation",
 ]

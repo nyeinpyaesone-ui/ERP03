@@ -1,44 +1,49 @@
 name: Quality
 
 on:
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "ERP-BACKEND/**"
-      - "frontend/**"
-      - ".github/workflows/quality.yml"
   push:
     branches: ["main", "feat/**", "fix/**"]
-    paths:
-      - "ERP-BACKEND/**"
-      - "frontend/**"
-      - ".github/workflows/quality.yml"
+  pull_request:
+    branches: ["main"]
 
 permissions:
   contents: read
 
 concurrency:
-  group: quality-${{ github.workflow }}-${{ github.ref }}
+  group: quality-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  python:
+  lint:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
       run:
         working-directory: ERP-BACKEND
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.12.13"
+          python-version: "3.12"
           cache: pip
           cache-dependency-path: ERP-BACKEND/requirements.txt
-      - run: pip install --requirement requirements.txt ruff
-      - run: ruff check app tests alembic
-      - run: ruff format --check app tests alembic
-      - run: python -m compileall -q app alembic
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install ruff==0.17.1
+
+      - name: Run ruff check
+        run: ruff check app tests alembic
+
+      - name: Run ruff format check
+        run: ruff format --check app tests alembic
+
+      - name: Compile backend
+        run: python -m compileall -q app alembic
 
   frontend:
     runs-on: ubuntu-latest
@@ -47,11 +52,18 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package.json
-      - run: npm install --no-audit --no-fund
-      - run: npm run build
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Build frontend
+        run: npm run build

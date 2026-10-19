@@ -163,6 +163,7 @@ class Invoice(Base):
     )
     invoice_no: Mapped[str] = mapped_column(String(64))
     idempotency_key: Mapped[str | None] = mapped_column(String(255))
+    request_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(24), default="draft")
     currency: Mapped[str] = mapped_column(String(3), default="MMK")
     subtotal: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)

@@ -145,9 +145,9 @@ setup_backend() {
   fi
   # shellcheck disable=SC1091
   source "$VENV_DIR/bin/activate"
-  pip install --quiet --upgrade pip
-  pip install --quiet --requirement "$BACKEND_DIR/requirements.txt"
-  pip install --quiet ruff==0.17.1
+  pip install --quiet --upgrade pip || pip install --quiet --upgrade pip
+  pip install --quiet --requirement "$BACKEND_DIR/requirements.txt" || pip install --quiet --requirement "$BACKEND_DIR/requirements.txt"
+  pip install --quiet --requirement "$BACKEND_DIR/dev-requirements.txt" || pip install --quiet --requirement "$BACKEND_DIR/dev-requirements.txt"
   log "Backend dependencies installed (pinned versions verified by CI)"
 }
 

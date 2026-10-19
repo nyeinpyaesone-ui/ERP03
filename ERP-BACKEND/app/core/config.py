@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     db_max_overflow: int = Field(default=20, ge=0, le=200)
     db_pool_recycle: int = Field(default=1800, ge=60)
     db_echo: bool = False
-    database_path: str = "/data/erp03.sqlite3"
+    database_path: str = "./.local/erp03.sqlite3"
 
     @field_validator("log_level")
     @classmethod
@@ -66,12 +66,6 @@ class Settings(BaseSettings):
             # Require HTTPS origins in production
             if any(origin.startswith("http://") for origin in self.cors_origin_list):
                 raise ValueError("Production CORS_ORIGINS must use HTTPS")
-        # DB storage mutual exclusion
-        if env in {"production", "prod"}:
-            # In production, prefer DATABASE_URL and disallow SQLite path usage
-            if self.database_path and "/sqlite" in self.database_url.lower():
-                # Allow, but warn via validation if path points to different location than expected
-                pass
         # Prevent ambiguous dual storage in production
         if env in {"production", "prod"} and "sqlite" in self.database_url.lower():
             raise ValueError("Production must use PostgreSQL DATABASE_URL, not SQLite")

@@ -180,13 +180,12 @@ def test_transaction_survives_store_reinitialization(tmp_path):
         amount="25.00",
         currency="MMK",
         metadata={"order": "ORD-001"},
-        business_id="persistent-business",
     )
 
     second_store = TransactionStore(database)
     loaded = second_store.get(
         created.transaction_id,
-        business_id="persistent-business",
+        business_id="business-a",
     )
     assert loaded is not None
     assert loaded.transaction_id == created.transaction_id
@@ -241,7 +240,6 @@ def test_existing_journal_is_migrated_and_legacy_tenant_is_recovered(tmp_path):
     assert owned is not None
     assert owned.metadata == {"invoice": "LEGACY-001"}
     assert foreign is None
-
 
 
 def test_same_idempotency_key_with_different_payload_returns_conflict():

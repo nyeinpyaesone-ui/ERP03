@@ -1,18 +1,12 @@
 name: Security
 
 on:
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "ERP-BACKEND/**"
-      - ".github/workflows/security.yml"
   push:
     branches: ["main"]
-    paths:
-      - "ERP-BACKEND/**"
-      - ".github/workflows/security.yml"
+  pull_request:
+    branches: ["main"]
   schedule:
-    - cron: "17 3 * * 1"
+    - cron: "0 3 * * 1"
 
 permissions:
   contents: read
@@ -23,24 +17,41 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.12.13"
-      - run: python -m pip install --upgrade pip pip-audit
-      - run: pip-audit -r ERP-BACKEND/requirements.txt
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip pip-audit
+
+      - name: Run dependency audit
+        run: pip-audit -r ERP-BACKEND/requirements.txt
 
   codeql:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
     strategy:
       fail-fast: false
       matrix:
         language: ["python", "javascript-typescript"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-      - uses: github/codeql-action/autobuild@v3
-      - uses: github/codeql-action/analyze@v3
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3

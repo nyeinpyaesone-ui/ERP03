@@ -4,7 +4,7 @@ import json
 import sqlite3
 import threading
 from dataclasses import dataclass
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -66,17 +66,14 @@ class TransactionStore:
                 """
             )
             columns = {
-                column["name"]
-                for column in connection.execute("PRAGMA table_info(transactions)")
+                column["name"] for column in connection.execute("PRAGMA table_info(transactions)")
             }
             if "business_id" not in columns:
                 connection.execute(
                     "ALTER TABLE transactions ADD COLUMN business_id TEXT NOT NULL DEFAULT ''"
                 )
             if "request_fingerprint" not in columns:
-                connection.execute(
-                    "ALTER TABLE transactions ADD COLUMN request_fingerprint TEXT"
-                )
+                connection.execute("ALTER TABLE transactions ADD COLUMN request_fingerprint TEXT")
             connection.execute(
                 """
                 UPDATE transactions
@@ -92,10 +89,8 @@ class TransactionStore:
             )
             connection.execute("COMMIT")
         except Exception:
-            try:
+            with contextlib.suppress(sqlite3.Error):
                 connection.execute("ROLLBACK")
-            except sqlite3.Error:
-                pass
             raise
         finally:
             connection.close()
@@ -146,7 +141,7 @@ class TransactionStore:
                 # Serialize metadata *inside* the write transaction so a
                 # non-serializable payload fails before any row is inserted;
                 # this keeps failed writes fully rolled back and retryable.
-                metadata_json = json.dumps(metadata, sort_keys=True, separators=(",", ":"))
+                json.dumps(metadata, sort_keys=True, separators=(",", ":"))
                 existing = connection.execute(
                     "SELECT * FROM transactions WHERE business_id = ? AND idempotency_key = ?",
                     (business_id, idempotency_key),
@@ -169,7 +164,6 @@ class TransactionStore:
                     """,
                     (
                         transaction_id,
-                        business_id,
                         idempotency_key,
                         business_id,
                         operation,
@@ -177,7 +171,7 @@ class TransactionStore:
                         currency,
                         json.dumps(metadata, sort_keys=True, separators=(",", ":")),
                         fingerprint,
-                        datetime.now(timezone.utc).isoformat(),
+                        datetime.now(UTC).isoformat(),
                     ),
                 )
                 connection.execute("COMMIT")
