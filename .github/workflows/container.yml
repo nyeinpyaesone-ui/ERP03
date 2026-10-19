@@ -3,8 +3,18 @@ name: Container
 on:
   pull_request:
     branches: ["main"]
+    paths:
+      - "ERP-BACKEND/**"
+      - "frontend/**"
+      - "Dockerfile*"
+      - ".github/workflows/container.yml"
   push:
     branches: ["main"]
+    paths:
+      - "ERP-BACKEND/**"
+      - "frontend/**"
+      - "Dockerfile*"
+      - ".github/workflows/container.yml"
 
 permissions:
   contents: read

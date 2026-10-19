@@ -3,7 +3,17 @@ name: ERP03 Qualification
 on:
   push:
     branches: [main]
+    paths:
+      - "ERP-BACKEND/**"
+      - "frontend/**"
+      - "scripts/**"
+      - ".github/workflows/qualification.yml"
   pull_request:
+    paths:
+      - "ERP-BACKEND/**"
+      - "frontend/**"
+      - "scripts/**"
+      - ".github/workflows/qualification.yml"
 
 permissions:
   contents: read
