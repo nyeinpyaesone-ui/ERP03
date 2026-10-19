@@ -9,7 +9,9 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Header, HTTPException, status
+from pydantic import BaseModel, Field, field_validator
+
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 
 from app.api.dependencies import Claims
 from app.api.validation import validate_idempotency_key
@@ -101,9 +103,11 @@ def create_transaction(
             metadata=payload.metadata,
         )
     except IdempotencyConflict as exc:
+        msg = str(exc)
+        code = "IDEMPOTENCY_PAYLOAD_MISMATCH" if "different request" in msg else "IDEMPOTENCY_KEY_REUSED"
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "IDEMPOTENCY_KEY_REUSED", "message": str(exc)},
+            detail={"code": code, "message": msg},
         ) from exc
     return TransactionResponse(
         transaction_id=result.transaction_id,
