@@ -24,7 +24,11 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false
       - run: terraform validate
-      - run: terraform plan -input=false -var='environment=dev'
+      - run: terraform plan -input=false -var='environment=dev' -out=tfplan
+      - uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: infra/terraform/tfplan
 
   kustomize:
     runs-on: ubuntu-latest
