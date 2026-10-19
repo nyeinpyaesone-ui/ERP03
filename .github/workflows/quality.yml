@@ -3,8 +3,16 @@ name: Quality
 on:
   pull_request:
     branches: ["main"]
+    paths:
+      - "ERP-BACKEND/**"
+      - "frontend/**"
+      - ".github/workflows/quality.yml"
   push:
     branches: ["main", "feat/**", "fix/**"]
+    paths:
+      - "ERP-BACKEND/**"
+      - "frontend/**"
+      - ".github/workflows/quality.yml"
 
 permissions:
   contents: read
