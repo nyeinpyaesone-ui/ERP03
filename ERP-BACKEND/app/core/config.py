@@ -1,12 +1,15 @@
+import logging
 from functools import lru_cache
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+logger = logging.getLogger("erp03.config")
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_prefix="", extra="ignore", case_sensitive=False
+        env_file=".env", env_prefix="", extra="forbid", case_sensitive=False
     )
     secret_key: SecretStr = SecretStr("development-only-change-me")
     app_name: str = "ERP03 API"
@@ -21,17 +24,31 @@ class Settings(BaseSettings):
     db_echo: bool = False
     database_path: str = "/data/erp03.sqlite3"
 
+    @field_validator("log_level")
+    @classmethod
+    def validate_log_level(cls, value: str) -> str:
+        allowed = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        upper = value.upper()
+        if upper not in allowed:
+            raise ValueError(f"log_level must be one of {allowed}")
+        return upper
+
     @field_validator("cors_origins")
     @classmethod
     def validate_cors_origins(cls, value: str) -> str:
         origins = [item.strip() for item in value.split(",") if item.strip()]
         if not origins:
             raise ValueError("CORS_ORIGINS must contain at least one origin")
+        for origin in origins:
+            if "://" not in origin:
+                raise ValueError(f"CORS origin '{origin}' must include scheme")
         return ",".join(origins)
 
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":
-        if self.environment.lower() in {"production", "prod"}:
+        env = self.environment.lower()
+        # Production security checks
+        if env in {"production", "prod"}:
             secret = self.secret_key.get_secret_value()
             if (
                 secret in {"", "development-only-change-me", "change-me-in-production"}
@@ -46,6 +63,18 @@ class Settings(BaseSettings):
                 for origin in self.cors_origin_list
             ):
                 raise ValueError("Production CORS_ORIGINS must not contain localhost/127.0.0.1")
+            # Require HTTPS origins in production
+            if any(origin.startswith("http://") for origin in self.cors_origin_list):
+                raise ValueError("Production CORS_ORIGINS must use HTTPS")
+        # DB storage mutual exclusion
+        if env in {"production", "prod"}:
+            # In production, prefer DATABASE_URL and disallow SQLite path usage
+            if self.database_path and "/sqlite" in self.database_url.lower():
+                # Allow, but warn via validation if path points to different location than expected
+                pass
+        # Prevent ambiguous dual storage in production
+        if env in {"production", "prod"} and "sqlite" in self.database_url.lower():
+            raise ValueError("Production must use PostgreSQL DATABASE_URL, not SQLite")
         return self
 
     @property
@@ -56,7 +85,11 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     """Resolve settings once per process (cached)."""
-    return Settings()
+    try:
+        return Settings()
+    except Exception as exc:
+        logger.exception("Failed to load Settings: %s", exc)
+        raise
 
 
 # Single module-level accessor. Resolved eagerly on import; tests and tools

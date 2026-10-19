@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   backend:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
       postgres:
@@ -49,7 +49,7 @@ jobs:
       - run: pytest -q
 
   frontend:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
       run:

@@ -30,9 +30,10 @@ app = FastAPI(
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     """Map typed domain errors to the stable error envelope exactly once."""
+    request_id = request.headers.get("X-Request-ID") or uuid4().hex
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": {"code": exc.code, "message": exc.message}},
+        content={"error": {"code": exc.code, "message": exc.message, "request_id": request_id}},
     )
 
 

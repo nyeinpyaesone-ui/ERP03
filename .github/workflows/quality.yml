@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   python:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
       run:
@@ -33,7 +33,7 @@ jobs:
       - run: python -m compileall -q app alembic
 
   frontend:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
       run:

@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   dependency-audit:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -25,7 +25,7 @@ jobs:
       - run: pip-audit -r ERP-BACKEND/requirements.txt
 
   codeql:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false

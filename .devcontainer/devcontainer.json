@@ -1,0 +1,22 @@
+{
+  "name": "ERP03 Full Stack",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {"version": "3.12"},
+    "ghcr.io/devcontainers/features/node:1": {"version": "22"},
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python", "ms-python.black-formatter", "ms-python.ruff", "dbaeumer.vscode-eslint", "esbenp.prettier-vscode"],
+      "settings": {"python.defaultInterpreterPath": "/usr/local/bin/python", "editor.formatOnSave": true}
+    }
+  },
+  "forwardPorts": [3000, 5173, 8000, 5432],
+  "portsAttributes": {
+    "5173": {"label": "Frontend Dev Server", "onAutoForward": "notify"},
+    "8000": {"label": "ERP03 API", "onAutoForward": "notify"}
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "remoteUser": "vscode"
+}
