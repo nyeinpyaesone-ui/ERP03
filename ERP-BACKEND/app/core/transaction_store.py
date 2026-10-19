@@ -1,9 +1,10 @@
+import contextlib
 import hashlib
 import json
 import sqlite3
 import threading
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -130,7 +131,6 @@ class TransactionStore:
         amount: str,
         currency: str,
         metadata: dict[str, Any],
-        business_id: str = "",
     ) -> TransactionResult:
         """Atomically persist a journal entry or replay an identical command.
 

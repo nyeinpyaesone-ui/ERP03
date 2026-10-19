@@ -5,8 +5,8 @@
 ### Code quality – EXECUTION PENDING
 - Execute Ruff/pytest gates in CI with 0 findings evidence.
 
-### CI/CD – EXECUTION PENDING
-- Resolve GitHub Actions runner `startup_failure`.
+### CI/CD – IN PROGRESS
+- GitHub Actions runners switched from `ubuntu-24.04` to `ubuntu-latest` to resolve `startup_failure`. Awaiting workflow execution evidence.
 - Ensure Quality, Security, Container, IaC workflows execute and pass.
 
 ### Security – EXECUTION PENDING
