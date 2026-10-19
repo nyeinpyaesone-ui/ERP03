@@ -18,3 +18,13 @@ test:
 
 build:
 	docker compose -f docker-compose.dev.yml build
+
+build-backend:
+	docker build -t erp03-backend:dev ERP-BACKEND
+
+build-frontend:
+	docker build -t erp03-frontend:dev frontend
+
+build-all:
+	docker build -t erp03-backend:dev ERP-BACKEND
+	docker build -t erp03-frontend:dev frontend
