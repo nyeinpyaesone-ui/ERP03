@@ -265,7 +265,7 @@ def test_same_idempotency_key_with_different_payload_returns_conflict():
 
     assert first.status_code == 201
     assert conflict.status_code == 409
-    assert conflict.json()["detail"]["code"] == "IDEMPOTENCY_KEY_REUSED"
+    assert conflict.json()["detail"]["code"] == "IDEMPOTENCY_PAYLOAD_MISMATCH"
 
 
 def test_idempotency_fingerprint_ignores_metadata_key_order(tmp_path):
