@@ -1,5 +1,20 @@
-version: '3.8'
 services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: erp03
+      POSTGRES_PASSWORD: erp03
+      POSTGRES_DB: erp03
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp03 -d erp03"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: ./ERP-BACKEND
@@ -9,11 +24,17 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://erp03:erp03@postgres:5432/erp03
       - CORS_ORIGINS=http://localhost:5173
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
     volumes:
       - ./ERP-BACKEND:/app
+      - /app/__pycache__
     depends_on:
-      - postgres
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "pip install --upgrade pip && pip install -r requirements.txt &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
   frontend:
     build:
@@ -26,17 +47,8 @@ services:
       - /app/node_modules
     environment:
       - VITE_API_BASE=http://localhost:8000/api/v1
-
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: erp03
-      POSTGRES_PASSWORD: erp03
-      POSTGRES_DB: erp03
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+    depends_on:
+      - backend
 
 volumes:
   pgdata:
