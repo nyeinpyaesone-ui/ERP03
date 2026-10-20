@@ -44,7 +44,7 @@ services:
     environment:
       ENVIRONMENT: production
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
-      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:////app/.local/erp03.sqlite3}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set to a postgresql+asyncpg:// URL}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
       DATABASE_PATH: /app/.local/erp03.sqlite3
     volumes:
