@@ -1,12 +1,12 @@
-name: IaC
+name: Infrastructure Validation
 
 on:
-  pull_request:
+  push:
     branches: ["main"]
     paths:
       - "infra/**"
       - ".github/workflows/iac.yml"
-  push:
+  pull_request:
     branches: ["main"]
     paths:
       - "infra/**"
@@ -14,10 +14,6 @@ on:
 
 permissions:
   contents: read
-
-concurrency:
-  group: iac-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   terraform:
@@ -34,8 +30,24 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false
       - run: terraform validate
-      - run: terraform plan -input=false -var='environment=dev' -out=tfplan
-      - uses: actions/upload-artifact@v4
-        with:
-          name: terraform-plan
-          path: infra/terraform/tfplan
+      - run: terraform plan -input=false -var='environment=dev'
+
+  kustomize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: imranismail/setup-kustomize@v2
+      - run: kustomize build infra/kubernetes/overlays/dev
+      - run: kustomize build infra/kubernetes/overlays/staging
+      - run: kustomize build infra/kubernetes/overlays/production
+
+  opa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install conftest
+        run: |
+          curl -L https://github.com/open-policy-agent/conftest/releases/download/v0.45.0/conftest_0.45.0_Linux_x86_64.tar.gz \
+            | tar xz -C /usr/local/bin
+      - run: conftest test --policy infra/kubernetes/policies infra/kubernetes/

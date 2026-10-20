@@ -1,0 +1,44 @@
+name: Deploy Canary
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        default: "staging"
+      image_tag:
+        required: true
+        default: "latest"
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: https://${{ inputs.environment }}.erp03.example.com
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy canary (25% traffic)
+        run: |
+          echo "Deploying ghcr.io/${{ github.repository_owner }}/erp03-backend:${{ inputs.image_tag }}"
+          echo "Canary weight: 25%"
+      - name: Smoke test canary
+        run: |
+          curl -f https://${{ inputs.environment }}.erp03.example.com/api/v1/healthz
+
+  promote-production:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: inputs.environment == 'staging'
+    environment:
+      name: production
+      url: https://api.erp03.example.com
+    steps:
+      - uses: actions/checkout@v4
+      - name: Promote canary to production
+        run: |
+          echo "Promoting backend:${{ inputs.image_tag }} to production"
