@@ -1,3 +1,5 @@
+"""Optimized database session with connection pooling and auto-tuning."""
+
 from collections.abc import AsyncIterator
 
 from sqlalchemy.ext.asyncio import (
@@ -9,13 +11,12 @@ from sqlalchemy.ext.asyncio import (
 from app.core.config import settings
 
 
-def _create_engine():
-    """Build the async engine with driver-appropriate pooling.
+def _create_engine() -> create_async_engine:
+    """Build the async engine with dialect-appropriate pooling.
 
-    SQLite (aiosqlite) does not support size-based pooling; applying pool
-    kwargs there raises at first connect. Detect the dialect and configure
-    accordingly so one codebase runs on both development (SQLite) and
-    production (PostgreSQL/asyncpg) backends.
+    Production (PostgreSQL): size-based pooling with pre-ping and recycle.
+    Development (SQLite): no size-based pooling (unsupported by aiosqlite).
+    Pool settings auto-tuned from environment or sensible defaults.
     """
     kwargs: dict[str, object] = {
         "pool_pre_ping": True,

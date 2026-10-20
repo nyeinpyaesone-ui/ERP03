@@ -1,16 +1,9 @@
 """TypeSafe System One integration for ERP03.
 
-TypeSafe provides fast, structured judgments (Jev) that software can consume
-directly. ERP03 uses TypeSafe for:
-
-- Error classification: deciding whether an error is retryable and how to route it
-- Transaction risk scoring: detecting anomalous POS sales before they commit
-- Idempotency conflict resolution: judging whether two requests are semantically equal
-
-All TypeSafe calls are gated behind ``TYPESAFE_ENABLED`` and degrade gracefully
-when the API is unavailable or misconfigured. Code owns the workflow; TypeSafe
-supplies programmable common sense where ordinary code needs semantic
-understanding.
+Provides error classification, transaction risk scoring, and idempotency
+conflict judgment. All calls degrade gracefully when the SDK is unavailable
+or disabled. Code owns the workflow; TypeSafe supplies programmable common
+sense where ordinary code needs semantic understanding.
 """
 
 from __future__ import annotations
@@ -21,22 +14,16 @@ try:
     from typesafe import AsyncTypeSafeClient, choice, noul, score
 
     _TYPESAFE_AVAILABLE = True
-except ImportError:  # pragma: no cover - TypeSafe is an optional dependency
+except ImportError:  # pragma: no cover - TypeSafe is optional
     AsyncTypeSafeClient = None  # type: ignore[assignment]
-    choice = None  # type: ignore[assignment]
-    noul = None  # type: ignore[assignment]
-    score = None  # type: ignore[assignment]
+    choice = noul = score = None  # type: ignore[assignment]
     _TYPESAFE_AVAILABLE = False
 
 from app.core.config import settings
 
 
 class TypeSafeClient:
-    """Wrapper around the TypeSafe async client with ERP03-specific judgments.
-
-    All methods return ``None`` when TypeSafe is disabled or unavailable, so
-    callers can always fall back to deterministic logic.
-    """
+    """System One client wrapper with ERP03-specific judgments."""
 
     def __init__(self) -> None:
         self._client: Any | None = None
@@ -57,8 +44,6 @@ class TypeSafeClient:
             )
         return self._client
 
-    # ------------------------------------------------------------------ classify error
-
     async def classify_error(
         self,
         *,
@@ -68,22 +53,15 @@ class TypeSafeClient:
         method: str,
         request_id: str,
     ) -> dict[str, Any] | None:
-        """Classify an error for retry and routing decisions.
-
-        Returns a dict with ``retryable`` (bool), ``severity`` (low/medium/high),
-        and ``route_to`` (engineering/support/auto-resolve).
-        """
         client = await self._get_client()
         if client is None:
             return None
-
         try:
             result = await client.ask(
-                choice(  # type: ignore[misc]
+                choice(
                     "error_classification",
                     instructions=(
-                        "Classify this API error for retry and routing decisions. "
-                        "Consider the error code, message, endpoint, and HTTP method."
+                        "Classify this API error for retry and routing decisions."
                     ),
                     options=[
                         {"id": "retryable_transient", "label": "Retryable transient error"},
@@ -110,8 +88,6 @@ class TypeSafeClient:
         except Exception:
             return None
 
-    # ------------------------------------------------------------------ score transaction risk
-
     async def score_transaction_risk(
         self,
         *,
@@ -123,29 +99,22 @@ class TypeSafeClient:
         payments_count: int,
         idempotency_key: str | None,
     ) -> dict[str, Any] | None:
-        """Score a POS sale for fraud/anomaly risk before commit.
-
-        Returns a dict with ``score`` (0-100) and ``levels`` (probability per level).
-        """
         client = await self._get_client()
         if client is None:
             return None
-
         try:
             result = await client.ask(
-                score(  # type: ignore[misc]
+                score(
                     "transaction_risk",
                     instructions=(
-                        "Score this POS sale for fraud or anomaly risk. Consider "
-                        "amount, currency, line count, payment count, and whether "
-                        "an idempotency key is present."
+                        "Score this POS sale for fraud or anomaly risk."
                     ),
                     levels=[
-                        {"id": "0", "description": "No risk - normal transaction"},
-                        {"id": "25", "description": "Low risk - minor anomaly"},
-                        {"id": "50", "description": "Medium risk - review recommended"},
-                        {"id": "75", "description": "High risk - block pending review"},
-                        {"id": "100", "description": "Critical risk - block immediately"},
+                        {"id": "0", "description": "No risk"},
+                        {"id": "25", "description": "Low risk"},
+                        {"id": "50", "description": "Medium risk"},
+                        {"id": "75", "description": "High risk"},
+                        {"id": "100", "description": "Critical risk"},
                     ],
                 ),
                 state={
@@ -166,8 +135,6 @@ class TypeSafeClient:
         except Exception:
             return None
 
-    # ------------------------------------------------------------- idempotency conflict resolution
-
     async def judge_idempotency_conflict(
         self,
         *,
@@ -181,22 +148,16 @@ class TypeSafeClient:
         new_currency: str,
         new_metadata: dict[str, Any],
     ) -> dict[str, Any] | None:
-        """Judge whether two idempotency-keyed requests are semantically equal.
-
-        Returns a dict with ``conflict`` (bool) and ``reason`` (str).
-        """
         client = await self._get_client()
         if client is None:
             return None
-
         try:
             result = await client.ask(
-                noul(  # type: ignore[misc]
+                noul(
                     "idempotency_conflict",
                     instructions=(
                         "Decide whether two idempotency-keyed requests describe "
-                        "the same business command. Consider operation, amount, "
-                        "currency, and metadata. Canonicalize metadata key order."
+                        "the same business command."
                     ),
                 ),
                 state={
@@ -211,16 +172,13 @@ class TypeSafeClient:
                     "new_metadata": new_metadata,
                 },
             )
-            return {
-                "conflict": not result.yes,  # noul asks "is this the same?"
-                "probability": result.probability,
-            }
+            return {"conflict": not result.yes, "probability": result.probability}
         except Exception:
             return None
 
     async def close(self) -> None:
         if self._client is not None:
-            await self._client.close()  # type: ignore[attr-defined]
+            await self._client.close()
             self._client = None
 
 

@@ -1,3 +1,7 @@
+"""Typed application settings with environment-based auto-tuning."""
+
+from __future__ import annotations
+
 import logging
 from functools import lru_cache
 from typing import Any
@@ -9,25 +13,37 @@ logger = logging.getLogger("erp03.config")
 
 
 class Settings(BaseSettings):
+    """Canonical settings with environment-driven auto-tuning.
+
+    Database pool sizing scales with environment tier (development/staging/production)
+    so operators only need to set ENVIRONMENT; pool parameters follow automatically.
+    """
+
     model_config = SettingsConfigDict(
         env_file=".env", env_prefix="", extra="forbid", case_sensitive=False
     )
+
+    # --- Core ---
     secret_key: SecretStr = SecretStr("development-only-change-me")
     app_name: str = "ERP03 API"
     version: str = "1.0.0"
     environment: str = "development"
     log_level: str = "INFO"
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
-    database_url: str = Field(default="postgresql+asyncpg://erp03:erp03@postgres:5432/erp03")
-    db_pool_size: int = Field(default=10, ge=1, le=100)
-    db_max_overflow: int = Field(default=20, ge=0, le=200)
-    db_pool_recycle: int = Field(default=1800, ge=60)
-    db_echo: bool = False
+    database_url: str = Field(
+        default="sqlite+aiosqlite:////app/.local/erp03.sqlite3"
+    )
     database_path: str = "./.local/erp03.sqlite3"
 
-    # --- TypeSafe System One configuration ---
-    typesafe_enabled: bool = Field(default=False, description="Enable TypeSafe judgments")
-    typesafe_api_key: SecretStr | None = Field(default=None, description="TypeSafe API key")
+    # --- Database pool (auto-tuned by environment) ---
+    db_pool_size: int = Field(default=10, ge=1, le=500)
+    db_max_overflow: int = Field(default=20, ge=0, le=1000)
+    db_pool_recycle: int = Field(default=1800, ge=60)
+    db_echo: bool = False
+
+    # --- TypeSafe System One ---
+    typesafe_enabled: bool = Field(default=False)
+    typesafe_api_key: SecretStr | None = Field(default=None)
 
     @field_validator("typesafe_api_key", mode="before")
     @classmethod
@@ -39,16 +55,15 @@ class Settings(BaseSettings):
     @field_validator("log_level")
     @classmethod
     def validate_log_level(cls, value: str) -> str:
-        allowed = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
         upper = value.upper()
-        if upper not in allowed:
-            raise ValueError(f"log_level must be one of {allowed}")
+        if upper not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+            raise ValueError("log_level must be one of DEBUG, INFO, WARNING, ERROR, CRITICAL")
         return upper
 
     @field_validator("cors_origins")
     @classmethod
     def validate_cors_origins(cls, value: str) -> str:
-        origins = [item.strip() for item in value.split(",") if item.strip()]
+        origins = [o.strip() for o in value.split(",") if o.strip()]
         if not origins:
             raise ValueError("CORS_ORIGINS must contain at least one origin")
         for origin in origins:
@@ -57,35 +72,49 @@ class Settings(BaseSettings):
         return ",".join(origins)
 
     @model_validator(mode="after")
-    def validate_production_security(self) -> "Settings":
+    def validate_production_security(self) -> Settings:
         env = self.environment.lower()
-        # Production security checks
         if env in {"production", "prod"}:
             secret = self.secret_key.get_secret_value()
-            if (
-                secret in {"", "development-only-change-me", "change-me-in-production"}
-                or len(secret) < 32
-            ):
+            if secret in (
+                "", "development-only-change-me", "change-me-in-production"
+            ) or len(secret) < 32:
                 raise ValueError(
-                    "SECRET_KEY must be explicitly configured "
-                    "with at least 32 characters in production"
+                    "SECRET_KEY must be explicitly configured with at least "
+                    "32 characters in production"
                 )
             if any(
-                origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1")
-                for origin in self.cors_origin_list
+                o.startswith(("http://localhost", "http://127.0.0.1"))
+                for o in self.cors_origin_list
             ):
                 raise ValueError("Production CORS_ORIGINS must not contain localhost/127.0.0.1")
-            # Require HTTPS origins in production
-            if any(origin.startswith("http://") for origin in self.cors_origin_list):
+            if any(o.startswith("http://") for o in self.cors_origin_list):
                 raise ValueError("Production CORS_ORIGINS must use HTTPS")
-        # Prevent ambiguous dual storage in production
-        if env in {"production", "prod"} and "sqlite" in self.database_url.lower():
-            raise ValueError("Production must use PostgreSQL DATABASE_URL, not SQLite")
+            if "sqlite" in self.database_url.lower():
+                raise ValueError("Production must use PostgreSQL DATABASE_URL, not SQLite")
+        return self
+
+    @model_validator(mode="after")
+    def auto_tune_pool(self) -> Settings:
+        """Auto-tune pool sizing based on environment tier."""
+        env = self.environment.lower()
+        if env in {"production", "prod"}:
+            self.db_pool_size = max(self.db_pool_size, 20)
+            self.db_max_overflow = max(self.db_max_overflow, 50)
+            self.db_pool_recycle = max(self.db_pool_recycle, 3600)
+        elif env in {"staging", "stage"}:
+            self.db_pool_size = max(self.db_pool_size, 10)
+            self.db_max_overflow = max(self.db_max_overflow, 30)
+            self.db_pool_recycle = max(self.db_pool_recycle, 1800)
+        else:
+            self.db_pool_size = min(self.db_pool_size, 5)
+            self.db_max_overflow = min(self.db_max_overflow, 10)
+            self.db_pool_recycle = min(self.db_pool_recycle, 900)
         return self
 
     @property
     def cors_origin_list(self) -> list[str]:
-        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
 
 @lru_cache(maxsize=1)
@@ -98,7 +127,4 @@ def get_settings() -> Settings:
         raise
 
 
-# Single module-level accessor. Resolved eagerly on import; tests and tools
-# override values through environment variables *before* importing the app,
-# or call ``get_settings.cache_clear()`` after mutating the environment.
 settings: Settings = get_settings()

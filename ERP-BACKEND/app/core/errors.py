@@ -1,16 +1,9 @@
-"""Typed application errors with stable, machine-readable codes.
+"""Typed application errors with stable, machine-readable codes."""
 
-Domain services raise these; the API layer maps them to HTTP responses in a
-single exception handler, so routers never translate error strings by hand.
-"""
 
 
 class AppError(Exception):
-    """Base class for expected business-rule failures.
-
-    ``status_code`` carries the HTTP status the API layer should return and
-    ``code`` is a stable identifier safe to expose to clients.
-    """
+    """Base class for expected business-rule failures."""
 
     status_code = 500
     code = "INTERNAL_ERROR"
@@ -70,3 +63,31 @@ class PaymentError(ValidationError):
     """A payment record violated a business invariant."""
 
     code = "PAYMENT_ERROR"
+
+
+# Error code registry for fast lookup without string matching.
+_ERROR_CODES: dict[str, type[AppError]] = {
+    cls.code: cls
+    for cls in AppError.__subclasses__()
+    for cls in (cls, *cls.__subclasses__())
+}
+
+
+def error_from_code(code: str, message: str) -> AppError:
+    """Build the typed error from a stable code, O(1) lookup."""
+    cls = _ERROR_CODES.get(code, AppError)
+    return cls(message)
+
+
+__all__ = [
+    "AppError",
+    "ValidationError",
+    "ConflictError",
+    "InsufficientStockError",
+    "SaleValidationError",
+    "BootstrapConflictError",
+    "NotFoundError",
+    "ForbiddenError",
+    "PaymentError",
+    "error_from_code",
+]

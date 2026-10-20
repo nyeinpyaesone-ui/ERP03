@@ -1,9 +1,4 @@
-"""Authenticated transaction journal endpoints.
-
-Every write is idempotent: a reused ``X-Idempotency-Key`` (scoped to the
-caller's business) replays the original entry instead of recording a new one.
-Reads are scoped to the caller's business as well.
-"""
+"""Authenticated transaction journal endpoints."""
 
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -39,7 +34,6 @@ class TransactionRequest(BaseModel):
     @field_validator("currency")
     @classmethod
     def normalize_currency(cls, value: str) -> str:
-        """Normalize a three-character currency code."""
         return value.strip().upper()
 
 
@@ -82,12 +76,7 @@ def create_transaction(
     claims: dict[str, Any] = Depends(current_claims),
     x_idempotency_key: str | None = Header(default=None),
 ) -> TransactionResponse:
-    """Record a journal entry or return the original entry for a repeated key.
-
-    Every request requires authentication. Tenant identity is derived from the
-    verified access token, never from request metadata. Amounts are stored at
-    two decimal places; a positive input that rounds to zero is rejected.
-    """
+    """Record a journal entry or return the original entry for a repeated key."""
     idempotency_key = validate_idempotency_key(x_idempotency_key)
 
     try:
@@ -127,11 +116,7 @@ def get_transaction(
     transaction_id: str,
     claims: dict[str, Any] = Depends(current_claims),
 ) -> TransactionResponse:
-    """Return a journal entry owned by the authenticated caller's business.
-
-    A missing transaction and a transaction owned by another business both
-    return 404, preventing this endpoint from becoming a cross-tenant oracle.
-    """
+    """Return a journal entry owned by the authenticated caller's business."""
     business_id = _business_id(claims)
     result = store.get(transaction_id, business_id=business_id)
     if result is None:
