@@ -1,5 +1,14 @@
+"""ERP03 FastAPI application with TypeSafe System One judgment integration.
+
+Code owns the workflow; TypeSafe supplies programmable common sense:
+- Error classification drives retry-after headers (code decision, model annotation).
+- Transaction risk scoring gates high-risk sales (code decision, model annotation).
+- TypeSafe client lifecycle is bound to the app lifespan.
+"""
+
 import logging
 import time
+from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -23,17 +32,39 @@ logging.basicConfig(
 )
 logger = logging.getLogger("erp03")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Bind TypeSafe client lifecycle to the app.
+
+    ``close()`` is guaranteed to run on shutdown so the SDK's HTTP client
+    and any buffered judgments are flushed cleanly.
+    """
+    yield
+    if settings.typesafe_enabled:
+        await typesafe.close()
+
+
 app = FastAPI(
-    title=settings.app_name, version=settings.version, docs_url="/docs", redoc_url="/redoc"
+    title=settings.app_name,
+    version=settings.version,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
-    """Map typed domain errors to the stable error envelope exactly once."""
-    request_id = request.headers.get("X-Request-ID") or uuid4().hex
+    """Map typed domain errors to the stable error envelope exactly once.
 
-    # Classify error via TypeSafe for retry/routing decisions (non-blocking).
+    TypeSafe classification is non-blocking: if it is unavailable or slow,
+    the HTTP error is still returned. When available and confident,
+    ``Retry-After`` is derived from the classification (code-owned decision).
+    """
+    request_id = request.headers.get("X-Request-ID") or uuid4().hex
+    headers = {"X-Request-ID": request_id}
+
     classification = None
     if settings.typesafe_enabled:
         classification = await typesafe.classify_error(
@@ -43,15 +74,37 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
             method=request.method,
             request_id=request_id,
         )
+        if classification is not None:
+            # Confidence gates acting on the judgment.
+            if classification.confidence < 0.40:
+                logger.warning(
+                    "Low-confidence error classification request_id=%s "
+                    "selected=%s confidence=%.2f escalate=True",
+                    request_id,
+                    classification.selected,
+                    classification.confidence,
+                )
+            if classification.is_retryable and classification.retry_after_seconds is not None:
+                headers["Retry-After"] = str(classification.retry_after_seconds)
 
     return JSONResponse(
         status_code=exc.status_code,
+        headers=headers,
         content={
             "error": {
                 "code": exc.code,
                 "message": exc.message,
                 "request_id": request_id,
-                "typesafe": classification,
+                "typesafe": (
+                    {
+                        "selected": classification.selected,
+                        "probability": classification.probability,
+                        "confidence": classification.confidence,
+                        "escalate": classification.escalate,
+                    }
+                    if classification is not None
+                    else None
+                ),
             },
         },
     )
@@ -63,7 +116,13 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Idempotency-Key"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "X-Request-ID",
+        "X-Idempotency-Key",
+        "Retry-After",
+    ],
 )
 
 
@@ -79,6 +138,7 @@ async def request_context(request: Request, call_next):
         )
         response = JSONResponse(
             status_code=500,
+            headers={"X-Request-ID": request_id},
             content={
                 "error": {
                     "code": "INTERNAL_ERROR",
