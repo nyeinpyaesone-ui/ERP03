@@ -12,11 +12,13 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
+from app.api.validation import validate_idempotency_key
 from app.core.config import settings
 from app.core.security import current_claims
 from app.core.transaction_store import IdempotencyConflict, TransactionResult, TransactionStore
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
+
 store = TransactionStore(settings.database_path)
 
 
@@ -86,12 +88,7 @@ def create_transaction(
     verified access token, never from request metadata. Amounts are stored at
     two decimal places; a positive input that rounds to zero is rejected.
     """
-    idempotency_key = (x_idempotency_key or "").strip()
-    if not idempotency_key or len(idempotency_key) > 255:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="X-Idempotency-Key is required and must be <= 255 characters",
-        )
+    idempotency_key = validate_idempotency_key(x_idempotency_key)
 
     try:
         amount = payload.amount.quantize(Decimal("0.01"))
@@ -122,15 +119,7 @@ def create_transaction(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": code, "message": msg},
         ) from exc
-    return TransactionResponse(
-        transaction_id=result.transaction_id,
-        status=result.status,
-        operation=result.operation,
-        amount=result.amount,
-        currency=result.currency,
-        metadata=result.metadata,
-        idempotent_replay=result.idempotent_replay,
-    )
+    return _to_response(result)
 
 
 @router.get("/{transaction_id}", response_model=TransactionResponse)

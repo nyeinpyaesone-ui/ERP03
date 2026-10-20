@@ -11,11 +11,23 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-from app.db.session import engine
+
+def _get_engine():
+    """Lazily import the engine to avoid import-time failures when
+    DATABASE_URL is not yet configured."""
+    from app.db.session import engine
+
+    return engine
+
+
+REQUEST_COUNT = None
+REQUEST_LATENCY = None
 
 
 def init_telemetry(service_name: str = "erp03-backend") -> None:
     """Initialize OpenTelemetry tracing and metrics."""
+    global REQUEST_COUNT, REQUEST_LATENCY
+
     resource = Resource(
         attributes={
             "service.name": service_name,
@@ -37,18 +49,17 @@ def init_telemetry(service_name: str = "erp03-backend") -> None:
     )
     metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[reader]))
 
+    REQUEST_COUNT = metrics.get_meter(__name__).create_counter(
+        "erp03_requests_total", unit="1", description="Total HTTP requests"
+    )
+    REQUEST_LATENCY = metrics.get_meter(__name__).create_histogram(
+        "erp03_request_duration_ms", unit="ms", description="Request duration"
+    )
+
 
 def instrument_app(app) -> None:
     """Instrument FastAPI and SQLAlchemy."""
     FastAPIInstrumentor.instrument_app(app)
     SQLAlchemyInstrumentor().instrument(
-        engine=engine.sync_engine,
+        engine=_get_engine(),
     )
-
-
-REQUEST_COUNT = metrics.get_meter(__name__).create_counter(
-    "erp03_requests_total", unit="1", description="Total HTTP requests"
-)
-REQUEST_LATENCY = metrics.get_meter(__name__).create_histogram(
-    "erp03_request_duration_ms", unit="ms", description="Request duration"
-)
