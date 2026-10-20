@@ -10,7 +10,16 @@ from typing import Any
 
 
 class IdempotencyConflict(ValueError):
-    """Raised when a key is reused for a different canonical command."""
+    """Raised when a key is reused for a different canonical command.
+
+    ``code`` is the stable machine-readable reason surfaced to API clients:
+    ``IDEMPOTENCY_PAYLOAD_MISMATCH`` for a fingerprint collision, or
+    ``IDEMPOTENCY_KEY_REUSED`` for legacy keys recorded without a fingerprint.
+    """
+
+    def __init__(self, message: str, *, code: str = "IDEMPOTENCY_KEY_REUSED") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass(frozen=True)
@@ -150,7 +159,8 @@ class TransactionStore:
                     previous = existing["request_fingerprint"]
                     if previous is not None and previous != fingerprint:
                         raise IdempotencyConflict(
-                            "Idempotency key was already used for a different request"
+                            "Idempotency key was already used for a different request",
+                            code="IDEMPOTENCY_PAYLOAD_MISMATCH",
                         )
                     connection.execute("COMMIT")
                     return self._result(existing, replay=True)

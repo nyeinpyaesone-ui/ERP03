@@ -1,2 +1,2 @@
 ruff==0.17.1
-typesafe==0.1.0
+typesafe==0.9.1

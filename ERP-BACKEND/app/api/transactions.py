@@ -98,15 +98,10 @@ def create_transaction(
             metadata=payload.metadata,
         )
     except IdempotencyConflict as exc:
-        msg = str(exc)
-        code = (
-            "IDEMPOTENCY_PAYLOAD_MISMATCH"
-            if "different request" in msg
-            else "IDEMPOTENCY_KEY_REUSED"
-        )
+        code = getattr(exc, "code", "IDEMPOTENCY_KEY_REUSED")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"code": code, "message": msg},
+            detail={"code": code, "message": str(exc)},
         ) from exc
     return _to_response(result)
 
