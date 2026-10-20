@@ -157,7 +157,16 @@ class TransactionStore:
                 ).fetchone()
                 if existing:
                     previous = existing["request_fingerprint"]
-                    if previous is not None and previous != fingerprint:
+                    if previous is None:
+                        # Legacy row recorded without a fingerprint: we cannot
+                        # verify payload equality, so any replay of the same key
+                        # is a conflict by design (safer than silent replay).
+                        raise IdempotencyConflict(
+                            "Idempotency key was already used without a "
+                            "fingerprint; payload equality cannot be verified",
+                            code="IDEMPOTENCY_KEY_REUSED",
+                        )
+                    if previous != fingerprint:
                         raise IdempotencyConflict(
                             "Idempotency key was already used for a different request",
                             code="IDEMPOTENCY_PAYLOAD_MISMATCH",

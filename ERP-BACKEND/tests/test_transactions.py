@@ -266,6 +266,71 @@ def test_same_idempotency_key_with_different_payload_returns_conflict():
     assert conflict.json()["detail"]["code"] == "IDEMPOTENCY_PAYLOAD_MISMATCH"
 
 
+def test_legacy_fingerprint_less_replay_with_different_payload_returns_conflict(
+    tmp_path_factory,
+):
+    """Legacy rows (no request_fingerprint) cannot be verified for payload
+    equality, so any replay of the same key is a conflict by design."""
+    import sqlite3
+
+    from app.core.transaction_store import IdempotencyConflict, TransactionStore
+
+    db_path = str(tmp_path_factory.mktemp("legacy") / "legacy.sqlite3")
+    # Seed a legacy row directly with NULL request_fingerprint (pre-migration data).
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE transactions (
+            transaction_id TEXT PRIMARY KEY,
+            idempotency_key TEXT NOT NULL UNIQUE,
+            business_id TEXT NOT NULL DEFAULT '',
+            operation TEXT NOT NULL,
+            amount TEXT NOT NULL,
+            currency TEXT NOT NULL,
+            metadata_json TEXT NOT NULL,
+            request_fingerprint TEXT,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO transactions
+        (transaction_id, idempotency_key, business_id, operation, amount,
+         currency, metadata_json, request_fingerprint, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'committed', ?)
+        """,
+        (
+            "legacy-001",
+            "legacy-key",
+            "legacy-business",
+            "invoice.create",
+            "10.00",
+            "MMK",
+            '{"invoice": "INV-OLD"}',
+            "2026-01-01T00:00:00+00:00",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    isolated_store = TransactionStore(db_path)
+
+    # Replay the same key with a different payload → conflict.
+    with pytest.raises(IdempotencyConflict) as exc:
+        isolated_store.execute(
+            transaction_id="legacy-002",
+            idempotency_key="legacy-key",
+            operation="invoice.create",
+            amount="20.00",
+            currency="MMK",
+            metadata={"invoice": "INV-NEW"},
+            business_id="legacy-business",
+        )
+    assert exc.value.code == "IDEMPOTENCY_KEY_REUSED"
+
+
 def test_idempotency_fingerprint_ignores_metadata_key_order(tmp_path):
     isolated_store = TransactionStore(str(tmp_path / "fingerprint.sqlite3"))
     first = isolated_store.execute(
