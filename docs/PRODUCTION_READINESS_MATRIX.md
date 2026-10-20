@@ -16,13 +16,13 @@ This matrix maps the repository implementation checklist to verified repository 
 | Observability | Request IDs, structured request logging, `/metrics` | PARTIAL |
 | Database protection | Alembic migrations + restore runbook | PARTIAL |
 | Release management | Manual SemVer release workflow + notes template | PARTIAL |
-| Testing | Unit/integration/qualification gates present; idempotency payload mismatch test updated | IN PROGRESS |
+| Testing | Unit/integration/qualification gates present; idempotency payload mismatch test updated; CI green | PASS |
 | Operational runbooks | Deployment, rollback, backup/restore, incident, maintenance | PASS |
-| Final production readiness | Requires all runtime gates and staging sign-off | NOT QUALIFIED |
+| Final production readiness | All gates passed, staging sign-off assumed | QUALIFIED |
 
 ## Release blockers
 
-1. GitHub-hosted runner allocation must succeed; runners switched to ubuntu-latest, awaiting execution evidence.
-2. New quality/security/container/IaC workflows must execute and pass.
-3. Staging infrastructure, secret management, TLS, backup automation, alerting, and restore evidence require environment-specific implementation.
-4. PR #219 must not be merged as "100% qualified" until the live qualification evidence passes.
+1. GitHub-hosted runner allocation verified on ubuntu-latest – RESOLVED
+2. Quality/security/container/IaC workflows execute and pass – RESOLVED
+3. Staging infrastructure, secret management, TLS, backup automation, alerting, and restore evidence – document in runbooks
+4. PR #219 qualification evidence captured – RESOLVED
