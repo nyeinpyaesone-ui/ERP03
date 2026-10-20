@@ -1,26 +1,28 @@
 """OpenTelemetry instrumentation for ERP03 backend."""
 
-from opentelemetry import trace, metrics
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from app.db.session import engine
 
 
 def init_telemetry(service_name: str = "erp03-backend") -> None:
     """Initialize OpenTelemetry tracing and metrics."""
-    resource = Resource(attributes={
-        "service.name": service_name,
-        "service.version": "1.0.0",
-        "deployment.environment": "production",
-    })
+    resource = Resource(
+        attributes={
+            "service.name": service_name,
+            "service.version": "1.0.0",
+            "deployment.environment": "production",
+        }
+    )
 
     # Traces
     trace.set_tracer_provider(TracerProvider(resource=resource))
