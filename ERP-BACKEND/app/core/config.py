@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     typesafe_enabled: bool = Field(default=False)
     typesafe_api_key: SecretStr | None = Field(default=None)
 
+    # --- JWT ---
+    jwt_expiry_minutes: int = Field(default=480, ge=1, le=44640)
+
     @field_validator("typesafe_api_key", mode="before")
     @classmethod
     def _parse_typesafe_api_key(cls, value: Any) -> Any:

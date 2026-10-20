@@ -27,15 +27,16 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 def create_access_token(
-    user_id: UUID, business_id: UUID, branch_id: UUID | None, expires_minutes: int = 480
+    user_id: UUID, business_id: UUID, branch_id: UUID | None, expires_minutes: int | None = None
 ) -> str:
     now = datetime.now(UTC)
+    expiry = expires_minutes if expires_minutes is not None else settings.jwt_expiry_minutes
     payload = {
         "sub": str(user_id),
         "business_id": str(business_id),
         "branch_id": str(branch_id) if branch_id else None,
         "iat": int(now.timestamp()),
-        "exp": int((now + timedelta(minutes=expires_minutes)).timestamp()),
+        "exp": int((now + timedelta(minutes=expiry)).timestamp()),
     }
     return jwt.encode(payload, settings.secret_key.get_secret_value(), algorithm="HS256")
 
