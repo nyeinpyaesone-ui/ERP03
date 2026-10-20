@@ -1,5 +1,6 @@
 import logging
 from functools import lru_cache
+from typing import Any
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,6 +24,17 @@ class Settings(BaseSettings):
     db_pool_recycle: int = Field(default=1800, ge=60)
     db_echo: bool = False
     database_path: str = "./.local/erp03.sqlite3"
+
+    # --- TypeSafe System One configuration ---
+    typesafe_enabled: bool = Field(default=False, description="Enable TypeSafe judgments")
+    typesafe_api_key: SecretStr | None = Field(default=None, description="TypeSafe API key")
+
+    @field_validator("typesafe_api_key", mode="before")
+    @classmethod
+    def _parse_typesafe_api_key(cls, value: Any) -> Any:
+        if value is None or value == "":
+            return None
+        return value
 
     @field_validator("log_level")
     @classmethod

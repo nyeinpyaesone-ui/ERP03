@@ -15,6 +15,7 @@ from app.api.transactions import router as transactions_router
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.metrics import REQUEST_COUNT, REQUEST_LATENCY, metrics_app
+from app.core.typesafe import typesafe
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),
@@ -31,9 +32,28 @@ app = FastAPI(
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     """Map typed domain errors to the stable error envelope exactly once."""
     request_id = request.headers.get("X-Request-ID") or uuid4().hex
+
+    # Classify error via TypeSafe for retry/routing decisions (non-blocking).
+    classification = None
+    if settings.typesafe_enabled:
+        classification = await typesafe.classify_error(
+            error_code=exc.code,
+            error_message=exc.message,
+            endpoint=str(request.url.path),
+            method=request.method,
+            request_id=request_id,
+        )
+
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": {"code": exc.code, "message": exc.message, "request_id": request_id}},
+        content={
+            "error": {
+                "code": exc.code,
+                "message": exc.message,
+                "request_id": request_id,
+                "typesafe": classification,
+            },
+        },
     )
 
 
