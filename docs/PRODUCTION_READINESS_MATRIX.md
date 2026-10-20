@@ -6,8 +6,8 @@ This matrix maps the repository implementation checklist to verified repository 
 |---|---|---|
 | Repository discovery | Backend, frontend, deployment and workflow tree identified | PASS |
 | Baseline verification | Python/Node/PostgreSQL versions are pinned in CI; package manifests verified | PASS |
-| Code quality | Ruff lint/format gate added; path filters applied | IN PROGRESS |
-| CI/CD | CI + Qualification + Quality + Security + Container + IaC workflows present; runners switched to ubuntu-latest; path filters added | IN PROGRESS |
+| Code quality | Ruff lint/format gate added; path filters applied; CI green | PASS |
+| CI/CD | CI + Qualification + Quality + Security + Container + IaC workflows present; runners switched to ubuntu-latest; path filters added; CI green | PASS |
 | Containerization | Non-root backend, health checks, pinned runtime images | PARTIAL |
 | Local bootstrap | Compose + env configuration present | PASS |
 | Infrastructure as Code | Terraform contract + validation workflow | PARTIAL |
