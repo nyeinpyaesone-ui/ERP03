@@ -6,7 +6,7 @@
 
 ```bash
 cd ERP-BACKEND
-cp .env.example .env
+cp ERP-BACKEND/.env.example ERP-BACKEND/.env
 ```
 
 ### 2. Generate a secure SECRET_KEY

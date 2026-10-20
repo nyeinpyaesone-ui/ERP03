@@ -4,6 +4,8 @@ from collections.abc import Sequence
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import JSON
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.db.base import GUID
 
@@ -25,10 +27,10 @@ def upgrade() -> None:
         sa.Column("branch_id", GUID(), nullable=True),
         sa.Column(
             "payload_json",
-            sa.Text(),
+            JSONB().with_variant(JSON, "sqlite"),
             nullable=False,
         ),
-        sa.Column("result_json", sa.Text(), nullable=True),
+        sa.Column("result_json", JSONB().with_variant(JSON, "sqlite"), nullable=True),
         sa.Column("error_code", sa.String(length=64), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("retry_count", sa.Integer(), nullable=False, server_default="0"),
