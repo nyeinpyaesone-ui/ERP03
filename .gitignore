@@ -20,6 +20,12 @@ Thumbs.db
 htmlcov/
 coverage/
 
+# frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+
 # linter/type-checker caches
 .ruff_cache/
 .mypy_cache/
