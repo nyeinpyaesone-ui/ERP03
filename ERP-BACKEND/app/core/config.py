@@ -30,9 +30,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
-    database_url: str = Field(
-        default="sqlite+aiosqlite:////app/.local/erp03.sqlite3"
-    )
+    database_url: str = Field(default="sqlite+aiosqlite:////app/.local/erp03.sqlite3")
     database_path: str = "./.local/erp03.sqlite3"
 
     # --- Database pool (auto-tuned by environment) ---
@@ -76,9 +74,10 @@ class Settings(BaseSettings):
         env = self.environment.lower()
         if env in {"production", "prod"}:
             secret = self.secret_key.get_secret_value()
-            if secret in (
-                "", "development-only-change-me", "change-me-in-production"
-            ) or len(secret) < 32:
+            if (
+                secret in ("", "development-only-change-me", "change-me-in-production")
+                or len(secret) < 32
+            ):
                 raise ValueError(
                     "SECRET_KEY must be explicitly configured with at least "
                     "32 characters in production"

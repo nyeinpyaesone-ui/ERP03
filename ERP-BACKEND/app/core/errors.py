@@ -1,7 +1,6 @@
 """Typed application errors with stable, machine-readable codes."""
 
 
-
 class AppError(Exception):
     """Base class for expected business-rule failures."""
 
@@ -67,9 +66,7 @@ class PaymentError(ValidationError):
 
 # Error code registry for fast lookup without string matching.
 _ERROR_CODES: dict[str, type[AppError]] = {
-    cls.code: cls
-    for cls in AppError.__subclasses__()
-    for cls in (cls, *cls.__subclasses__())
+    cls.code: cls for cls in AppError.__subclasses__() for cls in (cls, *cls.__subclasses__())
 }
 
 

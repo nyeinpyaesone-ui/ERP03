@@ -60,9 +60,7 @@ class TypeSafeClient:
             result = await client.ask(
                 choice(
                     "error_classification",
-                    instructions=(
-                        "Classify this API error for retry and routing decisions."
-                    ),
+                    instructions=("Classify this API error for retry and routing decisions."),
                     options=[
                         {"id": "retryable_transient", "label": "Retryable transient error"},
                         {"id": "retryable_rate_limit", "label": "Rate limit exceeded"},
@@ -106,9 +104,7 @@ class TypeSafeClient:
             result = await client.ask(
                 score(
                     "transaction_risk",
-                    instructions=(
-                        "Score this POS sale for fraud or anomaly risk."
-                    ),
+                    instructions=("Score this POS sale for fraud or anomaly risk."),
                     levels=[
                         {"id": "0", "description": "No risk"},
                         {"id": "25", "description": "Low risk"},
