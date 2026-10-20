@@ -56,7 +56,7 @@ fi
 log "5. Docker Compose configuration"
 cd "$ROOT_DIR"
 if command -v docker compose >/dev/null 2>&1; then
-  POSTGRES_PASSWORD=testpass CORS_ORIGINS=https://erp.example.com SECRET_KEY=0123456789abcdef0123456789abcdef docker compose -f docker-compose.yml config --quiet || fail "prod compose config invalid"
+  POSTGRES_PASSWORD=testpass CORS_ORIGINS=https://erp.example.com SECRET_KEY=0123456789abcdef0123456789abcdef DATABASE_URL=postgresql+asyncpg://erp03:testpass@postgres:5432/erp03 docker compose -f docker-compose.yml config --quiet || fail "prod compose config invalid"
   docker compose -f docker-compose.dev.yml config --quiet || fail "dev compose config invalid"
   echo "  OK: both compose files valid"
 else
