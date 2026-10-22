@@ -47,8 +47,18 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
       `IDEMPOTENCY_KEY_REUSED` is currently unreachable via data. Decide
       semantics (recommend: mismatch-on-fingerprint-less → `IDEMPOTENCY_KEY_REUSED`)
       and add a test that seeds a legacy row.
-- [ ] **METRICS-1: `/metrics` unauthenticated (agent finding 10).** Gate with
+- [x] **METRICS-1: `/metrics` unauthenticated (agent finding 10).** Gate with
       auth claims or bind to an internal-only port/target.
+      _Kept `/metrics` authenticated (JWT required) but added a dedicated
+      `metrics_scrape_token` bearer token so Prometheus can scrape without a
+      user JWT. Added `metrics_scrape_token` setting, updated metrics auth
+      middleware to accept it, and configured Prometheus scrape job with
+      `authorization: Bearer ${METRICS_SCRAPE_TOKEN}`. Also fixed the
+      prometheus-rules.yml metric-name mismatch (gap 3.1) and initialized
+      OpenTelemetry telemetry behind `telemetry_enabled` + `otlp_endpoint`
+      settings (gaps 3.2, 3.1)._ Evidence: commit `39a1b5d5`, gate green
+      (ruff check/format clean, compileall clean, pytest 49 passed / 1
+      skipped).
 - [ ] **AUTH-1: JWT TTL hardcoded 480 min, claims never re-validated against
       User/branch state (agent finding 11).** Add a Settings knob, re-check
       `User.active` on privileged endpoints or shorten TTL; consider login
