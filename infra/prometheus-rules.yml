@@ -2,7 +2,7 @@ groups:
   - name: erp03-alerts
     rules:
       - alert: HighErrorRate
-        expr: rate(erp03_requests_total{code=~"5.."}[5m]) > 0.05
+        expr: rate(erp03_http_requests_total{status=~"5.."}[5m]) > 0.05
         for: 2m
         labels:
           severity: critical
@@ -11,13 +11,13 @@ groups:
           description: "Error rate is {{ $value }} over the last 5 minutes"
 
       - alert: HighLatency
-        expr: histogram_quantile(0.95, rate(erp03_request_duration_ms_bucket[5m])) > 500
+        expr: histogram_quantile(0.95, rate(erp03_http_request_duration_seconds_bucket[5m])) > 0.5
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "High p95 latency on erp03-backend"
-          description: "p95 latency is {{ $value }}ms over the last 5 minutes"
+          description: "p95 latency is {{ $value }}s over the last 5 minutes"
 
       - alert: ServiceDown
         expr: up{job="erp03-backend"} == 0

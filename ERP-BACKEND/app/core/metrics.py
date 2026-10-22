@@ -2,6 +2,7 @@ from fastapi import status
 from prometheus_client import Counter, Histogram, make_asgi_app
 from starlette.responses import JSONResponse
 
+from app.core.config import settings
 from app.core.security import decode_access_token
 
 REQUEST_COUNT = Counter(
@@ -36,6 +37,14 @@ def _metrics_auth_middleware(app):
                 await response(scope, receive, send)
                 return
             token = auth_header.split(" ", 1)[1]
+
+            # Allow the dedicated metrics scrape token (for Prometheus) in
+            # addition to a valid JWT access token.
+            scrape_token = settings.metrics_scrape_token
+            if scrape_token is not None and token == scrape_token.get_secret_value():
+                await app(scope, receive, send)
+                return
+
             try:
                 decode_access_token(token)
             except Exception:

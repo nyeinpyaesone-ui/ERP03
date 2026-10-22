@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     typesafe_enabled: bool = Field(default=False)
     typesafe_api_key: SecretStr | None = Field(default=None)
 
+    # --- OpenTelemetry ---
+    telemetry_enabled: bool = Field(default=False)
+    otlp_endpoint: str = Field(default="http://otel-collector:4317")
+
+    # --- Metrics scraping ---
+    metrics_scrape_token: SecretStr | None = Field(default=None)
+
     # --- JWT ---
     jwt_expiry_minutes: int = Field(default=480, ge=1, le=44640)
 

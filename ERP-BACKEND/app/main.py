@@ -39,7 +39,24 @@ async def lifespan(app: FastAPI):
 
     ``close()`` is guaranteed to run on shutdown so the SDK's HTTP client
     and any buffered judgments are flushed cleanly.
+
+    OpenTelemetry tracing/metrics are initialized on startup when
+    ``settings.telemetry_enabled`` is true, exporting to
+    ``settings.otlp_endpoint``.
     """
+    if settings.telemetry_enabled:
+        try:
+            from app.core.telemetry import init_telemetry, instrument_app
+        except ImportError as exc:
+            raise RuntimeError(
+                "telemetry_enabled=true but opentelemetry is not installed; "
+                "install the opentelemetry extras or set TELEMETRY_ENABLED=false"
+            ) from exc
+        init_telemetry(
+            service_name=settings.app_name.lower().replace(" ", "-"),
+            otlp_endpoint=settings.otlp_endpoint,
+        )
+        instrument_app(app)
     yield
     if settings.typesafe_enabled:
         await typesafe.close()

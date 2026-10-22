@@ -23,8 +23,15 @@ REQUEST_COUNT = None
 REQUEST_LATENCY = None
 
 
-def init_telemetry(service_name: str = "erp03-backend") -> None:
-    """Initialize OpenTelemetry tracing and metrics."""
+def init_telemetry(
+    service_name: str = "erp03-backend",
+    otlp_endpoint: str = "http://otel-collector:4317",
+) -> None:
+    """Initialize OpenTelemetry tracing and metrics.
+
+    All OTLP exporters point at ``otlp_endpoint`` so the collector address can
+    be overridden per environment without editing this module.
+    """
     global REQUEST_COUNT, REQUEST_LATENCY
 
     resource = Resource(
@@ -37,11 +44,11 @@ def init_telemetry(service_name: str = "erp03-backend") -> None:
 
     trace.set_tracer_provider(TracerProvider(resource=resource))
     trace.get_tracer_provider().add_span_processor(
-        BatchSpanProcessor(OTLPSpanExporter(endpoint="http://otel-collector:4317"))
+        BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint))
     )
 
     reader = PeriodicExportingMetricReader(
-        exporter=OTLPMetricExporter(endpoint="http://otel-collector:4317"),
+        exporter=OTLPMetricExporter(endpoint=otlp_endpoint),
         export_interval_millis=15000,
     )
     metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[reader]))
