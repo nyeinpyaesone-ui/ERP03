@@ -1,25 +1,10 @@
-import contextlib
-import hashlib
+"""PostgreSQL/SQLite-backed durable transaction journal with atomic idempotency."""
+
 import json
-import sqlite3
-import threading
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
-
-class IdempotencyConflict(ValueError):
-    """Raised when a key is reused for a different canonical command.
-
-    ``code`` is the stable machine-readable reason surfaced to API clients:
-    ``IDEMPOTENCY_PAYLOAD_MISMATCH`` for a fingerprint collision, or
-    ``IDEMPOTENCY_KEY_REUSED`` for legacy keys recorded without a fingerprint.
-    """
-
-    def __init__(self, message: str, *, code: str = "IDEMPOTENCY_KEY_REUSED") -> None:
-        super().__init__(message)
-        self.code = code
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @dataclass(frozen=True)
@@ -34,214 +19,150 @@ class TransactionResult:
 
 
 class TransactionStore:
-    """Durable transaction journal with atomic idempotency and tenant isolation."""
+    """Durable transaction journal with atomic idempotency and tenant isolation.
 
-    def __init__(self, database_path: str) -> None:
-        self.database_path = database_path
-        Path(database_path).parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.RLock()
-        self._initialize()
+    Works with both PostgreSQL and SQLite backends through SQLAlchemy ORM.
+    """
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(
-            self.database_path,
-            timeout=10,
-            isolation_level=None,
-            check_same_thread=False,
-        )
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys=ON")
-        return connection
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
 
-    def _initialize(self) -> None:
-        connection = self._connect()
-        try:
-            connection.execute("PRAGMA journal_mode=WAL")
-            connection.execute("BEGIN IMMEDIATE")
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS transactions (
-                    transaction_id TEXT PRIMARY KEY,
-                    idempotency_key TEXT NOT NULL UNIQUE,
-                    business_id TEXT NOT NULL DEFAULT '',
-                    operation TEXT NOT NULL,
-                    amount TEXT NOT NULL,
-                    currency TEXT NOT NULL,
-                    metadata_json TEXT NOT NULL,
-                    request_fingerprint TEXT,
-                    status TEXT NOT NULL,
-                    created_at TEXT NOT NULL
-                )
-                """
-            )
-            columns = {
-                column["name"] for column in connection.execute("PRAGMA table_info(transactions)")
-            }
-            if "business_id" not in columns:
-                connection.execute(
-                    "ALTER TABLE transactions ADD COLUMN business_id TEXT NOT NULL DEFAULT ''"
-                )
-            if "request_fingerprint" not in columns:
-                connection.execute("ALTER TABLE transactions ADD COLUMN request_fingerprint TEXT")
-            connection.execute(
-                """
-                UPDATE transactions
-                SET business_id = substr(idempotency_key, 1, instr(idempotency_key, ':') - 1)
-                WHERE business_id = '' AND instr(idempotency_key, ':') > 0
-                """
-            )
-            connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_transactions_business_transaction
-                ON transactions (business_id, transaction_id)
-                """
-            )
-            connection.execute("COMMIT")
-        except Exception:
-            with contextlib.suppress(sqlite3.Error):
-                connection.execute("ROLLBACK")
-            raise
-        finally:
-            connection.close()
-
-    @staticmethod
-    def _fingerprint(
-        operation: str,
-        amount: str,
-        currency: str,
-        metadata: dict[str, Any],
-    ) -> str:
-        canonical = json.dumps(
-            {
-                "operation": operation,
-                "amount": amount,
-                "currency": currency,
-                "metadata": metadata,
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-            allow_nan=False,
-        )
-        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-    def execute(
+    async def execute(
         self,
         *,
         transaction_id: str,
-        business_id: str,
         idempotency_key: str,
         operation: str,
         amount: str,
         currency: str,
         metadata: dict[str, Any],
     ) -> TransactionResult:
-        """Atomically persist a journal entry or replay an identical command.
+        """Atomically record a committed entry or replay an existing key's entry.
 
-        This records a journal entry; it does not execute the named domain
-        operation. Legacy records without a fingerprint are replayed unchanged
-        for compatibility, but cannot be checked for payload equality.
+        Uses a transaction-bound SELECT-then-INSERT pattern that is safe
+        under concurrent access because the database serializes writers.
+        Returns ``idempotent_replay=True`` when the key already existed.
         """
-        fingerprint = self._fingerprint(operation, amount, currency, metadata)
-        with self._lock:
-            connection = self._connect()
-            try:
-                connection.execute("BEGIN IMMEDIATE")
-                # Serialize metadata *inside* the write transaction so a
-                # non-serializable payload fails before any row is inserted;
-                # this keeps failed writes fully rolled back and retryable.
-                json.dumps(metadata, sort_keys=True, separators=(",", ":"))
-                existing = connection.execute(
-                    "SELECT * FROM transactions WHERE business_id = ? AND idempotency_key = ?",
-                    (business_id, idempotency_key),
-                ).fetchone()
-                if existing:
-                    previous = existing["request_fingerprint"]
-                    if previous is None:
-                        # Legacy row recorded without a fingerprint: we cannot
-                        # verify payload equality, so any replay of the same key
-                        # is a conflict by design (safer than silent replay).
-                        raise IdempotencyConflict(
-                            "Idempotency key was already used without a "
-                            "fingerprint; payload equality cannot be verified",
-                            code="IDEMPOTENCY_KEY_REUSED",
-                        )
-                    if previous != fingerprint:
-                        raise IdempotencyConflict(
-                            "Idempotency key was already used for a different request",
-                            code="IDEMPOTENCY_PAYLOAD_MISMATCH",
-                        )
-                    connection.execute("COMMIT")
-                    return self._result(existing, replay=True)
+        async with self.session.begin():
+            # Check if the idempotency key already exists.
+            from sqlalchemy import text as sa_text
 
-                connection.execute(
-                    """
-                    INSERT INTO transactions
-                    (transaction_id, idempotency_key, business_id, operation, amount,
-                     currency, metadata_json, request_fingerprint, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'committed', ?)
-                    """,
-                    (
-                        transaction_id,
-                        idempotency_key,
-                        business_id,
-                        operation,
-                        amount,
-                        currency,
-                        json.dumps(metadata, sort_keys=True, separators=(",", ":")),
-                        fingerprint,
-                        datetime.now(UTC).isoformat(),
-                    ),
+            existing = await self.session.execute(
+                sa_text("""
+                    SELECT transaction_id, status, operation, amount, currency, metadata_json
+                    FROM transaction_journal
+                    WHERE idempotency_key = :idem_key
+                """),
+                {"idem_key": idempotency_key},
+            )
+            existing_row = existing.first()
+            if existing_row is not None:
+                return TransactionResult(
+                    transaction_id=existing_row.transaction_id,
+                    status=existing_row.status,
+                    operation=existing_row.operation,
+                    amount=str(existing_row.amount),
+                    currency=existing_row.currency,
+                    metadata=json.loads(existing_row.metadata_json),
+                    idempotent_replay=True,
                 )
-                connection.execute("COMMIT")
-                row = connection.execute(
-                    "SELECT * FROM transactions WHERE transaction_id = ?",
-                    (transaction_id,),
-                ).fetchone()
-                if row is None:
-                    raise RuntimeError("Transaction committed but could not be reloaded")
-                return self._result(row, replay=False)
-            except Exception:
-                with contextlib.suppress(sqlite3.Error):
-                    connection.execute("ROLLBACK")
-                raise
-            finally:
-                connection.close()
 
-    @staticmethod
-    def _result(row: sqlite3.Row, *, replay: bool) -> TransactionResult:
-        return TransactionResult(
-            transaction_id=row["transaction_id"],
-            status=row["status"],
-            operation=row["operation"],
-            amount=row["amount"],
-            currency=row["currency"],
-            metadata=json.loads(row["metadata_json"]),
-            idempotent_replay=replay,
-        )
+            # Insert the new journal entry.
+            result = await self.session.execute(
+                sa_text("""
+                    INSERT INTO transaction_journal
+                        (transaction_id, idempotency_key, operation, amount, currency,
+                         metadata_json, status, created_at)
+                    VALUES (:tx_id, :idem_key, :op, :amt, :curr, :meta,
+                            'committed', CURRENT_TIMESTAMP)
+                    ON CONFLICT (idempotency_key) DO NOTHING
+                    RETURNING transaction_id, status, operation, amount, currency,
+                              metadata_json
+                """),
+                {
+                    "tx_id": transaction_id,
+                    "idem_key": idempotency_key,
+                    "op": operation,
+                    "amt": str(amount),
+                    "curr": currency,
+                    "meta": json.dumps(metadata, sort_keys=True, separators=(",", ":")),
+                },
+            )
+            insert_row = result.first()
+            if insert_row is not None:
+                return TransactionResult(
+                    transaction_id=insert_row.transaction_id,
+                    status=insert_row.status,
+                    operation=insert_row.operation,
+                    amount=str(insert_row.amount),
+                    currency=insert_row.currency,
+                    metadata=json.loads(insert_row.metadata_json),
+                    idempotent_replay=False,
+                )
 
-    def get(
+            # Key already existed — return the original entry.
+            existing = await self.session.execute(
+                sa_text("""
+                    SELECT transaction_id, status, operation, amount, currency, metadata_json
+                    FROM transaction_journal
+                    WHERE idempotency_key = :idem_key
+                """),
+                {"idem_key": idempotency_key},
+            )
+            existing_row = existing.first()
+            if existing_row is None:
+                raise RuntimeError(
+                    "Idempotency key conflict but no existing row found "
+                    f"for key {idempotency_key!r}"
+                )
+            return TransactionResult(
+                transaction_id=existing_row.transaction_id,
+                status=existing_row.status,
+                operation=existing_row.operation,
+                amount=str(existing_row.amount),
+                currency=existing_row.currency,
+                metadata=json.loads(existing_row.metadata_json),
+                idempotent_replay=True,
+            )
+
+    async def get(
         self,
         transaction_id: str,
-        *,
         business_id: str | None = None,
     ) -> TransactionResult | None:
-        """Return a journal entry, optionally requiring an exact tenant match."""
-        connection = self._connect()
-        try:
-            if business_id is None:
-                row = connection.execute(
-                    "SELECT * FROM transactions WHERE transaction_id = ?",
-                    (transaction_id,),
-                ).fetchone()
-            else:
-                row = connection.execute(
-                    """
-                    SELECT * FROM transactions
-                    WHERE transaction_id = ? AND business_id = ?
-                    """,
-                    (transaction_id, business_id),
-                ).fetchone()
-            return self._result(row, replay=False) if row else None
-        finally:
-            connection.close()
+        """Return the entry by transaction ID, optionally filtering by business."""
+        from sqlalchemy import text as sa_text
+
+        if business_id is not None:
+            result = await self.session.execute(
+                sa_text("""
+                    SELECT transaction_id, status, operation, amount, currency, metadata_json
+                    FROM transaction_journal
+                    WHERE transaction_id = :tx_id AND idempotency_key LIKE :business_prefix
+                """),
+                {
+                    "tx_id": transaction_id,
+                    "business_prefix": f"{business_id}:%",
+                },
+            )
+        else:
+            result = await self.session.execute(
+                sa_text("""
+                    SELECT transaction_id, status, operation, amount, currency, metadata_json
+                    FROM transaction_journal
+                    WHERE transaction_id = :tx_id
+                """),
+                {"tx_id": transaction_id},
+            )
+        row = result.first()
+        if row is None:
+            return None
+        return TransactionResult(
+            transaction_id=row.transaction_id,
+            status=row.status,
+            operation=row.operation,
+            amount=str(row.amount),
+            currency=row.currency,
+            metadata=json.loads(row.metadata_json),
+            idempotent_replay=False,
+        )

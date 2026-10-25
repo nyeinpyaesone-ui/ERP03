@@ -34,6 +34,9 @@ jobs:
         working-directory: ERP-BACKEND
     env:
       DATABASE_URL: postgresql+asyncpg://erp03:erp03@127.0.0.1:5432/erp03
+      ENVIRONMENT: production
+      SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-secret-key-for-testing-at-least-32-chars-long' }}
+      CORS_ORIGINS: https://erp.example.invalid
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

@@ -6,7 +6,6 @@ Code owns the workflow; TypeSafe supplies programmable common sense:
 - TypeSafe client lifecycle is bound to the app lifespan.
 """
 
-import logging
 import time
 from contextlib import asynccontextmanager
 from uuid import uuid4
@@ -14,6 +13,8 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.api.auth import router as auth_router
 from app.api.catalog import router as catalog_router
@@ -23,14 +24,13 @@ from app.api.sales import router as sales_router
 from app.api.transactions import router as transactions_router
 from app.core.config import settings
 from app.core.errors import AppError
+from app.core.logging import setup_logging
 from app.core.metrics import REQUEST_COUNT, REQUEST_LATENCY, metrics_app
-from app.core.typesafe import typesafe
+from app.core.rate_limit import limiter
+from app.core.typesafe import CONFIDENCE_ESCALATE_THRESHOLD, typesafe
+from app.core.validation import validate_request
 
-logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper(), logging.INFO),
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-)
-logger = logging.getLogger("erp03")
+logger = setup_logging(settings.log_level)
 
 
 @asynccontextmanager
@@ -70,6 +70,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
@@ -93,7 +97,7 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
         )
         if classification is not None:
             # Confidence gates acting on the judgment.
-            if classification.confidence < 0.40:
+            if classification.confidence < CONFIDENCE_ESCALATE_THRESHOLD:
                 logger.warning(
                     "Low-confidence error classification request_id=%s "
                     "selected=%s confidence=%.2f escalate=True",
@@ -128,9 +132,15 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
 
 
 app.mount("/metrics", metrics_app)
+
+# Validate CORS origins for production
+cors_origins = settings.cors_origin_list
+if settings.environment == "production" and "*" in cors_origins:
+    raise ValueError("Wildcard CORS origin not allowed in production with credentials")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=[
@@ -141,6 +151,9 @@ app.add_middleware(
         "Retry-After",
     ],
 )
+
+# Request validation middleware (content-type, body size)
+app.middleware("http")(validate_request)
 
 
 @app.middleware("http")
@@ -172,7 +185,18 @@ async def request_context(request: Request, call_next):
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if settings.environment == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'"
+    )
     logger.info(
         "request method=%s path=%s status=%s duration_ms=%.2f request_id=%s",
         request.method,
@@ -187,6 +211,24 @@ async def request_context(request: Request, call_next):
 @app.get("/api/v1", tags=["system"])
 async def api_root() -> dict[str, str]:
     return {"service": "erp03", "status": "ready", "version": settings.version}
+
+
+# TypeSafe non-blocking annotation (errors and business events)
+# Fire-and-forget; never impacts request latency. Code owns decisions.
+@app.middleware("http")
+async def typesafe_annotate(request: Request, call_next):
+    response = await call_next(request)
+    if settings.typesafe_enabled and response.status_code >= 400:
+        import asyncio
+
+        asyncio.create_task(
+            typesafe.judge_request(
+                request_id=request.headers.get("X-Request-ID", ""),
+                method=request.method,
+                endpoint=str(request.url.path),
+            )
+        )
+    return response
 
 
 app.include_router(health_router, prefix="/api/v1")

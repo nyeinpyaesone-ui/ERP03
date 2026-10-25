@@ -3,9 +3,13 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - configmap.yaml
-  - erp03-secrets.yaml
+  - secret.yaml
   - erp-data-pvc.yaml
   - backend-deployment.yaml
   - backend-service.yaml
   - frontend-deployment.yaml
   - frontend-service.yaml
+  - ingress.yaml
+  - pdb.yaml
+  - network-policy.yaml
+  - migration-job.yaml

@@ -10,6 +10,8 @@ on:
 permissions:
   contents: read
   packages: write
+  security-events: write
+  id-token: write
 
 jobs:
   build-backend:
@@ -39,17 +41,36 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=sha
+          flavor: |
+            prefix=latest,on=push,branch=main
 
       - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
           context: ERP-BACKEND
           file: ERP-BACKEND/Dockerfile
-          push: true
+          push: ${{ github.event_name == 'push' && (github.ref_type == 'tag' || github.ref == 'refs/heads/main') }}
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          sbom: true
+          provenance: true
+
+      - name: Trivy image scan (backend)
+        uses: aquasecurity/trivy-action@v0.22.0
+        with:
+          image: ghcr.io/${{ github.repository_owner }}/erp03-backend:${{ steps.meta-backend.outputs.version }}
+          format: sarif
+          output: trivy-backend.sarif
+          severity: CRITICAL,HIGH
+          exit-code: 1
+
+      - name: Upload Trivy scan result
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-backend.sarif
 
   build-frontend:
     runs-on: ubuntu-latest
@@ -78,14 +99,33 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=sha
+          flavor: |
+            prefix=latest,on=push,branch=main
 
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
         with:
           context: frontend
           file: frontend/Dockerfile
-          push: true
+          push: ${{ github.event_name == 'push' && (github.ref_type == 'tag' || github.ref == 'refs/heads/main') }}
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          sbom: true
+          provenance: true
+
+      - name: Trivy image scan (frontend)
+        uses: aquasecurity/trivy-action@v0.22.0
+        with:
+          image: ghcr.io/${{ github.repository_owner }}/erp03-frontend:${{ steps.meta-frontend.outputs.version }}
+          format: sarif
+          output: trivy-frontend.sarif
+          severity: CRITICAL,HIGH
+          exit-code: 1
+
+      - name: Upload Trivy scan result
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-frontend.sarif

@@ -1,0 +1,21 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: erp03-backend-pdb
+  namespace: erp03
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: erp03-backend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: erp03-frontend-pdb
+  namespace: erp03
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: erp03-frontend

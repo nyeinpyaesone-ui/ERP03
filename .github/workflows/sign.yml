@@ -12,28 +12,30 @@ permissions:
 jobs:
   sign-backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: sigstore/cosign-installer@v3.5.0
-      - name: Sign backend image
+      - name: Sign backend image (keyless OIDC)
         run: |
-          cosign sign --key ${{ secrets.COSIGN_KEY }} \
+          cosign sign --yes \
             ghcr.io/${{ github.repository_owner }}/erp03-backend:${{ github.ref_name }}
       - name: Verify backend signature
         run: |
-          cosign verify --key ${{ secrets.COSIGN_PUB_KEY }} \
+          cosign verify \
             ghcr.io/${{ github.repository_owner }}/erp03-backend:${{ github.ref_name }}
 
   sign-frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: sigstore/cosign-installer@v3.5.0
-      - name: Sign frontend image
+      - name: Sign frontend image (keyless OIDC)
         run: |
-          cosign sign --key ${{ secrets.COSIGN_KEY }} \
+          cosign sign --yes \
             ghcr.io/${{ github.repository_owner }}/erp03-frontend:${{ github.ref_name }}
       - name: Verify frontend signature
         run: |
-          cosign verify --key ${{ secrets.COSIGN_PUB_KEY }} \
+          cosign verify \
             ghcr.io/${{ github.repository_owner }}/erp03-frontend:${{ github.ref_name }}

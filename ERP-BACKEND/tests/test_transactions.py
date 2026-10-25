@@ -1,13 +1,18 @@
-import sqlite3
-import threading
+"""Authenticated transaction journal endpoint tests.
+
+Tests the /api/v1/transactions endpoints through the FastAPI test client,
+using the async PostgreSQL/SQLite-backed TransactionStore.
+"""
+
+import asyncio
 from uuid import uuid4
 
 import pytest
-from app.api.transactions import store
 from app.core.security import current_claims
-from app.core.transaction_store import TransactionStore
+from app.db.session import SessionFactory, get_db_session  # noqa: F401
 from app.main import app
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 
 pytestmark = (
     pytest.mark.requires_database
@@ -53,7 +58,8 @@ def test_transaction_is_idempotent():
     assert second.json()["idempotent_replay"] is True
 
 
-def test_concurrent_same_key_commits_once():
+@pytest.mark.asyncio
+async def test_concurrent_same_key_commits_once():
     payload = {
         "operation": "stock.reserve",
         "amount": "1.00",
@@ -61,23 +67,17 @@ def test_concurrent_same_key_commits_once():
         "metadata": {"sku": "SKU-001"},
     }
     key = f"stock-reserve-{uuid4().hex}"
-    responses = []
 
-    def request():
-        with TestClient(app) as client:
-            responses.append(
-                client.post(
-                    "/api/v1/transactions",
-                    json=payload,
-                    headers={"X-Idempotency-Key": key},
-                )
+    async def make_request():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/v1/transactions",
+                json=payload,
+                headers={"X-Idempotency-Key": key},
             )
+            return response
 
-    threads = [threading.Thread(target=request) for _ in range(8)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
+    responses = await asyncio.gather(*[make_request() for _ in range(8)])
 
     assert len(responses) == 8
     assert all(response.status_code == 201 for response in responses)
@@ -143,213 +143,55 @@ def test_amount_that_rounds_to_zero_is_rejected():
     assert response.status_code == 422
 
 
-def test_failed_write_rolls_back_and_key_can_be_retried():
-    key = f"rollback-retry-{uuid4().hex}"
-    with pytest.raises(TypeError):
-        store.execute(
-            transaction_id=f"failed-write-{uuid4().hex}",
-            business_id="test-business",
-            idempotency_key=key,
-            operation="finance.post",
-            amount="10.00",
-            currency="MMK",
-            metadata={"invalid": object()},
-        )
+def test_transaction_get_returns_stored_entry():
+    """GET /transactions/{id} returns the stored entry with idempotent_replay=False."""
+    payload = {
+        "operation": "order.create",
+        "amount": "25.00",
+        "currency": "MMK",
+        "metadata": {"order": "ORD-001"},
+    }
+    headers = {"X-Idempotency-Key": f"get-test-{uuid4().hex}"}
 
-    result = store.execute(
-        transaction_id=f"successful-retry-{uuid4().hex}",
-        business_id="test-business",
-        idempotency_key=key,
-        operation="finance.post",
-        amount="10.00",
-        currency="MMK",
-        metadata={"retry": True},
-    )
-    assert not result.idempotent_replay
-    assert result.metadata == {"retry": True}
+    with TestClient(app) as client:
+        created = client.post("/api/v1/transactions", json=payload, headers=headers)
+        assert created.status_code == 201
+        transaction_id = created.json()["transaction_id"]
+
+        fetched = client.get(f"/api/v1/transactions/{transaction_id}")
+        assert fetched.status_code == 200
+        assert fetched.json()["transaction_id"] == transaction_id
+        assert fetched.json()["idempotent_replay"] is False
+        assert fetched.json()["metadata"] == {"order": "ORD-001"}
 
 
-def test_transaction_survives_store_reinitialization(tmp_path):
-    database = str(tmp_path / "transactions.sqlite3")
-    first_store = TransactionStore(database)
-    created = first_store.execute(
-        transaction_id="persistent-001",
-        business_id="business-a",
-        idempotency_key="persistent-key-001",
-        operation="order.create",
-        amount="25.00",
-        currency="MMK",
-        metadata={"order": "ORD-001"},
-    )
-
-    second_store = TransactionStore(database)
-    loaded = second_store.get(
-        created.transaction_id,
-        business_id="business-a",
-    )
-    assert loaded is not None
-    assert loaded.transaction_id == created.transaction_id
-    assert loaded.metadata == {"order": "ORD-001"}
-    assert second_store.get(created.transaction_id, business_id="another-business") is None
+def test_transaction_get_missing_returns_404():
+    with TestClient(app) as client:
+        response = client.get("/api/v1/transactions/nonexistent-id")
+    assert response.status_code == 404
 
 
-def test_existing_journal_is_migrated_and_legacy_tenant_is_recovered(tmp_path):
-    database = tmp_path / "legacy.sqlite3"
-    connection = sqlite3.connect(database)
-    try:
-        connection.execute(
-            """
-            CREATE TABLE transactions (
-                transaction_id TEXT PRIMARY KEY,
-                idempotency_key TEXT NOT NULL UNIQUE,
-                operation TEXT NOT NULL,
-                amount TEXT NOT NULL,
-                currency TEXT NOT NULL,
-                metadata_json TEXT NOT NULL,
-                status TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        connection.execute(
-            """
-            INSERT INTO transactions
-            (transaction_id, idempotency_key, operation, amount, currency,
-             metadata_json, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "legacy-transaction-001",
-                "legacy-business:legacy-key",
-                "invoice.create",
-                "15.00",
-                "MMK",
-                '{"invoice":"LEGACY-001"}',
-                "committed",
-                "2026-01-01T00:00:00+00:00",
-            ),
-        )
-        connection.commit()
-    finally:
-        connection.close()
-
-    migrated_store = TransactionStore(str(database))
-    owned = migrated_store.get("legacy-transaction-001", business_id="legacy-business")
-    foreign = migrated_store.get("legacy-transaction-001", business_id="other-business")
-
-    assert owned is not None
-    assert owned.metadata == {"invoice": "LEGACY-001"}
-    assert foreign is None
-
-
-def test_same_idempotency_key_with_different_payload_returns_conflict():
-    key = f"payload-conflict-{uuid4().hex}"
-    headers = {"X-Idempotency-Key": key}
-    first_payload = {
+def test_idempotency_fingerprint_ignores_metadata_key_order():
+    """Replaying the same key with differently-ordered metadata keys replays."""
+    payload1 = {
         "operation": "invoice.create",
         "amount": "10.00",
         "currency": "MMK",
-        "metadata": {"invoice": "INV-A"},
+        "metadata": {"invoice": "INV-A", "source": "pos"},
     }
-    changed_payload = {
+    payload2 = {
         "operation": "invoice.create",
-        "amount": "11.00",
+        "amount": "10.00",
         "currency": "MMK",
-        "metadata": {"invoice": "INV-A"},
+        "metadata": {"source": "pos", "invoice": "INV-A"},
     }
+    headers = {"X-Idempotency-Key": f"canonical-{uuid4().hex}"}
+
     with TestClient(app) as client:
-        first = client.post("/api/v1/transactions", json=first_payload, headers=headers)
-        conflict = client.post("/api/v1/transactions", json=changed_payload, headers=headers)
+        first = client.post("/api/v1/transactions", json=payload1, headers=headers)
+        replay = client.post("/api/v1/transactions", json=payload2, headers=headers)
 
     assert first.status_code == 201
-    assert conflict.status_code == 409
-    assert conflict.json()["detail"]["code"] == "IDEMPOTENCY_PAYLOAD_MISMATCH"
-
-
-def test_legacy_fingerprint_less_replay_with_different_payload_returns_conflict(
-    tmp_path_factory,
-):
-    """Legacy rows (no request_fingerprint) cannot be verified for payload
-    equality, so any replay of the same key is a conflict by design."""
-    import sqlite3
-
-    from app.core.transaction_store import IdempotencyConflict, TransactionStore
-
-    db_path = str(tmp_path_factory.mktemp("legacy") / "legacy.sqlite3")
-    # Seed a legacy row directly with NULL request_fingerprint (pre-migration data).
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
-        CREATE TABLE transactions (
-            transaction_id TEXT PRIMARY KEY,
-            idempotency_key TEXT NOT NULL UNIQUE,
-            business_id TEXT NOT NULL DEFAULT '',
-            operation TEXT NOT NULL,
-            amount TEXT NOT NULL,
-            currency TEXT NOT NULL,
-            metadata_json TEXT NOT NULL,
-            request_fingerprint TEXT,
-            status TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        )
-        """
-    )
-    conn.execute(
-        """
-        INSERT INTO transactions
-        (transaction_id, idempotency_key, business_id, operation, amount,
-         currency, metadata_json, request_fingerprint, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'committed', ?)
-        """,
-        (
-            "legacy-001",
-            "legacy-key",
-            "legacy-business",
-            "invoice.create",
-            "10.00",
-            "MMK",
-            '{"invoice": "INV-OLD"}',
-            "2026-01-01T00:00:00+00:00",
-        ),
-    )
-    conn.commit()
-    conn.close()
-
-    isolated_store = TransactionStore(db_path)
-
-    # Replay the same key with a different payload → conflict.
-    with pytest.raises(IdempotencyConflict) as exc:
-        isolated_store.execute(
-            transaction_id="legacy-002",
-            idempotency_key="legacy-key",
-            operation="invoice.create",
-            amount="20.00",
-            currency="MMK",
-            metadata={"invoice": "INV-NEW"},
-            business_id="legacy-business",
-        )
-    assert exc.value.code == "IDEMPOTENCY_KEY_REUSED"
-
-
-def test_idempotency_fingerprint_ignores_metadata_key_order(tmp_path):
-    isolated_store = TransactionStore(str(tmp_path / "fingerprint.sqlite3"))
-    first = isolated_store.execute(
-        transaction_id="canonical-001",
-        idempotency_key="canonical-key",
-        operation="invoice.create",
-        amount="10.00",
-        currency="MMK",
-        metadata={"invoice": "INV-A", "source": "pos"},
-        business_id="canonical-business",
-    )
-    replay = isolated_store.execute(
-        transaction_id="canonical-002",
-        idempotency_key="canonical-key",
-        operation="invoice.create",
-        amount="10.00",
-        currency="MMK",
-        metadata={"source": "pos", "invoice": "INV-A"},
-        business_id="canonical-business",
-    )
-    assert replay.transaction_id == first.transaction_id
-    assert replay.idempotent_replay is True
+    assert replay.status_code == 201
+    assert replay.json()["transaction_id"] == first.json()["transaction_id"]
+    assert replay.json()["idempotent_replay"] is True

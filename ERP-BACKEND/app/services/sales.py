@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -11,10 +12,13 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.errors import ConflictError, PaymentError, SaleValidationError
 from app.models.erp import Customer, Invoice, InvoiceItem, Payment, Product, Warehouse
 from app.models.identity import Branch
 from app.services.inventory import adjust_stock
+
+logger = logging.getLogger("erp03.sales")
 
 
 async def _find_idempotent_invoice(
@@ -174,6 +178,41 @@ async def create_pos_sale(
         requested_paid = sum((payment.amount for payment in payments), Decimal("0"))
         if requested_total >= 0 and requested_paid > requested_total:
             raise PaymentError("Overpayment is not allowed")
+
+    # TypeSafe transaction risk: annotation only, code owns the decision.
+    # Non-blocking degrade when TypeSafe is disabled or unavailable.
+    risk = None
+    if settings.typesafe_enabled:
+        try:
+            from app.core.typesafe import typesafe
+
+            risk = await typesafe.score_transaction_risk(
+                business_id=str(business_id),
+                branch_id=str(branch_id),
+                amount=str(requested_total or 0),
+                currency=currency,
+                lines_count=len(lines),
+                payments_count=len(payments),
+                idempotency_key=idempotency_key,
+            )
+            if risk and risk.is_high_risk:
+                logger.warning(
+                    "High-risk sale annotated "
+                    "request_id=%s business_id=%s branch_id=%s "
+                    "score=%s confidence=%.2f escalate=%s",
+                    idempotency_key or "unknown",
+                    business_id,
+                    branch_id,
+                    risk.score,
+                    risk.confidence,
+                    risk.escalate,
+                )
+                raise PaymentError("Sale blocked: high fraud/anomaly risk")
+        except PaymentError:
+            raise
+        except Exception:  # pragma: no cover - TypeSafe optional
+            logger.debug("TypeSafe risk scoring skipped for sale")
+            risk = None
 
     fingerprint = _sale_fingerprint(
         business_id=business_id,

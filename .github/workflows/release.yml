@@ -3,6 +3,15 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        required: true
+        description: SemVer tag to release (e.g. v1.0.1)
+      generate_notes:
+        required: false
+        default: "true"
+        description: Auto-generate release notes from commit history
 
 permissions:
   contents: write
@@ -11,24 +20,40 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: resolve_tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ inputs.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Generate changelog
         id: changelog
+        if: inputs.generate_notes != 'false' && github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         uses: scottbrenner/generate-changelog-action@v1
         with:
           my_token: ${{ github.token }}
           from_tag: ${{ github.event.before }}
-          to_tag: ${{ github.ref_name }}
+          to_tag: ${{ steps.resolve_tag.outputs.tag }}
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          tag_name: ${{ steps.resolve_tag.outputs.tag }}
+          name: Release ${{ steps.resolve_tag.outputs.tag }}
           body: ${{ steps.changelog.outputs.changelog }}
           generate_release_notes: true
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          user: __token__
-          password: ${{ secrets.PYPI_TOKEN }}
+
+      - name: Record release evidence
+        run: |
+          echo "Release ${{ steps.resolve_tag.outputs.tag }} created from commit ${{ github.sha }}"
+          echo "Images: ghcr.io/${{ github.repository_owner }}/erp03-backend:${{ steps.resolve_tag.outputs.tag }}"
+          echo "Images: ghcr.io/${{ github.repository_owner }}/erp03-frontend:${{ steps.resolve_tag.outputs.tag }}"

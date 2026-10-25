@@ -1,29 +1,64 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
+import Login from './components/Login.jsx';
+import Dashboard from './components/Dashboard.jsx';
+import Sales from './components/Sales.jsx';
+import Inventory from './components/Inventory.jsx';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export default function App() {
-  const [health, setHealth] = useState('checking');
+  const [token, setToken] = useState(localStorage.getItem('erp03_token'));
+  const [user, setUser] = useState(null);
+  const [activeView, setActiveView] = useState('dashboard');
 
   useEffect(() => {
-    fetch(`${API_BASE}/healthz`)
-      .then((response) => {
-        if (!response.ok) throw new Error('unhealthy');
-        setHealth('online');
+    if (token) {
+      fetch(`${API_BASE}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
       })
-      .catch(() => setHealth('offline'));
-  }, []);
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then(setUser)
+        .catch(() => {
+          localStorage.removeItem('erp03_token');
+          setToken(null);
+        });
+    }
+  }, [token]);
+
+  if (!token) {
+    return (
+      <Login
+        onLogin={(t, u) => {
+          localStorage.setItem('erp03_token', t);
+          setToken(t);
+          setUser(u);
+        }}
+      />
+    );
+  }
 
   return (
-    <main className="shell">
-      <section className="card" aria-labelledby="title">
-        <p className="eyebrow">ERP03 · CONTROL PLANE</p>
-        <h1 id="title">Enterprise Resource Planning</h1>
-        <p className="subtitle">Production-focused modular ERP foundation.</p>
-        <div className={`status ${health}`} role="status">
-          <span aria-hidden="true" /> API {health}
-        </div>
-      </section>
-    </main>
+    <div className="erp-layout">
+      <nav className="sidebar">
+        <h2>ERP03</h2>
+        <button onClick={() => setActiveView('dashboard')}>Dashboard</button>
+        <button onClick={() => setActiveView('sales')}>Sales</button>
+        <button onClick={() => setActiveView('inventory')}>Inventory</button>
+        <button
+          onClick={() => {
+            localStorage.removeItem('erp03_token');
+            setToken(null);
+            setUser(null);
+          }}
+        >
+          Logout
+        </button>
+      </nav>
+      <main className="content">
+        {activeView === 'dashboard' && <Dashboard user={user} />}
+        {activeView === 'sales' && <Sales token={token} />}
+        {activeView === 'inventory' && <Inventory token={token} />}
+      </main>
+    </div>
   );
 }

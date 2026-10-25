@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: erp03-dev
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: erp03-backend
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: erp03-frontend
+  - patch: |-
+      - op: replace
+        path: /data/CORS_ORIGINS
+        value: http://localhost:3000,http://localhost:5173
+    target:
+      kind: ConfigMap
+      name: erp03-runtime

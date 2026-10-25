@@ -54,10 +54,10 @@ def init_telemetry(
     metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[reader]))
 
     REQUEST_COUNT = metrics.get_meter(__name__).create_counter(
-        "erp03_requests_total", unit="1", description="Total HTTP requests"
+        "erp03_http_requests_total", unit="1", description="Total HTTP requests"
     )
     REQUEST_LATENCY = metrics.get_meter(__name__).create_histogram(
-        "erp03_request_duration_ms", unit="ms", description="Request duration"
+        "erp03_http_request_duration_seconds", unit="s", description="HTTP request duration"
     )
 
 

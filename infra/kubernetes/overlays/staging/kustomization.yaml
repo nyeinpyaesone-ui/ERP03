@@ -1,0 +1,51 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: erp03-staging
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+    target:
+      kind: Deployment
+      name: erp03-backend
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+    target:
+      kind: Deployment
+      name: erp03-frontend
+  - patch: |-
+      - op: replace
+        path: /data/ENVIRONMENT
+        value: staging
+    target:
+      kind: ConfigMap
+      name: erp03-runtime
+  - patch: |-
+      - op: replace
+        path: /data/CORS_ORIGINS
+        value: https://staging.erp.example.com
+    target:
+      kind: ConfigMap
+      name: erp03-runtime
+  - patch: |-
+      - op: replace
+        path: /stringData/DATABASE_URL
+        value: postgresql+asyncpg://erp03:erp03@postgres:5432/erp03
+    target:
+      kind: Secret
+      name: erp03-secrets
+  - patch: |-
+      - op: replace
+        path: /stringData/SECRET_KEY
+        value: replace-with-staging-secret-key-32chars-min
+    target:
+      kind: Secret
+      name: erp03-secrets

@@ -33,6 +33,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        required: true
     command: ["alembic", "upgrade", "head"]
     restart: "no"
 

@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: erp03-migration
+  namespace: erp03
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migration
+          image: ghcr.io/nyeinpyaesone-ui/erp03-backend@sha256:REPLACE_WITH_REAL_DIGEST
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: erp03-runtime
+            - secretRef:
+                name: erp03-secrets

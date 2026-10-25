@@ -45,7 +45,7 @@ cd ERP-BACKEND && ruff format --check app tests alembic
 cd ERP-BACKEND
 python -m compileall -q app alembic
 alembic upgrade head                  # single head; fresh-DB apply verified
-pytest -q                             # 48 passed, 1 PG-only skip
+pytest -q                             # 67 passed, 1 PG-only skip
 
 # Frontend
 cd frontend && npm ci && npm run build
@@ -93,9 +93,15 @@ Single head `0007_operation_orchestration`. Always run `alembic upgrade head` ag
 `app/core/typesafe.py` — gated by `TYPESAFE_ENABLED` + `TYPESAFE_API_KEY`. Code owns decisions; TypeSafe only annotates:
 - Confidence thresholds: act ≥0.70, escalate <0.40
 - `classify_error` → drives `Retry-After` header on error responses
-- `judge_request` asks independent judgments in parallel via `asyncio.gather`
+- `judge_request` asks independent judgments together via one batched `system_one` call (keyed questions, code consumes applicable answers)
 - Client closed in FastAPI `lifespan` shutdown
 - Never sniff error-message text for codes; use typed `IdempotencyConflict.code`
+
+**Verified TypeSafe gotchas:**
+
+- The pinned `typesafe==0.9.1` in `ERP-BACKEND/dev-requirements.txt` is NOT the TypeSafe AI SDK — it is an unrelated package (formal type-assertion decorators). The real SDK is `typesafe-sdk` (`typesafe_sdk` module; e.g. `from typesafe_sdk import AsyncTypeSafeClient, Choice, Noul, Score`). With the current pin, the import in `app/core/typesafe.py` always fails → `_TYPESAFE_AVAILABLE` stays `False` → the optional integration silently never activates. **Fixed:** pin is now `typesafe-sdk==0.7.5`.
+- The judgment code expected an SDK surface that differed from the real one (it used `client.ask(...)`, `choice()/noul()/score()` factories, and `result.selected/confidence/score/yes/probability`). **Reconciled:** the integration now uses `client.system_one(state=..., questions={...})` with answers under `response.choices` / `response.nouls` / `response.scores`; the judgment layer is verified against the live `typesafe-sdk` 0.7.5 API docs.
+- Runtime error handling calls `typesafe.classify_error` directly; the `judge_request` composition helper was not invoked from app code (tests only). It now performs one batched call; still not wired into app error handling.
 
 ## Do not commit
 

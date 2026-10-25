@@ -29,3 +29,7 @@ frontend/.vite/
 # linter/type-checker caches
 .ruff_cache/
 .mypy_cache/
+
+# backend local data (SQLite journal, test artifacts)
+ERP-BACKEND/.local/
+.local/

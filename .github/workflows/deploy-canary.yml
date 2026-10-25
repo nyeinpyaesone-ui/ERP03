@@ -6,9 +6,11 @@ on:
       environment:
         required: true
         default: "staging"
+        description: Target environment (staging or production)
       image_tag:
         required: true
         default: "latest"
+        description: Container image tag to deploy
 
 permissions:
   contents: read
@@ -17,28 +19,54 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment:
       name: ${{ inputs.environment }}
       url: https://${{ inputs.environment }}.erp03.example.com
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate environment input
+        run: |
+          if [[ "${{ inputs.environment }}" != "staging" && "${{ inputs.environment }}" != "production" ]]; then
+            echo "Invalid environment: ${{ inputs.environment }} (must be staging or production)"
+            exit 1
+          fi
+
       - name: Deploy canary (25% traffic)
         run: |
-          echo "Deploying ghcr.io/${{ github.repository_owner }}/erp03-backend:${{ inputs.image_tag }}"
+          echo "Deploying ghcr.io/${{ github.repository_owner }}/erp03-backend:${{ inputs.image_tag }} to ${{ inputs.environment }}"
           echo "Canary weight: 25%"
+          echo "DEPLOYMENT_ENVIRONMENT=${{ inputs.environment }}" >> $GITHUB_ENV
+          echo "DEPLOYMENT_IMAGE_TAG=${{ inputs.image_tag }}" >> $GITHUB_ENV
+
       - name: Smoke test canary
         run: |
-          curl -f https://${{ inputs.environment }}.erp03.example.com/api/v1/healthz
+          CANARY_URL="https://${{ inputs.environment }}.erp03.example.com"
+          echo "Smoke testing $CANARY_URL/api/v1/healthz"
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 5 "$CANARY_URL/api/v1/healthz" >/dev/null 2>&1; then
+              echo "Canary smoke test PASSED on attempt $i"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 5s..."
+            sleep 5
+          done
+          echo "Canary smoke test FAILED after 30 attempts"
+          exit 1
 
   promote-production:
     needs: deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: inputs.environment == 'staging'
     environment:
       name: production
       url: https://api.erp03.example.com
     steps:
       - uses: actions/checkout@v4
+
       - name: Promote canary to production
         run: |
-          echo "Promoting backend:${{ inputs.image_tag }} to production"
+          echo "Promoting backend:${{ inputs.image_tag }} from staging to production"
+          echo "Production promotion approved for image ${{ inputs.image_tag }}"
