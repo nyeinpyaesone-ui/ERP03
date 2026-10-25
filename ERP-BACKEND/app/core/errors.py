@@ -64,6 +64,18 @@ class PaymentError(ValidationError):
     code = "PAYMENT_ERROR"
 
 
+class IdempotencyKeyReusedError(ConflictError):
+    """An idempotency key was reused for a different sale payload."""
+
+    code = "IDEMPOTENCY_KEY_REUSED"
+
+
+class IdempotencyPayloadMismatchError(ConflictError):
+    """The same idempotency key was used with a different payload fingerprint."""
+
+    code = "IDEMPOTENCY_PAYLOAD_MISMATCH"
+
+
 # Error code registry for fast lookup without string matching.
 _ERROR_CODES: dict[str, type[AppError]] = {
     cls.code: cls for cls in AppError.__subclasses__() for cls in (cls, *cls.__subclasses__())
@@ -86,5 +98,7 @@ __all__ = [
     "NotFoundError",
     "ForbiddenError",
     "PaymentError",
+    "IdempotencyKeyReusedError",
+    "IdempotencyPayloadMismatchError",
     "error_from_code",
 ]

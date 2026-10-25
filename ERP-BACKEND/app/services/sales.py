@@ -13,7 +13,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.errors import ConflictError, PaymentError, SaleValidationError
+from app.core.errors import (
+    ConflictError,
+    IdempotencyKeyReusedError,
+    IdempotencyPayloadMismatchError,
+    PaymentError,
+    SaleValidationError,
+)
 from app.models.erp import Customer, Invoice, InvoiceItem, Payment, Product, Warehouse
 from app.models.identity import Branch
 from app.services.inventory import adjust_stock
@@ -316,11 +322,15 @@ async def create_pos_sale(
                 .with_for_update()
             )
             if existing is not None:
-                if (
-                    existing.request_fingerprint is not None
-                    and existing.request_fingerprint != fingerprint
-                ):
-                    raise ConflictError("Idempotency key was already used for a different sale")
+                if existing.request_fingerprint is None:
+                    # Legacy row without fingerprint: cannot verify payload match
+                    raise IdempotencyKeyReusedError(
+                        "Idempotency key was reused for a legacy sale without fingerprint"
+                    )
+                if existing.request_fingerprint != fingerprint:
+                    raise IdempotencyPayloadMismatchError(
+                        "Idempotency key was reused with a different sale payload"
+                    )
                 return SaleResult.from_invoice(existing)
 
         invoice = Invoice(

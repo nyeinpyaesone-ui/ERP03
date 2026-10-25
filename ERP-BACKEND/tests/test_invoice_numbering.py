@@ -4,7 +4,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from app.core.errors import ConflictError
+from app.core.errors import ConflictError, IdempotencyKeyReusedError
 from app.db.session import SessionFactory
 from app.main import app
 from app.models.erp import Invoice
@@ -240,6 +240,66 @@ async def test_same_idempotency_key_different_payload_returns_conflict():
                 warehouse_id=warehouse.id,
                 lines=different_lines,
                 payments=different_payments,
+                idempotency_key=key,
+            )
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_legacy_row_without_fingerprint_raises_idempotency_key_reused():
+    """TS-2: A legacy invoice row without request_fingerprint must not replay
+    silently — same idempotency key with any payload raises
+    IDEMPOTENCY_KEY_REUSED."""
+    business, branch, warehouse, user = await _bootstrap("IDEML")
+    async with SessionFactory() as session, session.begin():
+        from app.models.erp import Product, StockBalance
+
+        product = Product(
+            business_id=business.id,
+            branch_id=branch.id,
+            sku=f"SKU-{uuid4().hex[:6]}",
+            name="Legacy item",
+            sale_price=Decimal("10.00"),
+            active=True,
+        )
+        session.add(product)
+        await session.flush()
+        session.add(
+            StockBalance(warehouse_id=warehouse.id, product_id=product.id, quantity=Decimal("5"))
+        )
+
+        # Seed a legacy row: idempotency key set, fingerprint NULL
+        legacy = Invoice(
+            business_id=business.id,
+            branch_id=branch.id,
+            customer_id=None,
+            invoice_no="INV-202601-000001",
+            idempotency_key=f"ideml-{uuid4().hex}",
+            request_fingerprint=None,
+            status="paid",
+            currency="MMK",
+            subtotal=Decimal("10.00"),
+            discount=Decimal("0"),
+            tax=Decimal("0"),
+            total=Decimal("10.00"),
+            paid=Decimal("10.00"),
+        )
+        session.add(legacy)
+        await session.flush()
+        key = legacy.idempotency_key
+
+    lines = [SaleLine(product_id=product.id, quantity=Decimal("1"))]
+    payments = [SalePayment(method="cash", amount=Decimal("10.00"))]
+
+    async with SessionFactory() as session:
+        with pytest.raises(IdempotencyKeyReusedError):
+            await create_pos_sale(
+                session,
+                business_id=business.id,
+                branch_id=branch.id,
+                warehouse_id=warehouse.id,
+                lines=lines,
+                payments=payments,
                 idempotency_key=key,
             )
         await session.commit()
