@@ -59,11 +59,12 @@ jobs:
           test -n "$STAGING_USER"
           test -n "$GHCR_USERNAME"
           test -n "$GHCR_TOKEN"
+          [[ "$GHCR_USERNAME" =~ ^[A-Za-z0-9-]+$ ]] || exit 1
           port="${STAGING_PORT:-22}"
           printf '%s' "$GHCR_TOKEN" | ssh -i "$HOME/.ssh/id_ed25519" \
             -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=yes \
             "$STAGING_USER@$STAGING_HOST" \
-            'docker login ghcr.io --username "$1" --password-stdin' sh "$GHCR_USERNAME"
+            "docker login ghcr.io --username $GHCR_USERNAME --password-stdin"
 
       - name: Pull and restart selected images
         env:
@@ -80,7 +81,7 @@ jobs:
           port="${STAGING_PORT:-22}"
           ssh -i "$HOME/.ssh/id_ed25519" -p "$port" \
             -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            "$STAGING_USER@$STAGING_HOST" sh -s -- "$DEPLOY_PATH" "$IMAGE_TAG" <<'REMOTE'
+            "$STAGING_USER@$STAGING_HOST" bash -s -- "$DEPLOY_PATH" "$IMAGE_TAG" <<'REMOTE'
           set -Eeuo pipefail
           deploy_path="$1"
           image_tag="$2"
