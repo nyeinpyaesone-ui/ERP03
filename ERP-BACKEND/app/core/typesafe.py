@@ -21,8 +21,13 @@ SDK contract (``typesafe-sdk``):
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Self
+
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 try:
     from typesafe_sdk import AsyncTypeSafeClient, Choice, Noul, Score
@@ -32,8 +37,6 @@ except ImportError:  # pragma: no cover - TypeSafe is optional
     AsyncTypeSafeClient = None  # type: ignore[assignment]
     Choice = Noul = Score = None  # type: ignore[assignment]
     _TYPESAFE_AVAILABLE = False
-
-from app.core.config import settings
 
 # ---------------------------------------------------------------------------
 # Confidence thresholds
@@ -229,7 +232,8 @@ class TypeSafeClient:
                 confidence=answer.confidence,
                 escalate=answer.confidence < CONFIDENCE_ESCALATE_THRESHOLD,
             )
-        except Exception:
+        except Exception:  # pragma: no cover - TypeSafe optional
+            logger.debug("TypeSafe classify_error failed", exc_info=True)
             return None
 
     # ------------------------------------------------------------------ transaction risk
@@ -276,7 +280,8 @@ class TypeSafeClient:
                 confidence=answer.confidence,
                 escalate=answer.confidence < CONFIDENCE_ESCALATE_THRESHOLD,
             )
-        except Exception:
+        except Exception:  # pragma: no cover - TypeSafe optional
+            logger.debug("TypeSafe score_transaction_risk failed", exc_info=True)
             return None
 
     # ------------------------------------------------------------------ idempotency conflict
@@ -335,7 +340,8 @@ class TypeSafeClient:
                 probability=answer.noul,
                 confidence=confidence,
             )
-        except Exception:
+        except Exception:  # pragma: no cover - TypeSafe optional
+            logger.debug("TypeSafe judge_idempotency_conflict failed", exc_info=True)
             return None
 
     # ------------------------------------------------------------------ composition
@@ -393,9 +399,13 @@ class TypeSafeClient:
             state["has_idempotency_key"] = idempotency_key is not None
 
         if not questions:
-            return {"classification": None, "risk": None, "enabled": True}
+            return {"classification": None, "risk": None, "enabled": False}
 
-        response = await client.system_one(state=state, questions=questions)
+        try:
+            response = await client.system_one(state=state, questions=questions)
+        except Exception:  # pragma: no cover - TypeSafe optional
+            logger.debug("TypeSafe judge_request failed", exc_info=True)
+            return {"classification": None, "risk": None, "enabled": True}
 
         output: dict[str, Any] = {"classification": None, "risk": None, "enabled": True}
         if ERROR_CLASSIFICATION_QUESTION in response.choices:
@@ -408,7 +418,12 @@ class TypeSafeClient:
             }
         if TRANSACTION_RISK_QUESTION in response.scores:
             answer = response.scores[TRANSACTION_RISK_QUESTION]
-            legend_vals = [answer.legend[k] for k in sorted(answer.legend, key=lambda x: int(x))]
+            try:
+                legend_vals = [
+                    answer.legend[k] for k in sorted(answer.legend, key=lambda x: int(x))
+                ]
+            except (KeyError, ValueError, TypeError):
+                legend_vals = []
             output["risk"] = {
                 "score": int(answer.score),
                 "levels": legend_vals,

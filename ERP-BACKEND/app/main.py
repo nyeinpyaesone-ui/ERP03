@@ -6,6 +6,7 @@ Code owns the workflow; TypeSafe supplies programmable common sense:
 - TypeSafe client lifecycle is bound to the app lifespan.
 """
 
+import asyncio
 import time
 from contextlib import asynccontextmanager
 from uuid import uuid4
@@ -219,15 +220,20 @@ async def api_root() -> dict[str, str]:
 async def typesafe_annotate(request: Request, call_next):
     response = await call_next(request)
     if settings.typesafe_enabled and response.status_code >= 400:
-        import asyncio
-
-        asyncio.create_task(
+        task = asyncio.create_task(
             typesafe.judge_request(
                 request_id=request.headers.get("X-Request-ID", ""),
                 method=request.method,
                 endpoint=str(request.url.path),
             )
         )
+
+        def _log_task_error(fut: asyncio.Task) -> None:
+            exc = fut.exception()
+            if exc is not None:
+                logger.debug("TypeSafe annotate failed", exc_info=exc)
+
+        task.add_done_callback(_log_task_error)
     return response
 
 
