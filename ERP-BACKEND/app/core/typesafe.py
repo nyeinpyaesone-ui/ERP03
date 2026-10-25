@@ -12,21 +12,25 @@ TypeSafe contract (per System One model design):
 - Code owns retry/routing/escalation decisions; TypeSafe only annotates.
 - Confidence thresholds gate acting on a judgment.
 - Independent judgments over the same request state are asked together.
+
+SDK contract (``typesafe-sdk``):
+- Questions travel as a mapping of question name -> question object.
+- Answers come back grouped by type and keyed by question name:
+  ``response.choices``, ``response.nouls``, ``response.scores``.
 """
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from typing import Any, Self
 
 try:
-    from typesafe import AsyncTypeSafeClient, choice, noul, score
+    from typesafe_sdk import AsyncTypeSafeClient, Choice, Noul, Score
 
     _TYPESAFE_AVAILABLE = True
 except ImportError:  # pragma: no cover - TypeSafe is optional
     AsyncTypeSafeClient = None  # type: ignore[assignment]
-    choice = noul = score = None  # type: ignore[assignment]
+    Choice = Noul = Score = None  # type: ignore[assignment]
     _TYPESAFE_AVAILABLE = False
 
 from app.core.config import settings
@@ -37,12 +41,15 @@ from app.core.config import settings
 
 # Below this confidence, code does NOT act on a TypeSafe judgment for
 # state-changing decisions (retry, conflict rejection, risk escalation).
-# The value is tuned from observed TypeSafe calibration on ERP03 traffic.
 CONFIDENCE_ACT_THRESHOLD = 0.70
 
 # Below this confidence, the judgment is escalated for human review regardless
 # of the selected option.
 CONFIDENCE_ESCALATE_THRESHOLD = 0.40
+
+ERROR_CLASSIFICATION_QUESTION = "error_classification"
+TRANSACTION_RISK_QUESTION = "transaction_risk"
+IDEMPOTENCY_CONFLICT_QUESTION = "idempotency_conflict"
 
 
 @dataclass(frozen=True)
@@ -50,7 +57,7 @@ class ErrorClassification:
     """Typed result of an error-classification judgment.
 
     ``selected`` is the model's pick; ``confidence`` gates whether code acts.
-    Code derives retry/routing from ``selected`` only when confidence meets the
+    Code derives retry/escalate from ``selected`` only when confidence meets the
     act threshold.
     """
 
@@ -87,13 +94,14 @@ class ErrorClassification:
 class TransactionRisk:
     """Typed result of a transaction-risk score judgment."""
 
-    score: int  # 0-100
+    score: int
     levels: list[Any]
     confidence: float
     escalate: bool
 
     @property
     def is_high_risk(self) -> bool:
+        """Code-owned high-risk decision based on score + confidence."""
         if self.confidence < CONFIDENCE_ACT_THRESHOLD:
             return False
         return self.score >= 75
@@ -103,7 +111,8 @@ class TransactionRisk:
 class IdempotencyJudgment:
     """Typed result of an idempotency-conflict judgment.
 
-    ``yes`` from the Noul means "same business command" → replay, not conflict.
+    ``yes`` from the Noul means "same business command" → replay. Code rejects
+    only when ``is_conflict`` is true (not same command with adequate confidence).
     """
 
     yes: bool
@@ -116,6 +125,42 @@ class IdempotencyJudgment:
         if self.confidence < CONFIDENCE_ACT_THRESHOLD:
             return False  # low confidence → do not reject, escalate instead
         return not self.yes
+
+
+def _error_classification_question() -> Any:
+    """Choice question: classify an API error for retry and routing decisions."""
+    return Choice(
+        type="choice",
+        instructions=(
+            "Classify this API error for retry and routing decisions. "
+            "If none of the retryable categories apply and the error is "
+            "not clearly auth/not-found/server, select unclassified."
+        ),
+        criteria={
+            "retryable_transient": "Retryable transient error; temporary failure",
+            "retryable_rate_limit": "Rate limit exceeded; retry after backoff",
+            "retryable_validation": "Client validation error; do not retry",
+            "non_retryable_auth": "Auth failure; do not retry",
+            "non_retryable_not_found": "Resource not found; do not retry",
+            "non_retryable_server": "Permanent server error; do not retry",
+            "unclassified": "Cannot determine category",
+        },
+    )
+
+
+def _transaction_risk_question() -> Any:
+    """Score question: fraud or anomaly risk for a POS sale."""
+    return Score(
+        type="score",
+        instructions="Score this POS sale for fraud or anomaly risk.",
+        criteria=[
+            "No risk",
+            "Low risk",
+            "Medium risk",
+            "High risk",
+            "Critical risk",
+        ],
+    )
 
 
 class TypeSafeClient:
@@ -142,7 +187,7 @@ class TypeSafeClient:
 
     async def close(self) -> None:
         if self._client is not None:
-            await self._client.close()
+            await self._client.aclose()
             self._client = None
 
     # ------------------------------------------------------------------ error classification
@@ -165,24 +210,7 @@ class TypeSafeClient:
         if client is None:
             return None
         try:
-            result = await client.ask(
-                choice(
-                    "error_classification",
-                    instructions=(
-                        "Classify this API error for retry and routing decisions. "
-                        "If none of the retryable categories apply and the error is "
-                        "not clearly auth/not-found/server, select unclassified."
-                    ),
-                    options=[
-                        {"id": "retryable_transient", "label": "Retryable transient error"},
-                        {"id": "retryable_rate_limit", "label": "Rate limit exceeded"},
-                        {"id": "retryable_validation", "label": "Client validation error"},
-                        {"id": "non_retryable_auth", "label": "Auth failure"},
-                        {"id": "non_retryable_not_found", "label": "Resource not found"},
-                        {"id": "non_retryable_server", "label": "Permanent server error"},
-                        {"id": "unclassified", "label": "Cannot determine category"},
-                    ],
-                ),
+            response = await client.system_one(
                 state={
                     "error_code": error_code,
                     "error_message": error_message,
@@ -190,13 +218,16 @@ class TypeSafeClient:
                     "method": method,
                     "request_id": request_id,
                 },
+                questions={
+                    ERROR_CLASSIFICATION_QUESTION: _error_classification_question(),
+                },
             )
-            escalate = result.confidence < CONFIDENCE_ESCALATE_THRESHOLD
+            answer = response.choices[ERROR_CLASSIFICATION_QUESTION]
             return ErrorClassification(
-                selected=result.selected,
-                probability=result.probability,
-                confidence=result.confidence,
-                escalate=escalate,
+                selected=answer.choice,
+                probability=answer.probabilities.get(answer.choice, 0.0),
+                confidence=answer.confidence,
+                escalate=answer.confidence < CONFIDENCE_ESCALATE_THRESHOLD,
             )
         except Exception:
             return None
@@ -222,21 +253,7 @@ class TypeSafeClient:
         if client is None:
             return None
         try:
-            result = await client.ask(
-                score(
-                    "transaction_risk",
-                    instructions=(
-                        "Score this POS sale for fraud or anomaly risk. "
-                        "Use level 100 only for clear fraud patterns."
-                    ),
-                    levels=[
-                        {"id": "0", "description": "No risk"},
-                        {"id": "25", "description": "Low risk"},
-                        {"id": "50", "description": "Medium risk"},
-                        {"id": "75", "description": "High risk"},
-                        {"id": "100", "description": "Critical risk"},
-                    ],
-                ),
+            response = await client.system_one(
                 state={
                     "business_id": business_id,
                     "branch_id": branch_id,
@@ -246,13 +263,18 @@ class TypeSafeClient:
                     "payments_count": payments_count,
                     "has_idempotency_key": idempotency_key is not None,
                 },
+                questions={
+                    TRANSACTION_RISK_QUESTION: _transaction_risk_question(),
+                },
             )
-            escalate = result.confidence < CONFIDENCE_ESCALATE_THRESHOLD
+            answer = response.scores[TRANSACTION_RISK_QUESTION]
+            # legend is a dict mapping index string -> description; preserve order
+            legend_vals = [answer.legend[k] for k in sorted(answer.legend, key=lambda x: int(x))]
             return TransactionRisk(
-                score=result.score,
-                levels=result.levels,
-                confidence=result.confidence,
-                escalate=escalate,
+                score=int(answer.score),
+                levels=legend_vals,
+                confidence=answer.confidence,
+                escalate=answer.confidence < CONFIDENCE_ESCALATE_THRESHOLD,
             )
         except Exception:
             return None
@@ -281,16 +303,7 @@ class TypeSafeClient:
         if client is None:
             return None
         try:
-            result = await client.ask(
-                noul(
-                    "idempotency_conflict",
-                    instructions=(
-                        "Answer yes if both requests describe the same business "
-                        "command (same operation, amount, currency, and business "
-                        "meaning despite metadata key-order differences). "
-                        "Answer no if they are genuinely different commands."
-                    ),
-                ),
+            response = await client.system_one(
                 state={
                     "key": key,
                     "original_operation": original_operation,
@@ -302,11 +315,25 @@ class TypeSafeClient:
                     "new_currency": new_currency,
                     "new_metadata": new_metadata,
                 },
+                questions={
+                    IDEMPOTENCY_CONFLICT_QUESTION: Noul(
+                        type="noul",
+                        instructions=(
+                            "Answer yes if both requests describe the same business "
+                            "command (same operation, amount, currency, and business "
+                            "meaning despite metadata key-order differences). "
+                            "Answer no if they are genuinely different commands."
+                        ),
+                    ),
+                },
             )
+            answer = response.nouls[IDEMPOTENCY_CONFLICT_QUESTION]
+            yes = answer.noul > 0.5
+            confidence = abs(2 * answer.noul - 1)
             return IdempotencyJudgment(
-                yes=result.yes,
-                probability=result.probability,
-                confidence=result.confidence,
+                yes=yes,
+                probability=answer.noul,
+                confidence=confidence,
             )
         except Exception:
             return None
@@ -332,100 +359,62 @@ class TypeSafeClient:
         """Ask independent judgments over the same request state together.
 
         Per TypeSafe guidance: independent questions over identical state run
-        in parallel (asyncio.gather) and cannot see one another's answers. Code
-        consumes the applicable answers.
+        in parallel (one batched call); code consumes the applicable answers.
         """
         client = await self._get_client()
         if client is None:
             return {"classification": None, "risk": None, "enabled": False}
 
-        tasks: list[Any] = []
+        questions: dict[str, Any] = {}
+        state: dict[str, Any] = {
+            "request_id": request_id,
+            "method": method,
+            "endpoint": endpoint,
+        }
 
         if error_code is not None and error_message is not None:
-            tasks.append(
-                client.ask(
-                    choice(
-                        "error_classification",
-                        instructions=(
-                            "Classify this API error for retry and routing. "
-                            "Select unclassified if no category fits."
-                        ),
-                        options=[
-                            {"id": "retryable_transient", "label": "Retryable transient"},
-                            {"id": "retryable_rate_limit", "label": "Rate limit"},
-                            {"id": "retryable_validation", "label": "Client validation"},
-                            {"id": "non_retryable_auth", "label": "Auth failure"},
-                            {"id": "non_retryable_not_found", "label": "Not found"},
-                            {"id": "non_retryable_server", "label": "Server error"},
-                            {"id": "unclassified", "label": "Cannot determine"},
-                        ],
-                    ),
-                    state={
-                        "error_code": error_code,
-                        "error_message": error_message,
-                        "endpoint": endpoint,
-                        "method": method,
-                        "request_id": request_id,
-                    },
-                )
-            )
+            questions[ERROR_CLASSIFICATION_QUESTION] = _error_classification_question()
+            state["error"] = {
+                "code": error_code,
+                "message": error_message,
+                "endpoint": endpoint,
+                "method": method,
+                "request_id": request_id,
+            }
 
         if business_id is not None and amount is not None and currency is not None:
-            tasks.append(
-                client.ask(
-                    score(
-                        "transaction_risk",
-                        instructions="Score this POS sale for fraud or anomaly risk.",
-                        levels=[
-                            {"id": "0", "description": "No risk"},
-                            {"id": "25", "description": "Low risk"},
-                            {"id": "50", "description": "Medium risk"},
-                            {"id": "75", "description": "High risk"},
-                            {"id": "100", "description": "Critical risk"},
-                        ],
-                    ),
-                    state={
-                        "business_id": business_id,
-                        "branch_id": branch_id or "",
-                        "amount": amount,
-                        "currency": currency,
-                        "lines_count": lines_count or 0,
-                        "payments_count": payments_count or 0,
-                        "has_idempotency_key": idempotency_key is not None,
-                    },
-                )
-            )
+            questions[TRANSACTION_RISK_QUESTION] = _transaction_risk_question()
+            state["business_id"] = business_id
+            state["branch_id"] = branch_id or ""
+            state["amount"] = amount
+            state["currency"] = currency
+            state["lines_count"] = lines_count or 0
+            state["payments_count"] = payments_count or 0
+            state["has_idempotency_key"] = idempotency_key is not None
 
-        if not tasks:
+        if not questions:
             return {"classification": None, "risk": None, "enabled": True}
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        response = await client.system_one(state=state, questions=questions)
 
         output: dict[str, Any] = {"classification": None, "risk": None, "enabled": True}
-        idx = 0
-        if error_code is not None and error_message is not None:
-            result = results[idx]
-            idx += 1
-            if isinstance(result, Exception):
-                output["classification"] = None
-            else:
-                output["classification"] = {
-                    "selected": result.selected,
-                    "probability": result.probability,
-                    "confidence": result.confidence,
-                    "escalate": result.confidence < CONFIDENCE_ESCALATE_THRESHOLD,
-                }
-        if business_id is not None and amount is not None and currency is not None:
-            result = results[idx]
-            if isinstance(result, Exception):
-                output["risk"] = None
-            else:
-                output["risk"] = {
-                    "score": result.score,
-                    "levels": result.levels,
-                    "confidence": result.confidence,
-                    "escalate": result.confidence < CONFIDENCE_ESCALATE_THRESHOLD,
-                }
+        if ERROR_CLASSIFICATION_QUESTION in response.choices:
+            answer = response.choices[ERROR_CLASSIFICATION_QUESTION]
+            output["classification"] = {
+                "selected": answer.choice,
+                "probability": answer.probabilities.get(answer.choice, 0.0),
+                "confidence": answer.confidence,
+                "escalate": answer.confidence < CONFIDENCE_ESCALATE_THRESHOLD,
+            }
+        if TRANSACTION_RISK_QUESTION in response.scores:
+            answer = response.scores[TRANSACTION_RISK_QUESTION]
+            legend_vals = [answer.legend[k] for k in sorted(answer.legend, key=lambda x: int(x))]
+            output["risk"] = {
+                "score": int(answer.score),
+                "levels": legend_vals,
+                "confidence": answer.confidence,
+                "escalate": answer.confidence < CONFIDENCE_ESCALATE_THRESHOLD,
+            }
         return output
 
     async def __aenter__(self) -> Self:
