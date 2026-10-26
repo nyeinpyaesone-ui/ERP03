@@ -1,102 +1,307 @@
-# ERP03 — Agent instructions
+# ERP03 — Agent Instructions (Advanced)
 
-Production-focused AI ERP modular-monolith. FastAPI backend (`ERP-BACKEND/`), React/Vite frontend (`frontend/`), Terraform infra (`infra/`). Single deployable unit; capabilities are added behind app/domain boundaries, not premature service splits.
+Production-focused AI ERP modular-monolith. FastAPI backend (`ERP-BACKEND/`), React/Vite frontend (`frontend/`), Terraform infra (`infra/`). Single deployable unit; capabilities added behind app/domain boundaries.
 
-## Layout & entry points
+---
 
-| Path | Role |
-|---|---|
-| `ERP-BACKEND/app/main.py` | FastAPI app, `lifespan` binds TypeSafe client close |
-| `ERP-BACKEND/app/core/config.py` | `Settings` with `extra="forbid"` |
-| `ERP-BACKEND/app/core/errors.py` | Typed `AppError` codes (INTERNAL_ERROR, VALIDATION_ERROR, CONFLICT, NOT_FOUND, FORBIDDEN, …) |
-| `ERP-BACKEND/app/core/typesafe.py` | Optional System One judgments (error classification, transaction risk, idempotency conflict) |
-| `ERP-BACKEND/app/api/transactions.py` | Journal endpoints; typed idempotency codes `IDEMPOTENCY_PAYLOAD_MISMATCH` / `IDEMPOTENCY_KEY_REUSED` |
-| `ERP-BACKEND/app/services/sales.py` | Atomic POS sale: invoice + stock + payments in one DB transaction |
-| `ERP-BACKEND/app/services/orchestration.py` | 6-state cross-module operation state machine |
-| `ERP-BACKEND/alembic/versions/` | Single head `0007_operation_orchestration` |
-| `frontend/` | Vite dev server on 5173; prod nginx build on port 80 |
+## Architecture Overview
 
-## Verification endpoints
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        ERP03 Modular Monolith                    │
+├─────────────────────────────────────────────────────────────────┤
+│  Frontend (React 19 + Vite 7)                                   │
+│  ├── SPA served by nginx (prod) / Vite HMR (dev)               │
+│  └── VITE_API_BASE_URL build-time injected                     │
+├─────────────────────────────────────────────────────────────────┤
+│  Backend (FastAPI 0.116 + Python 3.12)                          │
+│  ├── app/main.py — FastAPI + lifespan + middleware stack        │
+│  ├── app/core/config.py — Settings (extra="forbid")             │
+│  ├── app/core/errors.py — Typed AppError hierarchy              │
+│  ├── app/core/typesafe.py — Optional System One integration     │
+│  ├── app/core/transaction_store.py — SQLite idempotency journal │
+│  ├── app/api/*.py — REST endpoints (auth, catalog, sales, etc.) │
+│  ├── app/services/*.py — Domain logic (sales, orchestration)    │
+│  ├── app/models/*.py — SQLAlchemy 2.0 ORM models                │
+│  ├── app/schemas/*.py — Pydantic v2 request/response schemas    │
+│  ├── app/db/session.py — AsyncEngine + AsyncSession factory     │
+│  └── alembic/ — Migrations (single head 0007)                   │
+├─────────────────────────────────────────────────────────────────┤
+│  Infra (Terraform) — AWS/GCP/Azure, k8s, networking            │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-- `GET /api/v1` — API identity
-- `GET /api/v1/healthz` — liveness
-- `GET /api/v1/readyz` — database + migration readiness
-- `GET /api/v1/docs` — API docs
-- `GET /api/v1/metrics` — Prometheus
+---
 
-## Exact developer commands
+## Critical Invariants (Verify Before Changes)
 
-Run from repo root unless noted.
+| Invariant | Location | Test |
+|-----------|----------|------|
+| `Settings.extra == "forbid"` | `app/core/config.py:23` | Any undeclared env var → startup crash |
+| Production rejects SQLite | `app/core/config.py:95-96` | `ENVIRONMENT=production` + SQLite URL → ValueError |
+| Single Alembic head | `alembic/versions/` | `alembic heads` returns one revision |
+| Idempotency fingerprint SHA-256 | `app/services/sales.py:50-96` | Canonical JSON → deterministic hash |
+| Branch-row lock serializes invoice_no | `app/services/sales.py:189-197` | `SELECT ... FOR UPDATE` on Branch |
+| Savepoint per payment row | `app/services/sales.py:344-361` | `session.begin_nested()` per Payment |
+| TypeSafe judgments non-blocking | `app/main.py:68-110` | Error returned even if TypeSafe fails |
+
+---
+
+## Exact Developer Commands
 
 ```bash
-# Bootstrap (creates .venv at root, ERP-BACKEND/.env, runs smoke tests)
-./scripts/setup.sh
-./scripts/setup.sh --qualify          # full CI-equivalent gate
-./scripts/setup.sh --with-infra       # also start Docker Compose
+# ─── Bootstrap ──────────────────────────────────────────────────
+./scripts/setup.sh                          # venv + deps + .env + smoke
+./scripts/setup.sh --qualify                # full CI-equivalent gate
+./scripts/setup.sh --with-infra             # + docker compose up
 
-# Activate backend env
-source .venv/bin/activate             # venv lives at repo root
+# ─── Backend (run from repo root) ───────────────────────────────
+source .venv/bin/activate
 
-# Lint (must pass before commit)
+# Lint → typecheck → test (order matters)
 cd ERP-BACKEND && ruff check app tests alembic
 cd ERP-BACKEND && ruff format --check app tests alembic
+cd ERP-BACKEND && python -m compileall -q app alembic
+cd ERP-BACKEND && alembic upgrade head
+cd ERP-BACKEND && pytest -q                 # 49 passed, 1 PG-only skip
 
-# Compile + migrations + tests
-cd ERP-BACKEND
-python -m compileall -q app alembic
-alembic upgrade head                  # single head; fresh-DB apply verified
-pytest -q                             # 48 passed, 1 PG-only skip
+# Single test
+cd ERP-BACKEND && pytest tests/test_api.py::test_api_root -v
 
-# Frontend
-cd frontend && npm ci && npm run build
+# ─── Frontend ───────────────────────────────────────────────────
+cd frontend && npm ci --no-audit --no-fund
+# Vite crashes on low-memory hosts — use esbuild script:
+./scripts/build-frontend.sh                 # outputs frontend/dist/
 
-# Dev compose (Vite HMR on 5173, backend on 8000, postgres 5432)
-docker compose -f docker-compose.dev.yml up --build   # or: make dev
+# ─── Docker (requires daemon) ───────────────────────────────────
+docker compose -f docker-compose.dev.yml up --build   # dev: 5173/8000/5432
+docker compose up --build                    # prod minimal
+docker compose --profile full up             # + Postgres + migrate job
 
-# Prod compose
-docker compose up --build                    # minimal: backend + frontend (+ SQLite journal)
-docker compose --profile full up             # + managed Postgres + migration job
-
-# Make targets
+# ─── Make targets ───────────────────────────────────────────────
 make dev | test | lint | build | up | down | build-backend | build-frontend | build-all
 ```
 
-## Environment gotchas (verifiable, not speculative)
+---
 
-- **`Settings(extra="forbid")`** — any env var not declared in `app/core/config.py` crashes startup. Keep backend keys in `ERP-BACKEND/.env.example`, compose-only keys in root `.env.compose.example`. Never mix them.
-- **Production validation**: `ENVIRONMENT=production` rejects SQLite `DATABASE_URL`, requires `SECRET_KEY` ≥32 chars, HTTPS-only non-local CORS origins, and PostgreSQL `DATABASE_URL`.
-- **Paths differ by context**: compose uses `/app/.local/erp03.sqlite3`; local venv uses a CWD-relative or temp path. `setup.sh` generates `ERP-BACKEND/.env` with the container path for Docker use.
-- **`requirements.txt` ships test deps** (pytest, pytest-asyncio, httpx) in the prod image — known, do not remove without updating CI install steps.
-- **`VITE_API_BASE_URL` is build-time evaluated** in the frontend; it is not read at runtime by nginx. Default relative base + nginx `/api/` proxy is the deploy-safe pattern.
-- **Frontend dev port is 5173**; prod frontend serves on port 80 (mapped to 3000 in compose).
+## Environment & Secrets
 
-## CI / quality
+### Two `.env` Files — Never Mix
 
-Workflows (all `ubuntu-latest`):
-- `ci.yml` — backend (Postgres service → compile → `alembic upgrade head` → pytest) + frontend (npm install + build)
-- `quality.yml` — ruff check/format + compileall + frontend build
-- `security.yml` — pip-audit + CodeQL
-- `container.yml` — image build + Trivy
-- `iac.yml` — terraform fmt/validate/plan + artifact upload
-- `release.yml` — workflow_dispatch SemVer release
+| File | Scope | Example |
+|------|-------|---------|
+| `ERP-BACKEND/.env` | Backend runtime | `SECRET_KEY`, `DATABASE_URL`, `CORS_ORIGINS` |
+| `.env.compose` | Docker Compose only | `POSTGRES_PASSWORD`, `DOCKERHUB_IMAGE_*`, `SECRET_KEY` |
 
-Concurrency groups cancel in-progress runs on the same ref (`ci-${{ github.ref }}`, `quality-${{ github.ref }}`).
+```bash
+# Backend .env (generated by setup.sh, chmod 600)
+ENVIRONMENT=development
+SECRET_KEY=<48-char-urlsafe>
+DATABASE_URL=sqlite+aiosqlite:////path/to/erp03.sqlite3
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 
-Merge order (see `docs/PR_MERGE_ORDER.md`): #170 (security/env rotation) → Dependabot #191–196 → #229/#228. Do not merge any PR unless its head commit CI is green.
+# Compose .env (copy from .env.compose.example)
+POSTGRES_DB=erp03
+POSTGRES_USER=erp03
+POSTGRES_PASSWORD=<strong-password>
+DOCKERHUB_IMAGE_BACKEND=powerrangeranikg/erp03-backend
+DOCKERHUB_IMAGE_FRONTEND=powerrangeranikg/erp03-frontend
+IMAGE_TAG=latest
+SECRET_KEY=<32+ chars for production>
+```
 
-## Alembic
+### Production Hardening (auto-enforced by `Settings.validate_production_security`)
 
-Single head `0007_operation_orchestration`. Always run `alembic upgrade head` against a fresh DB before starting the backend; the compose `migrate` service does this and `backend` depends on `service_completed_successfully`.
+- `SECRET_KEY` ≥ 32 chars, not default
+- `CORS_ORIGINS` HTTPS only, no localhost
+- `DATABASE_URL` PostgreSQL (asyncpg), no SQLite
+- `ENVIRONMENT=production` or `prod`
 
-## TypeSafe integration (optional, disabled by default)
+---
 
-`app/core/typesafe.py` — gated by `TYPESAFE_ENABLED` + `TYPESAFE_API_KEY`. Code owns decisions; TypeSafe only annotates:
-- Confidence thresholds: act ≥0.70, escalate <0.40
-- `classify_error` → drives `Retry-After` header on error responses
-- `judge_request` asks independent judgments in parallel via `asyncio.gather`
-- Client closed in FastAPI `lifespan` shutdown
-- Never sniff error-message text for codes; use typed `IdempotencyConflict.code`
+## Database & Migrations
 
-## Do not commit
+```bash
+# Fresh DB migration (required before backend start)
+cd ERP-BACKEND
+alembic upgrade head          # single head: 0007_operation_orchestration
 
-`.venv/`, `.env`, `frontend/node_modules/`, `frontend/dist/`, `__pycache__/`, `.ruff_cache/`, `*.pyc`. Secrets go in environment variables only; `setup.sh` generates a random `SECRET_KEY` into `ERP-BACKEND/.env` (chmod 600).
+# Generate new migration (after model changes)
+alembic revision --autogenerate -m "descriptive_name"
+
+# Check current head
+alembic current
+alembic history
+```
+
+**Migration rules:**
+- Single head only (`0007_operation_orchestration`)
+- Reversible preferred; `downgrade` tested in CI
+- Compose `migrate` service runs `alembic upgrade head` with `service_completed_successfully`
+
+---
+
+## Idempotency & Concurrency
+
+### POS Sale Idempotency (`app/services/sales.py`)
+
+```python
+# Fingerprint = SHA-256(canonical JSON of sale command)
+# Key format: "{business_id}:{client_idempotency_key}"
+# Conflict codes: IDEMPOTENCY_PAYLOAD_MISMATCH | IDEMPOTENCY_KEY_REUSED
+
+# Concurrency control:
+# 1. SELECT ... FOR UPDATE on Branch (serializes invoice_no per branch)
+# 2. SELECT ... FOR UPDATE on Warehouse, Customer, Product (lock rows)
+# 3. Savepoint per InvoiceItem + Payment (partial rollback on failure)
+# 4. IntegrityError on duplicate invoice_no → replay existing
+```
+
+### Cross-Module Operations (`app/services/orchestration.py`)
+
+```python
+# 6-state machine: PENDING → PROCESSING → COMMITTED | FAILED → RECONCILIATION_REQUIRED | CANCELLED
+# Claim = conditional UPDATE (re-checks state in transaction)
+# SKIP LOCKED on PostgreSQL; plain FOR UPDATE on SQLite
+# Exponential backoff: 2^retry_count seconds (capped 1hr)
+# Reconciliation worker reclaims stale PROCESSING (>5min)
+```
+
+### SQLite Journal (`app/core/transaction_store.py`)
+
+```python
+# Durable transaction log for cross-boundary operations
+# WAL mode + BEGIN IMMEDIATE for writer serialization
+# Fingerprint verification prevents payload mismatch
+# Legacy rows without fingerprint → IDEMPOTENCY_KEY_REUSED (safe default)
+```
+
+---
+
+## TypeSafe Integration (Optional)
+
+```bash
+# Enable via env:
+TYPESAFE_ENABLED=true
+TYPESAFE_API_KEY=<key>
+```
+
+```python
+# Confidence thresholds (app/core/typesafe.py:41,45)
+CONFIDENCE_ACT_THRESHOLD = 0.70    # act on judgment
+CONFIDENCE_ESCALATE_THRESHOLD = 0.40  # escalate to human
+
+# Non-blocking: error response returned even if TypeSafe fails
+# Error classification → Retry-After header
+# Transaction risk score → high-risk gate (score ≥ 75)
+# Idempotency Noul → yes = same command (replay)
+```
+
+---
+
+## Testing Patterns
+
+```bash
+# Unit tests (pytest + asyncio)
+pytest -q                           # all
+pytest tests/test_api.py -v         # single file
+pytest -k "sale" -v                 # filter by name
+
+# Integration tests require PostgreSQL (skipped on SQLite)
+# tests/test_erp_integration.py::test_bootstrap_login_and_pos_sale_round_trip
+
+# Frontend build verification
+cd frontend && ./scripts/build-frontend.sh && ls dist/
+```
+
+### Test Fixtures (`tests/conftest.py`)
+
+- `session` — async SQLAlchemy session (SQLite by default)
+- `client` — FastAPI TestClient with auth override
+- `business_id`, `branch_id`, `warehouse_id` — seeded test data
+
+---
+
+## CI/CD Pipeline
+
+| Workflow | Trigger | Key Steps |
+|----------|---------|-----------|
+| `ci.yml` | push/PR to main/feat/**/fix/** | Postgres service → compile → migrate → pytest + npm build |
+| `quality.yml` | push/PR | ruff check/format + compileall + frontend build |
+| `security.yml` | schedule/PR | pip-audit + CodeQL |
+| `container.yml` | push tag/main/release** | **Docker Hub multi-arch (amd64/arm64) + provenance + SBOM** |
+| `iac.yml` | push/PR | terraform fmt/validate/plan |
+| `release.yml` | workflow_dispatch | SemVer tag → GitHub Release → PyPI |
+
+**Secrets required:**
+- `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (container.yml)
+- `PYPI_TOKEN` (release.yml)
+
+**Concurrency:** `ci-${{ github.ref }}`, `quality-${{ github.ref }}` cancel in-progress.
+
+---
+
+## Local Development Quirks (Verified)
+
+| Issue | Cause | Workaround |
+|-------|-------|------------|
+| Python 3.14 (not 3.12) | System Python newer | `asyncpg==0.32.0` (no 0.30.0 wheel); `typesafe` optional |
+| Vite `Bus error` | Low memory (144Mi free) | Use `scripts/build-frontend.sh` (esbuild) |
+| Docker daemon | No iptables/root in container | CI builds images; local compose unavailable |
+| `gh auth` | No browser | Use PAT: `echo "<pat>" \| gh auth login --with-token` |
+| Deploy key | SSH key not on GitHub | `gh repo deploy-key add --allow-write` |
+
+---
+
+## Key Files to Understand First
+
+1. `ERP-BACKEND/app/main.py` — App wiring, error handler, middleware, lifespan
+2. `ERP-BACKEND/app/core/config.py` — Settings, validation, auto-tuning
+3. `ERP-BACKEND/app/core/errors.py` — Typed error hierarchy + registry
+4. `ERP-BACKEND/app/services/sales.py` — Atomic POS sale (core domain logic)
+5. `ERP-BACKEND/app/services/orchestration.py` — Cross-module state machine
+6. `ERP-BACKEND/app/core/transaction_store.py` — SQLite idempotency journal
+7. `ERP-BACKEND/app/core/typesafe.py` — Optional System One integration
+8. `scripts/setup.sh` / `scripts/qualify.sh` — Bootstrap + CI gate
+9. `.github/workflows/container.yml` — Multi-arch Docker Hub publishing
+
+---
+
+## Common Tasks
+
+### Add New API Endpoint
+1. Schema in `app/schemas/<domain>.py`
+2. Service logic in `app/services/<domain>.py`
+3. Route in `app/api/<domain>.py`
+4. Register router in `app/main.py`
+5. Test in `tests/test_<domain>.py`
+
+### Add Database Column
+1. Modify model in `app/models/*.py`
+2. `alembic revision --autogenerate -m "add_column_to_table"`
+3. Review generated migration in `alembic/versions/`
+4. `alembic upgrade head` to test
+
+### Enable TypeSafe
+```bash
+export TYPESAFE_ENABLED=true
+export TYPESAFE_API_KEY=<key>
+# Restart backend
+```
+
+### Debug Production Config Locally
+```bash
+cd ERP-BACKEND
+ENVIRONMENT=production SECRET_KEY="x"*32 DATABASE_URL=postgresql+asyncpg://... \
+  python -c "from app.core.config import settings; print(settings.environment)"
+```
+
+---
+
+## References
+
+- `CLAUDE.md` — Coding agent profile with environment status
+- `scripts/setup.sh` — Full bootstrap logic
+- `scripts/qualify.sh` — CI-equivalent verification gate
+- `docs/PR_MERGE_ORDER.md` — Merge sequence for open PRs
+- `infra/` — Terraform modules for cloud deployment

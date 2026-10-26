@@ -37,7 +37,7 @@ services:
     restart: "no"
 
   backend:
-    image: ${GHCR_IMAGE_BACKEND:-ghcr.io/nyeinpyaesone-ui/erp03-backend}:${IMAGE_TAG:-latest}
+    image: ${DOCKERHUB_IMAGE_BACKEND:-powerrangeranikg/erp03-backend}:${IMAGE_TAG:-latest}
     build: ./ERP-BACKEND
     ports:
       - "8000:8000"
@@ -64,7 +64,7 @@ services:
           memory: 256M
 
   frontend:
-    image: ${GHCR_IMAGE_FRONTEND:-ghcr.io/nyeinpyaesone-ui/erp03-frontend}:${IMAGE_TAG:-latest}
+    image: ${DOCKERHUB_IMAGE_FRONTEND:-powerrangeranikg/erp03-frontend}:${IMAGE_TAG:-latest}
     build: ./frontend
     ports:
       - "3000:80"
