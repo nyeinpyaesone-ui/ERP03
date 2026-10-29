@@ -243,3 +243,27 @@ async def test_same_idempotency_key_different_payload_returns_conflict():
                 idempotency_key=key,
             )
         await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_next_invoice_no_handles_malformed_prior_number():
+    business, branch, _warehouse, _user = await _bootstrap("MALFORMED")
+    async with SessionFactory() as session, session.begin():
+        session.add(
+            Invoice(
+                business_id=business.id,
+                branch_id=branch.id,
+                invoice_no="INV-202610-GARBAGE",
+                status="paid",
+                currency="MMK",
+                subtotal=Decimal("0"),
+                discount=Decimal("0"),
+                tax=Decimal("0"),
+                total=Decimal("0"),
+                paid=Decimal("0"),
+            )
+        )
+    async with SessionFactory() as session:
+        number = await next_invoice_no(session, branch_id=branch.id)
+    assert number.startswith("INV-")
+    assert number.endswith("000001")
