@@ -20,8 +20,8 @@ RUN addgroup -g 1000 app && adduser -u 1000 -G app -s /bin/sh -D app
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build --chown=app:app /app/dist /usr/share/nginx/html
 
-USER app
-
+# nginx master process must run as root to bind the privileged port 80;
+# worker processes drop to the unprivileged `nginx` user automatically.
 EXPOSE 80
 
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
