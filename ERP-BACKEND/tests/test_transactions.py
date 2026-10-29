@@ -33,6 +33,16 @@ def test_transaction_requires_idempotency_key():
     assert response.status_code == 400
 
 
+def test_transaction_rejects_oversized_idempotency_key():
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/transactions",
+            json={"operation": "invoice.create", "amount": "100.00", "currency": "mmk"},
+            headers={"X-Idempotency-Key": "x" * 219},
+        )
+    assert response.status_code == 400
+
+
 def test_transaction_is_idempotent():
     payload = {
         "operation": "invoice.create",
