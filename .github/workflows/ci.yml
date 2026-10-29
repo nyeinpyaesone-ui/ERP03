@@ -29,11 +29,20 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
     defaults:
       run:
         working-directory: ERP-BACKEND
     env:
       DATABASE_URL: postgresql+asyncpg://erp03:erp03@127.0.0.1:5432/erp03
+      REDIS_URL: redis://:erp03@127.0.0.1:6379/0
+      REDIS_PASSWORD: erp03
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -70,4 +79,4 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --no-audit --no-fund
       - name: Build frontend
-        run: npm run build
+        run: VITE_API_BASE_URL=/api npm run build
