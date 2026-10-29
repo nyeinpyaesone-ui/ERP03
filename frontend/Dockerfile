@@ -10,6 +10,7 @@ RUN --mount=type=cache,target=/root/.npm \
     npm ci --no-audit --no-fund
 
 COPY index.html ./
+COPY vite.config.js ./
 COPY src ./src
 RUN VITE_API_BASE_URL=${VITE_API_BASE_URL} npm run build
 
