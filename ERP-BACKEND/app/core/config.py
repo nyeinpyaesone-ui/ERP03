@@ -46,6 +46,44 @@ class Settings(BaseSettings):
     # --- JWT ---
     jwt_expiry_minutes: int = Field(default=480, ge=1, le=44640)
 
+    # --- Redis (optional, for caching/sessions) ---
+    redis_url: str | None = Field(default=None)
+    redis_password: str | None = Field(default=None)
+    redis_db: int = Field(default=0)
+
+    # --- API metadata ---
+    api_v1_prefix: str = Field(default="/api/v1")
+    api_title: str = Field(default="ERP03 API")
+    api_version: str = Field(default="1.0.0")
+    api_docs_url: str = Field(default="/docs")
+    api_redoc_url: str = Field(default="/redoc")
+
+    # --- Auth ---
+    access_token_expire_minutes: int = Field(default=30, ge=1, le=1440)
+    refresh_token_expire_days: int = Field(default=7, ge=1, le=365)
+    password_min_length: int = Field(default=8, ge=4, le=128)
+    bcrypt_rounds: int = Field(default=12, ge=4, le=31)
+
+    # --- Idempotency ---
+    idempotency_ttl_hours: int = Field(default=24, ge=1, le=168)
+    idempotency_cleanup_interval: int = Field(default=3600, ge=60)
+
+    # --- Rate limiting ---
+    rate_limit_enabled: bool = Field(default=True)
+    rate_limit_requests: int = Field(default=100, ge=1)
+    rate_limit_window: int = Field(default=60, ge=1)
+
+    # --- Webhooks ---
+    webhook_secret: SecretStr | None = Field(default=None)
+    webhook_timeout: int = Field(default=30, ge=1, le=300)
+
+    # --- Observability ---
+    otel_enabled: bool = Field(default=False)
+    otel_exporter_otlp_endpoint: str | None = Field(default=None)
+
+    # --- Debug ---
+    debug: bool = Field(default=False)
+
     @field_validator("typesafe_api_key", mode="before")
     @classmethod
     def _parse_typesafe_api_key(cls, value: Any) -> Any:
@@ -117,6 +155,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def redis_url_parsed(self) -> str | None:
+        return self.redis_url
 
 
 @lru_cache(maxsize=1)

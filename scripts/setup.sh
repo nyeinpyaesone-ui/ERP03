@@ -150,7 +150,6 @@ compose_cmd() {
 
 # ---------------------------------------------------------------------------
 # 3. Auto-Configuration Engine — Dynamic, zero-touch environment setup
-#    Generates ALL configs, secrets, migrations, and verifies health automatically
 # ---------------------------------------------------------------------------
 check_gh_auth() {
   local PKG="${PKG:-$(command -v apt >/dev/null && echo apt || command -v brew >/dev/null && echo brew || command -v choco >/dev/null && echo choco || echo 'package-manager')}"
@@ -180,7 +179,7 @@ declare -A SECRET_SPECS=(
 generate_secure_value() {
   local spec="$1"
   case "$spec" in
-    token_urlsafe* ) local n="${spec#token_urlsafe(}"; n="${n%)}"; "$VENV_DIR/bin/python" -c "import secrets; print(secrets.token_urlsafe($n))" 2>/dev/null || head -c $((n*4/3)) /dev/urandom | od -An -tx1 | tr -d ' \n' ;;
+    token_urlsafe* ) local n="${spec#token_urlsafe(}"; n="${n%)}"; "$VENV_DIR/bin/python" -c "import secrets; print(secrets.token_urlsafe($n))" 2>/dev/null || python3 -c "import secrets; print(secrets.token_urlsafe($n))" ;;
     token_hex* ) local n="${spec#token_hex(}"; n="${n%)}"; head -c "$n" /dev/urandom | od -An -tx1 | tr -d ' \n' ;;
     default:* ) echo "${spec#default:}" ;;
     fixed:* ) echo "${spec#fixed:}" ;;
@@ -189,11 +188,24 @@ generate_secure_value() {
   esac
 }
 
+# Derive GitHub owner/repo from git remote
+gh_owner_repo() {
+  local url
+  url="$(git -C "$ROOT_DIR" config --get remote.origin.url 2>/dev/null || echo "")"
+  # Handle git@github.com:owner/repo.git or https://github.com/owner/repo.git
+  if [[ "$url" =~ github.com[:/]([^/]+)/([^/.]+) ]]; then
+    echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+  else
+    echo "nyeinpyaesone-ui/ERP03"  # fallback
+  fi
+}
+
 sync_github_secrets() {
   log "Syncing GitHub secrets to local .env files..."
   check_gh_auth
-  local gh_secrets
-  gh_secrets="$(gh secret list --repo nyeinpyaesone-ui/ERP03 --json name 2>/dev/null || echo '[]')"
+  local owner_repo gh_secrets
+  owner_repo="$(gh_owner_repo)"
+  gh_secrets="$(gh secret list --repo "$owner_repo" --json name 2>/dev/null || echo '[]')"
   log "Available GitHub secrets: $(echo "$gh_secrets" | "$VENV_DIR/bin/python" -c "import sys, json; [print(x['name'], end=' ') for x in json.load(sys.stdin)]" 2>/dev/null || echo "jq not available")"
   log "Note: Secret values are not readable via GitHub API — they must be set in CI/CD environment"
 }
@@ -206,6 +218,7 @@ auto_configure_all() {
     local py; py="$(python_cmd)"
     "$py" -m venv "$VENV_DIR"
   fi
+  # Use venv pip directly (activation not reliable in script context)
   "$VENV_DIR/bin/pip" install --quiet --upgrade pip
   "$VENV_DIR/bin/pip" install --quiet -r "$BACKEND_DIR/requirements.txt"
 
@@ -219,8 +232,9 @@ auto_configure_all() {
   # 3. Try to pull values from GitHub secrets (for CI/production values)
   if $SYNC_SECRETS && check_gh_auth 2>/dev/null; then
     log "Fetching available secrets from GitHub..."
-    local gh_secrets
-    gh_secrets="$(gh secret list --repo nyeinpyaesone-ui/ERP03 --json name 2>/dev/null || echo '[]')"
+    local gh_secrets owner_repo
+    owner_repo="$(gh_owner_repo)"
+    gh_secrets="$(gh secret list --repo "$(gh_owner_repo)" --json name 2>/dev/null || echo '[]')"
     for name in "${!SECRET_SPECS[@]}"; do
       IFS='|' read -r desc generator required <<< "${SECRET_SPECS[$name]}"
       if [[ "$generator" == "from_github" ]] && echo "$gh_secrets" | grep -q "\"$name\""; then
@@ -230,7 +244,7 @@ auto_configure_all() {
     done
   fi
 
-  # 4. Generate backend .env — essential fields only
+  # 4. Generate backend .env — essential fields only (matching Settings model)
   local backend_env="$BACKEND_DIR/.env"
   if [[ -f "$backend_env" && "$FORCE" != "true" ]]; then
     log "Keeping existing $backend_env (use --force to regenerate)"
@@ -257,12 +271,17 @@ EOF
     else
       local db_host="${SECRETS[DB_HOST]:-localhost}"
       local db_pass="${SECRETS[DB_PASSWORD]}"
+      # Ensure DB_PASSWORD is not empty for production
+      if [[ -z "$db_pass" || "$db_pass" == "__GITHUB_SECRET__" ]]; then
+        warn "DB_PASSWORD not set locally; generate a strong one or set in GitHub secrets"
+        db_pass="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+      fi
       cat > "$backend_env" <<EOF
 # ERP03 Backend Config — AUTO-GENERATED production
 ENVIRONMENT=production
 SECRET_KEY=${SECRETS[SECRET_KEY]}
 LOG_LEVEL=INFO
-DATABASE_URL=postgresql+asyncpg://erp03:${db_pass}@${db_host}:5432/erp03_prod
+DATABASE_URL=postgresql+asyncpg://erp03:${db_pass}@${db_host}:5432/erp03
 DATABASE_PATH=
 DB_POOL_SIZE=20
 DB_MAX_OVERFLOW=30
@@ -278,7 +297,7 @@ EOF
     log "  ✓ Backend config written"
   fi
 
-  # 5. Generate frontend .env for Vite build
+  # 5. Generate frontend .env for Vite build (uses /api for nginx proxy)
   local frontend_env="$FRONTEND_DIR/.env"
   if [[ -f "$frontend_env" && "$FORCE" != "true" ]]; then
     log "Keeping existing $frontend_env"
@@ -319,7 +338,7 @@ print(f'  ✓ CORS origins: {settings.cors_origins}')
 }
 
 # ---------------------------------------------------------------------------
-# 4. Backend environment provisioning
+# 4. Backend environment provisioning (legacy path)
 # ---------------------------------------------------------------------------
 setup_backend() {
   log "Provisioning Python virtualenv at $VENV_DIR"
@@ -337,7 +356,7 @@ setup_backend() {
 }
 
 # ---------------------------------------------------------------------------
-# 5. Secure local configuration (.env) — legacy generator
+# 5. Secure local configuration (.env) — legacy generator (fallback)
 # ---------------------------------------------------------------------------
 generate_env() {
   local env_file="$BACKEND_DIR/.env"
@@ -369,7 +388,7 @@ setup_frontend() {
     return
   fi
   log "Installing frontend dependencies"
-  (cd "$FRONTEND_DIR" && npm install --no-audit --no-fund --silent)
+  (cd "$FRONTEND_DIR" && npm ci --no-audit --no-fund --silent)
 }
 
 # ---------------------------------------------------------------------------
@@ -405,10 +424,20 @@ main() {
   fi
 
   check_toolchain
-  setup_backend
-  generate_env
+
+  # Use auto_configure_all for full config generation; falls back to legacy path
+  if [[ -f "$BACKEND_DIR/.env" && "$FORCE" != "true" ]]; then
+    log "Using existing $BACKEND_DIR/.env (use --force to regenerate)"
+    setup_backend
+  else
+    auto_configure_all
+  fi
+
   setup_frontend
+
+  # Run smoke test after full setup
   smoke_test
+
   if $WITH_INFRA; then start_infra; fi
   if $QUALIFY; then
     log "Running full qualification gate"
