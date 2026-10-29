@@ -61,9 +61,9 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
       (`jwt_expiry_minutes`, default 480, ge=1/le=44640); `create_access_token`
       consumes it; `require_permission` re-checks `User.active`/`Business.active`
       + permission joins. Remaining: login rate-limiting (posture/TODO).
-- [ ] **SETP-1: setup.sh emits container-absolute SQLite path for host use
+- [x] **SETP-1: setup.sh emits container-absolute SQLite path for host use
       (agent finding 12).** Point `database_url`/`database_path` at the same
-      venv-local absolute file.
+      venv-local absolute file. ✅ **FIXED**: `setup.sh` now uses `$ROOT_DIR/ERP-BACKEND/.local/erp03.sqlite3` consistently in both dev/prod configs; `DATABASE_PATH` empty in prod (PostgreSQL); verified Settings loads clean.
 - [x] **QUAL-1: qualify.sh assumes a pre-provisioned PG with fixed creds and
       no precondition probe (agent finding 13).** Probe first, print
       actionable hint, hermetic fallback.
@@ -97,14 +97,22 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
 - [ ] **OPS-3: Backup drill: restore dump into scratch PG + alembic_version
       probe (agent finding 14); backup_verify.sh currently only checks gzip CRC.**
 - [ ] **ALERT-1: `promtool check rules` + load once in staging Prometheus;**
-- [ ] **DEP-2: Move pytest/pytest-asyncio/httpx out of prod requirements**
+- [x] **DEP-2: Move pytest/pytest-asyncio/httpx out of prod requirements**
       (agent finding 18) — CI depends on them only because they ship in prod;
       correct ci.yml deps then trim requirements (agent finding 18)
-      and ci.yml: install dev-requirements for the test job.
-- [ ] **DEP-2b: delete stray root `package-lock.json`** (agent finding 17).
-- [ ] **DEVOPS-1: `migrate` advisory depends_on lets API boot with no tables
-      (agent finding 16) — set `required: true`.**
-- [ ] **T-1: 36 pytest library-deprecation warnings — track, don't suppress.**
+      and ci.yml: install dev-requirements for the test job. ✅ **VERIFIED**:
+      Already separated — `requirements.txt` has only prod deps;
+      `dev-requirements.txt` has pytest/pytest-asyncio/httpx/ruff/typesafe;
+      `ci.yml` installs both for test job; `quality.yml` installs only prod + ruff.
+- [x] **DEP-2b: delete stray root `package-lock.json`** (agent finding 17).
+      ✅ **VERIFIED**: No stray root `package-lock.json` exists.
+- [x] **DEVOPS-1: `migrate` advisory depends_on lets API boot with no tables
+      (agent finding 16) — set `required: true`.** ✅ **FIXED**: `docker-compose.yml`
+      backend `depends_on.migrate.required: true` added in commit `860dfcaf`.
+- [x] **T-1: 36 pytest library-deprecation warnings — track, don't suppress.**
+      ✅ **DONE**: Added `filterwarnings = default::DeprecationWarning` and
+      `default::PendingDeprecationWarning` to `ERP-BACKEND/pytest.ini`
+      to track all deprecation warnings without suppressing them.
 
 ---
 
