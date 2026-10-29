@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = Field(default=True)
     rate_limit_requests: int = Field(default=100, ge=1)
     rate_limit_window: int = Field(default=60, ge=1)
+    trusted_proxies: str = Field(default="")
 
     # --- Webhooks ---
     webhook_secret: SecretStr | None = Field(default=None)

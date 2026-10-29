@@ -35,12 +35,24 @@ logger = logging.getLogger("erp03")
 
 
 class RateLimitMiddleware:
-    """Simple in-memory rate limiter using sliding window."""
+    """Simple in-memory rate limiter using sliding window.
 
-    def __init__(self, app, requests_per_window: int = 100, window_seconds: int = 60):
+    Honours ``X-Forwarded-For`` only when the immediate peer is in
+    ``trusted_proxies`` (prevents spoofing). Evicts idle client buckets to
+    bound memory. Single-process scope: limits are not shared across workers.
+    """
+
+    def __init__(
+        self,
+        app,
+        requests_per_window: int = 100,
+        window_seconds: int = 60,
+        trusted_proxies: set[str] | None = None,
+    ):
         self.app = app
         self.requests_per_window = requests_per_window
         self.window_seconds = window_seconds
+        self.trusted_proxies = trusted_proxies or set()
         self.requests: dict[str, list[float]] = defaultdict(list)
 
     async def __call__(self, scope, receive, send):
@@ -48,16 +60,29 @@ class RateLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # Get client IP
-        client_ip = scope.get("client", ("unknown", 0))[0]
-        if not client_ip:
-            client_ip = "unknown"
+        # Get client IP, honouring X-Forwarded-For only from trusted peers.
+        peer_ip = scope.get("client", ("unknown", 0))[0] or "unknown"
+        client_ip = peer_ip
+        if peer_ip in self.trusted_proxies:
+            headers = dict(scope.get("headers", []))
+            forwarded = headers.get(b"x-forwarded-for", b"").decode().strip()
+            if forwarded:
+                client_ip = forwarded.split(",")[0].strip() or peer_ip
 
         now = time.time()
         window_start = now - self.window_seconds
 
-        # Clean old requests
+        # Clean old requests for this client.
         self.requests[client_ip] = [ts for ts in self.requests[client_ip] if ts > window_start]
+
+        # Evict idle buckets to bound memory.
+        stale = [
+            ip
+            for ip, ts_list in self.requests.items()
+            if not ts_list or ts_list[-1] <= window_start
+        ]
+        for ip in stale:
+            del self.requests[ip]
 
         # Check rate limit
         if len(self.requests[client_ip]) >= self.requests_per_window:
@@ -173,6 +198,7 @@ if settings.rate_limit_enabled:
         RateLimitMiddleware,
         requests_per_window=settings.rate_limit_requests,
         window_seconds=settings.rate_limit_window,
+        trusted_proxies={ip.strip() for ip in settings.trusted_proxies.split(",") if ip.strip()},
     )
 
 
