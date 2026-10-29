@@ -10,8 +10,9 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from uuid import uuid4
+from collections import defaultdict
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -31,6 +32,52 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger("erp03")
+
+
+from app.core.typesafe import typesafe
+
+
+class RateLimitMiddleware:
+    """Simple in-memory rate limiter using sliding window."""
+
+    def __init__(self, app, requests_per_window: int = 100, window_seconds: int = 60):
+        self.app = app
+        self.requests_per_window = requests_per_window
+        self.window_seconds = window_seconds
+        self.requests: dict[str, list[float]] = defaultdict(list)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Get client IP
+        client_ip = scope.get("client", ("unknown", 0))[0]
+        if not client_ip:
+            client_ip = "unknown"
+
+        now = time.time()
+        window_start = now - self.window_seconds
+
+        # Clean old requests
+        self.requests[client_ip] = [
+            ts for ts in self.requests[client_ip] if ts > window_start
+        ]
+
+        # Check rate limit
+        if len(self.requests[client_ip]) >= self.requests_per_window:
+            response = JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content={"detail": "Rate limit exceeded"},
+                headers={"Retry-After": str(self.window_seconds)},
+            )
+            await response(scope, receive, send)
+            return
+
+        # Record request
+        self.requests[client_ip].append(now)
+
+        await self.app(scope, receive, send)
 
 
 @asynccontextmanager
@@ -124,6 +171,14 @@ app.add_middleware(
         "Retry-After",
     ],
 )
+
+# Rate limiting middleware (respects settings.rate_limit_enabled)
+if settings.rate_limit_enabled:
+    app.add_middleware(
+        RateLimitMiddleware,
+        requests_per_window=settings.rate_limit_requests,
+        window_seconds=settings.rate_limit_window,
+    )
 
 
 @app.middleware("http")
