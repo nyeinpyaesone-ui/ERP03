@@ -102,7 +102,7 @@ services:
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
     ports:
-      - "3000:80"
+      - "3000:8080"
     depends_on:
       backend:
         condition: service_healthy
