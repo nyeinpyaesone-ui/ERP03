@@ -1,5 +1,6 @@
 """Authenticated transaction journal endpoints."""
 
+import threading
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import uuid4
@@ -15,20 +16,24 @@ from app.core.transaction_store import IdempotencyConflict, TransactionResult, T
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 _store: TransactionStore | None = None
+_store_lock = threading.Lock()
 
 
 def get_store() -> TransactionStore:
-    """Return the process-wide transaction journal (lazy, resettable for tests)."""
+    """Return the process-wide transaction journal (lazy, thread-safe)."""
     global _store
     if _store is None:
-        _store = TransactionStore(settings.database_path)
+        with _store_lock:
+            if _store is None:
+                _store = TransactionStore(settings.database_path)
     return _store
 
 
 def reset_store(database_path: str | None = None) -> TransactionStore:
     """Replace the process-wide store (used by tests for hermetic isolation)."""
     global _store
-    _store = TransactionStore(database_path or settings.database_path)
+    with _store_lock:
+        _store = TransactionStore(database_path or settings.database_path)
     return _store
 
 
