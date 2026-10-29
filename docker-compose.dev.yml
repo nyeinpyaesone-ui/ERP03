@@ -15,6 +15,19 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass erp03
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "erp03", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   migrate:
     build:
       context: ./ERP-BACKEND
@@ -45,6 +58,8 @@ services:
       - LOG_LEVEL=DEBUG
       - ENVIRONMENT=development
       - DATABASE_PATH=/app/.local/erp03.sqlite3
+      - REDIS_URL=redis://:erp03@redis:6379/0
+      - REDIS_PASSWORD=erp03
     volumes:
       - ./ERP-BACKEND:/app
       - /app/__pycache__
@@ -55,6 +70,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     command: >
       sh -c "pip install --upgrade pip && pip install -r requirements.txt &&
       uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
@@ -79,3 +96,4 @@ services:
 volumes:
   pgdata:
   erp_local:
+  redis_data:

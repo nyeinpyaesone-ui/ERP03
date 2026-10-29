@@ -22,6 +22,28 @@ services:
         reservations:
           memory: 512M
 
+  redis:
+    image: redis:7-alpine
+    profiles: ["full"]
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
   migrate:
     build: ./ERP-BACKEND
     profiles: ["full"]
@@ -47,6 +69,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set to a postgresql+asyncpg:// URL}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
       DATABASE_PATH: /app/.local/erp03.sqlite3
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - erp_data:/app/.local
     depends_on:
@@ -54,6 +78,8 @@ services:
         condition: service_completed_successfully
         required: true
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/healthz', timeout=3)"]
@@ -91,3 +117,4 @@ services:
 volumes:
   postgres_data:
   erp_data:
+  redis_data:
