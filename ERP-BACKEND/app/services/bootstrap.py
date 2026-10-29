@@ -7,6 +7,7 @@ tenant state and never resets an existing user's password.
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.errors import BootstrapConflictError, ValidationError
 from app.core.security import hash_password
 from app.models.erp import Warehouse
@@ -26,8 +27,9 @@ def validate_required(value: str, field: str, maximum: int) -> str:
 
 def validate_password_policy(password: str, field: str = "password") -> str:
     """Return ``password`` unchanged when it satisfies the length policy."""
-    if len(password) < 12 or len(password) > 256:
-        raise ValidationError(f"{field} must contain 12 to 256 characters")
+    minimum = settings.password_min_length
+    if len(password) < minimum or len(password) > 256:
+        raise ValidationError(f"{field} must contain {minimum} to 256 characters")
     return password
 
 
