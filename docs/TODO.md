@@ -124,9 +124,9 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
 | Startup-failure root cause (null `pull_request.number`) | zero references; `runs-on: ubuntu-latest` everywhere | prior |
 | IaC workflow restored with safe concurrency | `.github/workflows/iac.yml` present | `8e56739d` |
 | tracker: agent finding 4 (compose sqlite default) duplicates ENV-1 row → superseded by `73ecc902` | — | `73ecc902` |
-| P1 FE-1: `VITE_API_BASE_URL` runtime-env no-op (agent finding 6) | Dockerfile `ARG` in build stage; compose `build.args` `${VITE_API_BASE_URL:-/api}`; `App.jsx` fallback removed; nginx `/api/`→`backend:8000/api/v1/` verified | working-tree |
-| P1 METRICS-1: `/metrics` unauthenticated (agent finding 10) | ASGI Bearer-JWT auth in `app/core/metrics.py`; no-auth 401 / invalid 401 / valid 200; +3 regression tests in `tests/test_api.py`; full suite 52 passed | working-tree |
-| P1 TS-2: legacy fingerprint-less replay semantics (agent finding 9) | `transaction_store.py` raises `IDEMPOTENCY_KEY_REUSED` on fingerprint-less replay; seeded-legacy-row test passes | working-tree |
-| P1 QUAL-1: `qualify.sh` PG precondition probe (agent finding 13) | `probe_postgres()` + hermetic SQLite fallback present & verified in script | working-tree |
-| P1 CI-1: frontend installs ignore lockfile (agent finding 8) | `frontend/Dockerfile` + `ci.yml:71` + `quality.yml` + `qualify.sh` all `npm ci`; lockfile `frontend/package-lock.json`; YAML validated | working-tree |
-| Deep-dive SETP-1 (env integration): setup.sh emitted undeclared keys → `extra="forbid"` crash | corrected dev/prod backend `.env` heredocs in `setup.sh` to declared Settings fields only; corrected `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`/`JWT_EXPIRY_MINUTES`; verified `Settings()` loads clean | working-tree |
+| P1 FE-1: `VITE_API_BASE_URL` runtime-env no-op (agent finding 6) | Dockerfile `ARG` in build stage; compose `build.args` `${VITE_API_BASE_URL:-/api}`; `App.jsx` fallback removed; nginx `/api/`→`backend:8000/api/v1/` verified | `6883b400` |
+| P1 METRICS-1: `/metrics` unauthenticated (agent finding 10) | ASGI Bearer-JWT auth in `app/core/metrics.py`; no-auth 401 / invalid 401 / valid 200; +3 regression tests in `tests/test_api.py`; full suite 52 passed | `6883b400` |
+| P1 TS-2: legacy fingerprint-less replay semantics (agent finding 9) | `transaction_store.py` raises `IDEMPOTENCY_KEY_REUSED` on fingerprint-less replay; seeded-legacy-row test passes | `6883b400` |
+| P1 QUAL-1: `qualify.sh` PG precondition probe (agent finding 13) | `probe_postgres()` + hermetic SQLite fallback present & verified in script | `6883b400` |
+| P1 CI-1: frontend installs ignore lockfile (agent finding 8) | `frontend/Dockerfile` + `ci.yml:71` + `quality.yml` + `qualify.sh` all `npm ci`; lockfile `frontend/package-lock.json`; YAML validated | `6883b400` |
+| Deep-dive SETP-1 (env integration): setup.sh emitted undeclared keys → `extra="forbid"` crash | corrected dev/prod backend `.env` heredocs in `setup.sh` to declared Settings fields only; corrected `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`/`JWT_EXPIRY_MINUTES`; verified `Settings()` loads clean | `6883b400` |
