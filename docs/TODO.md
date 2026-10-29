@@ -57,10 +57,13 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
 - [x] **AUTH-1: JWT TTL hardcoded 480 min, claims never re-validated against
       User/branch state (agent finding 11).** Add a Settings knob, re-check
       `User.active` on privileged endpoints or shorten TTL; consider login
-      rate-limiting. ✅ **PARTIALLY VERIFIED**: Settings knob exists
+      rate-limiting. ✅ **VERIFIED**: Settings knob exists
       (`jwt_expiry_minutes`, default 480, ge=1/le=44640); `create_access_token`
       consumes it; `require_permission` re-checks `User.active`/`Business.active`
-      + permission joins. Remaining: login rate-limiting (posture/TODO).
+      + permission joins. ✅ **RATE LIMITING IMPLEMENTED**: `RateLimitMiddleware`
+      in `app/main.py` with config via `rate_limit_enabled`,
+      `rate_limit_requests`, `rate_limit_window`; default 100 req/min per IP;
+      returns 429 + `Retry-After` header.
 - [x] **SETP-1: setup.sh emits container-absolute SQLite path for host use
       (agent finding 12).** Point `database_url`/`database_path` at the same
       venv-local absolute file. ✅ **FIXED**: `setup.sh` now uses `$ROOT_DIR/ERP-BACKEND/.local/erp03.sqlite3` consistently in both dev/prod configs; `DATABASE_PATH` empty in prod (PostgreSQL); verified Settings loads clean.
