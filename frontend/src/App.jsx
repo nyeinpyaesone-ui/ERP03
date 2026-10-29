@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 export default function App() {
   const [health, setHealth] = useState('checking');

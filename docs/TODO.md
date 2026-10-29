@@ -35,34 +35,49 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
 
 ## P1 — correctness / security
 
-- [ ] **FE-1: `VITE_API_BASE_URL` as runtime env is a no-op (agent finding 6).**
+- [x] **FE-1: `VITE_API_BASE_URL` as runtime env is a no-op (agent finding 6).**
      _URL is evaluated at build time (`frontend/vite.config.js`, `App.jsx`);
       prebuilt GHCR images bake `http://localhost:8000/api/v1` in, breaking any
       real host deployment. Fix: default to relative base and rely on the
       existing nginx `/api/` proxy (`frontend/nginx.conf:9-10`), or accept the
       URL as a Docker build ARG. *Acceptance: built image serves API calls
       without runtime env.*
-- [ ] **TS-2: Legacy fingerprint-less replay semantics (agent finding 9).**
+- [x] **TS-2: Legacy fingerprint-less replay semantics (agent finding 9).**
       Legacy rows without `request_fingerprint` replay silently on any payload;
       `IDEMPOTENCY_KEY_REUSED` is currently unreachable via data. Decide
       semantics (recommend: mismatch-on-fingerprint-less → `IDEMPOTENCY_KEY_REUSED`)
       and add a test that seeds a legacy row.
-- [ ] **METRICS-1: `/metrics` unauthenticated (agent finding 10).** Gate with
-      auth claims or bind to an internal-only port/target.
-- [ ] **AUTH-1: JWT TTL hardcoded 480 min, claims never re-validated against
+- [x] **METRICS-1: `/metrics` unauthenticated (agent finding 10).** Gate with
+      auth claims or bind to an internal-only port/target. ✅ **VERIFIED** +
+      **REGRESSION-TESTED**: `app/core/metrics.py` ASGI auth middleware (Bearer
+      JWT via `decode_access_token`); no-auth → 401, invalid-token → 401,
+      valid-token → 200. Added `test_metrics_requires_authentication`,
+      `test_metrics_rejects_invalid_token`, `test_metrics_accepts_valid_token`
+      in `tests/test_api.py`.
+- [x] **AUTH-1: JWT TTL hardcoded 480 min, claims never re-validated against
       User/branch state (agent finding 11).** Add a Settings knob, re-check
       `User.active` on privileged endpoints or shorten TTL; consider login
-      rate-limiting.
+      rate-limiting. ✅ **PARTIALLY VERIFIED**: Settings knob exists
+      (`jwt_expiry_minutes`, default 480, ge=1/le=44640); `create_access_token`
+      consumes it; `require_permission` re-checks `User.active`/`Business.active`
+      + permission joins. Remaining: login rate-limiting (posture/TODO).
 - [ ] **SETP-1: setup.sh emits container-absolute SQLite path for host use
       (agent finding 12).** Point `database_url`/`database_path` at the same
       venv-local absolute file.
-- [ ] **QUAL-1: qualify.sh assumes a pre-provisioned PG with fixed creds and
+- [x] **QUAL-1: qualify.sh assumes a pre-provisioned PG with fixed creds and
       no precondition probe (agent finding 13).** Probe first, print
       actionable hint, hermetic fallback.
-- [ ] **CI-1: Frontend installs ignore the lockfile (agent finding 8).**
+      ✅ **VERIFIED**: `scripts/qualify.sh` now contains `probe_postgres()` +
+      `USE_PG` fallback to hermetic SQLite (`/tmp/erp03-qualify.sqlite3`).
+- [x] **CI-1: Frontend installs ignore the lockfile (agent finding 8).**
       `frontend/Dockerfile`, `ci.yml:75-81`, `qualify.sh:47` — switch to
       `npm ci` and lock the Express and `cache-dependency-path` to
       `package-lock.json`.
+      ✅ **VERIFIED+FIXED**: `frontend/Dockerfile` uses `npm ci`; `ci.yml:71` uses
+      `npm ci` + `cache-dependency-path: frontend/package-lock.json`; `quality.yml`
+      fixed this round (`npm install`→`npm ci`, `cache-dependency-path`→
+      `frontend/package-lock.json`); `scripts/qualify.sh` fixed this round
+      (`npm install`→`npm ci`). YAML validated.
 - [ ] **OPS-1: CI green evidence on `ubuntu-latest` (agent finding 4
       residue).** Confirm the run for `f6f25b21` is green across
       CI/Quality/Security/Container/IaC before closing #224/#226.
@@ -109,3 +124,9 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
 | Startup-failure root cause (null `pull_request.number`) | zero references; `runs-on: ubuntu-latest` everywhere | prior |
 | IaC workflow restored with safe concurrency | `.github/workflows/iac.yml` present | `8e56739d` |
 | tracker: agent finding 4 (compose sqlite default) duplicates ENV-1 row → superseded by `73ecc902` | — | `73ecc902` |
+| P1 FE-1: `VITE_API_BASE_URL` runtime-env no-op (agent finding 6) | Dockerfile `ARG` in build stage; compose `build.args` `${VITE_API_BASE_URL:-/api}`; `App.jsx` fallback removed; nginx `/api/`→`backend:8000/api/v1/` verified | working-tree |
+| P1 METRICS-1: `/metrics` unauthenticated (agent finding 10) | ASGI Bearer-JWT auth in `app/core/metrics.py`; no-auth 401 / invalid 401 / valid 200; +3 regression tests in `tests/test_api.py`; full suite 52 passed | working-tree |
+| P1 TS-2: legacy fingerprint-less replay semantics (agent finding 9) | `transaction_store.py` raises `IDEMPOTENCY_KEY_REUSED` on fingerprint-less replay; seeded-legacy-row test passes | working-tree |
+| P1 QUAL-1: `qualify.sh` PG precondition probe (agent finding 13) | `probe_postgres()` + hermetic SQLite fallback present & verified in script | working-tree |
+| P1 CI-1: frontend installs ignore lockfile (agent finding 8) | `frontend/Dockerfile` + `ci.yml:71` + `quality.yml` + `qualify.sh` all `npm ci`; lockfile `frontend/package-lock.json`; YAML validated | working-tree |
+| Deep-dive SETP-1 (env integration): setup.sh emitted undeclared keys → `extra="forbid"` crash | corrected dev/prod backend `.env` heredocs in `setup.sh` to declared Settings fields only; corrected `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`/`JWT_EXPIRY_MINUTES`; verified `Settings()` loads clean | working-tree |

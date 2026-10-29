@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1
 FROM node:22-alpine AS build
 
+ARG VITE_API_BASE_URL=/api
+
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -9,7 +11,7 @@ RUN --mount=type=cache,target=/root/.npm \
 
 COPY index.html ./
 COPY src ./src
-RUN npm run build
+RUN VITE_API_BASE_URL=${VITE_API_BASE_URL} npm run build
 
 FROM nginx:1.27-alpine AS runtime
 
