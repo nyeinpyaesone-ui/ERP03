@@ -8,11 +8,11 @@ Code owns the workflow; TypeSafe supplies programmable common sense:
 
 import logging
 import time
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from uuid import uuid4
-from collections import defaultdict
 
-from fastapi import FastAPI, Request, HTTPException, status
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -32,9 +32,6 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger("erp03")
-
-
-from app.core.typesafe import typesafe
 
 
 class RateLimitMiddleware:
@@ -60,9 +57,7 @@ class RateLimitMiddleware:
         window_start = now - self.window_seconds
 
         # Clean old requests
-        self.requests[client_ip] = [
-            ts for ts in self.requests[client_ip] if ts > window_start
-        ]
+        self.requests[client_ip] = [ts for ts in self.requests[client_ip] if ts > window_start]
 
         # Check rate limit
         if len(self.requests[client_ip]) >= self.requests_per_window:
