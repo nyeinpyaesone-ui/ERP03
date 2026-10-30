@@ -27,12 +27,12 @@ DATABASE_URL=postgresql+asyncpg://erp03:<your-secure-password>@postgres:5432/erp
 DATABASE_PATH=./.local/erp03.sqlite3
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 
-# GHCR (optional, for container publishing)
-GHCR_REGISTRY=ghcr.io
-GHCR_USERNAME=<your-github-username>
-GHCR_TOKEN=<your-github-pat-with-write-packages>
-GHCR_IMAGE_BACKEND=ghcr.io/<your-github-username>/erp03-backend
-GHCR_IMAGE_FRONTEND=ghcr.io/<your-github-username>/erp03-frontend
+# Docker Hub (optional, for container publishing)
+DOCKERHUB_REGISTRY=docker.io
+DOCKERHUB_USERNAME=<your-dockerhub-username>
+DOCKERHUB_TOKEN=<your-github-pat-with-write-packages>
+DOCKERHUB_IMAGE_BACKEND=docker.io/<your-dockerhub-username>/erp03-backend
+DOCKERHUB_IMAGE_FRONTEND=docker.io/<your-dockerhub-username>/erp03-frontend
 IMAGE_TAG=latest
 ```
 
@@ -67,7 +67,7 @@ docker compose --profile full up -d
 - [ ] `CORS_ORIGINS` contains only HTTPS origins (no `http://localhost`)
 - [ ] `DATABASE_URL` points to production PostgreSQL
 - [ ] `ENVIRONMENT=production`
-- [ ] GHCR images are built and tagged
+- [ ] Docker Hub images are built and tagged
 - [ ] Branch protection rules are configured (see PROTOCOLS.md)
 - [ ] Required status checks pass on `main`
 
@@ -78,7 +78,7 @@ Add these in **Settings → Secrets and variables → Actions**:
 | Secret | Value Source |
 |--------|--------------|
 | `GITHUB_TOKEN` | Auto-provided by GitHub Actions |
-| `GHCR_PAT` | GitHub PAT with `write:packages`, `read:packages` |
+| `DOCKERHUB_TOKEN` | Docker Hub access token (write:packages scope) |
 | `POSTGRES_PASSWORD` | Your chosen PostgreSQL password |
 | `SECRET_KEY` | Your generated secret key |
 | `DATABASE_URL` | Production database URL |
@@ -92,7 +92,7 @@ curl http://localhost:8000/api/v1/healthz
 # Frontend
 curl http://localhost:3000
 
-# GHCR images
-docker pull ghcr.io/nyeinpyaesone-ui/erp03-backend:latest
-docker pull ghcr.io/nyeinpyaesone-ui/erp03-frontend:latest
+# Docker Hub images
+docker pull docker.io/powerrangeranikg/erp03-backend:latest
+docker pull docker.io/powerrangeranikg/erp03-frontend:latest
 ```

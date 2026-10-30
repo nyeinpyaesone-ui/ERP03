@@ -12,23 +12,23 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53bf808258ca88e2a8e2 # v4
       - name: Generate changelog
         id: changelog
-        uses: scottbrenner/generate-changelog-action@v1
+        uses: scottbrenner/generate-changelog-action@f17b985298496cf8df35aa1104091c51e7bfea95 # v1.3.3
         with:
           my_token: ${{ github.token }}
           from_tag: ${{ github.event.before }}
           to_tag: ${{ github.ref_name }}
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           body: ${{ steps.changelog.outputs.changelog }}
           generate_release_notes: true
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           user: __token__
           password: ${{ secrets.PYPI_TOKEN }}
