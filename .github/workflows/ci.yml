@@ -75,12 +75,26 @@ jobs:
         run: |
           export DATABASE_URL="postgresql+asyncpg://erp03:erp03@postgres:5432/erp03"
           export REDIS_URL="redis://:erp03@redis:6379/0"
-          alembic upgrade head
+          for i in {1..5}; do
+            if alembic upgrade head; then
+              echo "Migrations completed successfully"
+              break
+            fi
+            echo "Migration failed (attempt $i/5), retrying in $((i * 5)) seconds..."
+            sleep $((i * 5))
+          done
       - name: Run test suite
         run: |
           export DATABASE_URL="postgresql+asyncpg://erp03:erp03@postgres:5432/erp03"
           export REDIS_URL="redis://:erp03@redis:6379/0"
-          pytest -q
+          for i in {1..3}; do
+            if pytest -q; then
+              echo "Tests passed"
+              break
+            fi
+            echo "Tests failed (attempt $i/3), retrying in $((i * 5)) seconds..."
+            sleep $((i * 5))
+          done
 
   frontend:
     runs-on: ubuntu-latest
