@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     # --- Auth ---
     access_token_expire_minutes: int = Field(default=30, ge=1, le=1440)
     refresh_token_expire_days: int = Field(default=7, ge=1, le=365)
-    password_min_length: int = Field(default=8, ge=4, le=128)
+    password_min_length: int = Field(default=12, ge=4, le=128)
     bcrypt_rounds: int = Field(default=12, ge=4, le=31)
 
     # --- Idempotency ---
@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = Field(default=True)
     rate_limit_requests: int = Field(default=100, ge=1)
     rate_limit_window: int = Field(default=60, ge=1)
+    trusted_proxies: str = Field(default="")
 
     # --- Webhooks ---
     webhook_secret: SecretStr | None = Field(default=None)

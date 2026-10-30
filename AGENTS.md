@@ -70,8 +70,8 @@ cd ERP-BACKEND && pytest tests/test_api.py::test_api_root -v
 
 # ─── Frontend ───────────────────────────────────────────────────
 cd frontend && npm ci --no-audit --no-fund
-# Vite crashes on low-memory hosts — use esbuild script:
-./scripts/build-frontend.sh                 # outputs frontend/dist/
+# Vite may crash on low-memory hosts; fall back to:
+cd frontend && npm run build                 # outputs frontend/dist/
 
 # ─── Docker (requires daemon) ───────────────────────────────────
 docker compose -f docker-compose.dev.yml up --build   # dev: 5173/8000/5432

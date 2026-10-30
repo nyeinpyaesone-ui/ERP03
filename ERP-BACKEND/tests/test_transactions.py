@@ -3,7 +3,7 @@ import threading
 from uuid import uuid4
 
 import pytest
-from app.api.transactions import store
+from app.api.transactions import get_store, reset_store
 from app.core.security import current_claims
 from app.core.transaction_store import TransactionStore
 from app.main import app
@@ -15,7 +15,11 @@ pytestmark = (
 
 
 @pytest.fixture(autouse=True)
-def authenticated_transaction_requests():
+def authenticated_transaction_requests(tmp_path):
+    db_path = tmp_path / "transactions.sqlite3"
+    # Remove any stale file from a previous run in the same tmp dir.
+    db_path.unlink(missing_ok=True)
+    reset_store(str(db_path))
     app.dependency_overrides[current_claims] = lambda: {
         "sub": "test-user",
         "business_id": "test-business",
@@ -29,6 +33,16 @@ def test_transaction_requires_idempotency_key():
         response = client.post(
             "/api/v1/transactions",
             json={"operation": "invoice.create", "amount": "100.00", "currency": "mmk"},
+        )
+    assert response.status_code == 400
+
+
+def test_transaction_rejects_oversized_idempotency_key():
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/transactions",
+            json={"operation": "invoice.create", "amount": "100.00", "currency": "mmk"},
+            headers={"X-Idempotency-Key": "x" * 219},
         )
     assert response.status_code == 400
 
@@ -146,7 +160,7 @@ def test_amount_that_rounds_to_zero_is_rejected():
 def test_failed_write_rolls_back_and_key_can_be_retried():
     key = f"rollback-retry-{uuid4().hex}"
     with pytest.raises(TypeError):
-        store.execute(
+        get_store().execute(
             transaction_id=f"failed-write-{uuid4().hex}",
             business_id="test-business",
             idempotency_key=key,
@@ -156,7 +170,7 @@ def test_failed_write_rolls_back_and_key_can_be_retried():
             metadata={"invalid": object()},
         )
 
-    result = store.execute(
+    result = get_store().execute(
         transaction_id=f"successful-retry-{uuid4().hex}",
         business_id="test-business",
         idempotency_key=key,
