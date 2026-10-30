@@ -62,8 +62,11 @@ jobs:
         run: |
           for i in {1..30}; do
             if pg_isready -U erp03 -d erp03 -h 127.0.0.1 -p 5432; then
-              echo "PostgreSQL is ready"
-              break
+              # Also verify we can actually connect with the credentials
+              if PGPASSWORD=erp03 psql -U erp03 -d erp03 -h 127.0.0.1 -p 5432 -c "SELECT 1" >/dev/null 2>&1; then
+                echo "PostgreSQL is ready and accepting connections"
+                break
+              fi
             fi
             echo "Waiting for PostgreSQL... (attempt $i/30)"
             sleep 2
