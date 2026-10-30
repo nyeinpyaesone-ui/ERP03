@@ -40,8 +40,6 @@ jobs:
       run:
         working-directory: ERP-BACKEND
     env:
-      DATABASE_URL: postgresql+asyncpg://erp03:erp03@127.0.0.1:${{ job.services.postgres.ports[5432] }}/erp03
-      REDIS_URL: redis://:erp03@127.0.0.1:${{ job.services.redis.ports[6379] }}/0
       REDIS_PASSWORD: erp03
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -73,9 +71,19 @@ jobs:
             sleep 2
           done
       - name: Run database migrations
-        run: alembic upgrade head
+        run: |
+          PG_PORT="${{ job.services.postgres.ports[5432] }}"
+          REDIS_PORT="${{ job.services.redis.ports[6379] }}"
+          export DATABASE_URL="postgresql+asyncpg://erp03:erp03@127.0.0.1:$PG_PORT/erp03"
+          export REDIS_URL="redis://:erp03@127.0.0.1:$REDIS_PORT/0"
+          alembic upgrade head
       - name: Run test suite
-        run: pytest -q
+        run: |
+          PG_PORT="${{ job.services.postgres.ports[5432] }}"
+          REDIS_PORT="${{ job.services.redis.ports[6379] }}"
+          export DATABASE_URL="postgresql+asyncpg://erp03:erp03@127.0.0.1:$PG_PORT/erp03"
+          export REDIS_URL="redis://:erp03@127.0.0.1:$REDIS_PORT/0"
+          pytest -q
 
   frontend:
     runs-on: ubuntu-latest
