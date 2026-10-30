@@ -59,6 +59,7 @@ jobs:
       - name: Wait for PostgreSQL to be ready
         run: |
           PG_PORT="${{ job.services.postgres.ports[5432] }}"
+          echo "PostgreSQL mapped port: $PG_PORT"
           for i in {1..30}; do
             if pg_isready -U erp03 -d erp03 -h 127.0.0.1 -p "$PG_PORT"; then
               # Also verify we can actually connect with the credentials
