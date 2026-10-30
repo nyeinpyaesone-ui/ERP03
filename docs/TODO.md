@@ -37,7 +37,7 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
 
 - [x] **FE-1: `VITE_API_BASE_URL` as runtime env is a no-op (agent finding 6).**
      _URL is evaluated at build time (`frontend/vite.config.js`, `App.jsx`);
-      prebuilt GHCR images bake `http://localhost:8000/api/v1` in, breaking any
+      prebuilt Docker Hub images bake `http://localhost:8000/api/v1` in, breaking any
       real host deployment. Fix: default to relative base and rely on the
       existing nginx `/api/` proxy (`frontend/nginx.conf:9-10`), or accept the
       URL as a Docker build ARG. *Acceptance: built image serves API calls

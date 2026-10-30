@@ -6,42 +6,41 @@ Configure these in GitHub: **Settings → Secrets and variables → Actions**
 
 | Secret Name | Description | Required For |
 |-------------|-------------|--------------|
-| `GITHUB_TOKEN` | GitHub personal access token with `write:packages` scope (auto-provided by GitHub Actions as `${{ github.token }}`) | Container build & push to GHCR |
-| `GHCR_PAT` | Personal Access Token with `write:packages` and `read:packages` scopes for GHCR authentication | Container push (alternative to GITHUB_TOKEN) |
-| `DOCKERHUB_USERNAME` | Docker Hub username (if pushing to Docker Hub) | Optional Docker Hub push |
-| `DOCKERHUB_TOKEN` | Docker Hub personal access token | Optional Docker Hub push |
+| `DOCKERHUB_USERNAME` | Docker Hub username (e.g., `powerrangeranikg`) | Container build & push to Docker Hub |
+| `DOCKERHUB_TOKEN` | Docker Hub personal access token | Container push to Docker Hub |
 | `POSTGRES_PASSWORD` | PostgreSQL database password | docker-compose / CI services |
 | `SECRET_KEY` | Application secret key (min 32 chars in production) | Backend / docker-compose / production |
 | `DATABASE_URL` | SQLAlchemy async database URL | Backend / CI tests |
 
-## Container Registry — GitHub Container Registry (GHCR)
+## Container Registry — Docker Hub
 
-ERP03 publishes container images to GHCR:
+ERP03 publishes container images to Docker Hub:
 
-- Backend: `ghcr.io/nyeinpyaesone-ui/erp03-backend`
-- Frontend: `ghcr.io/nyeinpyaesone-ui/erp03-frontend`
+- Backend: `powerrangeranikg/erp03-backend`
+- Frontend: `powerrangeranikg/erp03-frontend`
 
 ### Authentication
 
-GitHub Actions automatically provides `GITHUB_TOKEN` with `packages: write` permission when the workflow has `permissions: packages: write`. No additional PAT is required for GHCR pushes from Actions.
+Docker Hub credentials must be configured as repository secrets:
+- `DOCKERHUB_USERNAME` — your Docker Hub username
+- `DOCKERHUB_TOKEN` — Docker Hub access token (not password)
 
-For local docker pushes to GHCR, create a PAT with `write:packages` and `read:packages` scopes:
+For local docker pushes to Docker Hub:
 
 ```bash
-# Log in to GHCR locally
-echo $GHCR_PAT | docker login ghcr.io -u $GHCR_USERNAME --password-stdin
+# Log in to Docker Hub locally
+echo $DOCKERHUB_TOKEN | docker login docker.io -u $DOCKERHUB_USERNAME --password-stdin
 
 # Push an image
-docker push ghcr.io/nyeinpyaesone-ui/erp03-backend:latest
+docker push powerrangeranikg/erp03-backend:latest
 ```
 
 ### Required Permission Settings
 
 In the repository, ensure:
 
-1. **Settings → Actions → General → Workflow permissions** → "Read and write permissions" (enables `GITHUB_TOKEN` with `packages: write`)
+1. **Settings → Actions → General → Workflow permissions** → "Read and write permissions" (enables `${{ github.token }}` for any workflow needs)
 2. **Settings → Actions → General → Fork pull request workflows** → as needed
-3. **Package settings** → `erp03-backend` and `erp03-frontend` packages → Package visibility (public/private)
 
 ## Docker Compose Local Development
 

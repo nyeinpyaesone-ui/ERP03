@@ -67,6 +67,9 @@ else
   warn "To run against PostgreSQL, set DATABASE_URL to a reachable instance."
   DATABASE_URL="$SQLITE_URL"
   export DATABASE_URL
+  # Must also set ENVIRONMENT=development to avoid production validation error
+  ENVIRONMENT=development
+  export ENVIRONMENT
 fi
 
 log "Validate repository foundations"
