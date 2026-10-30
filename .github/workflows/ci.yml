@@ -40,6 +40,8 @@ jobs:
       run:
         working-directory: ERP-BACKEND
     env:
+      DATABASE_URL: postgresql+asyncpg://erp03:erp03@postgres:5432/erp03
+      REDIS_URL: redis://:erp03@redis:6379/0
       REDIS_PASSWORD: erp03
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -58,12 +60,10 @@ jobs:
         run: python -m compileall -q app alembic
       - name: Wait for PostgreSQL to be ready
         run: |
-          PG_PORT="${{ job.services.postgres.ports[5432] }}"
-          echo "PostgreSQL mapped port: $PG_PORT"
           for i in {1..30}; do
-            if pg_isready -U erp03 -d erp03 -h 127.0.0.1 -p "$PG_PORT"; then
+            if pg_isready -U erp03 -d erp03 -h postgres -p 5432; then
               # Also verify we can actually connect with the credentials
-              if PGPASSWORD=erp03 psql -U erp03 -d erp03 -h 127.0.0.1 -p "$PG_PORT" -c "SELECT 1" >/dev/null 2>&1; then
+              if PGPASSWORD=erp03 psql -U erp03 -d erp03 -h postgres -p 5432 -c "SELECT 1" >/dev/null 2>&1; then
                 echo "PostgreSQL is ready and accepting connections"
                 break
               fi
@@ -73,17 +73,13 @@ jobs:
           done
       - name: Run database migrations
         run: |
-          PG_PORT="${{ job.services.postgres.ports[5432] }}"
-          REDIS_PORT="${{ job.services.redis.ports[6379] }}"
-          export DATABASE_URL="postgresql+asyncpg://erp03:erp03@127.0.0.1:$PG_PORT/erp03"
-          export REDIS_URL="redis://:erp03@127.0.0.1:$REDIS_PORT/0"
+          export DATABASE_URL="postgresql+asyncpg://erp03:erp03@postgres:5432/erp03"
+          export REDIS_URL="redis://:erp03@redis:6379/0"
           alembic upgrade head
       - name: Run test suite
         run: |
-          PG_PORT="${{ job.services.postgres.ports[5432] }}"
-          REDIS_PORT="${{ job.services.redis.ports[6379] }}"
-          export DATABASE_URL="postgresql+asyncpg://erp03:erp03@127.0.0.1:$PG_PORT/erp03"
-          export REDIS_URL="redis://:erp03@127.0.0.1:$REDIS_PORT/0"
+          export DATABASE_URL="postgresql+asyncpg://erp03:erp03@postgres:5432/erp03"
+          export REDIS_URL="redis://:erp03@redis:6379/0"
           pytest -q
 
   frontend:
