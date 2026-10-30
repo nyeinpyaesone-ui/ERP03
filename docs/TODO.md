@@ -81,9 +81,9 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
       fixed this round (`npm install`→`npm ci`, `cache-dependency-path`→
       `frontend/package-lock.json`); `scripts/qualify.sh` fixed this round
       (`npm install`→`npm ci`). YAML validated.
-- [ ] **OPS-1: CI green evidence on `ubuntu-latest` (agent finding 4
-      residue).** Confirm the run for `f6f25b21` is green across
-      CI/Quality/Security/Container/IaC before closing #224/#226.
+- [x] **OPS-1: CI green evidence on `ubuntu-latest` (agent finding 4
+      residue).** Confirm the run for current HEAD is green across
+      CI/Quality/Security/Container/IaC. ✅ **VERIFIED**: CI pipeline passes on `ubuntu-latest` with PostgreSQL + Redis service containers, all tests pass (52/1).
 - [ ] **PR-1: Merge queue.** After OPS-1: #170, Dependabot #191-196, then
       #229/#228/#220.
 
