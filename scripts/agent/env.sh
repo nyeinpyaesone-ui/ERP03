@@ -78,7 +78,8 @@ agent_record_env() {
   command -v python3 >/dev/null 2>&1 && py="$(python3 -V 2>&1)"
   command -v node >/dev/null 2>&1 && node="$(node -v 2>&1)"
   commit="$(git -C "$AGENT_ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo none)"
-  cat > "$out/env.json" <<JSON
+  local desired
+  desired=$(cat <<JSON
 {
   "env": "${AGENT_ENV_NAME}",
   "os": "${AGENT_OS}",
@@ -95,4 +96,12 @@ agent_record_env() {
   "commit": "${commit}"
 }
 JSON
+)
+  # Idempotent: only rewrite when content actually changes, so re-running
+  # bootstrap never causes tracked-file churn.
+  local existing=""
+  [ -f "$out/env.json" ] && existing="$(cat "$out/env.json")"
+  if [ "$existing" != "$desired" ]; then
+    printf '%s\n' "$desired" > "$out/env.json"
+  fi
 }
