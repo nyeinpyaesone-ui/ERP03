@@ -46,10 +46,11 @@ class Settings(BaseSettings):
     # --- JWT ---
     jwt_expiry_minutes: int = Field(default=480, ge=1, le=44640)
 
-    # --- Redis (optional, for caching/sessions) ---
+    # --- Redis (optional, for caching/sessions/rate-limiting) ---
     redis_url: str | None = Field(default=None)
     redis_password: str | None = Field(default=None)
     redis_db: int = Field(default=0)
+    redis_max_connections: int = Field(default=50, ge=1, le=1000)
 
     # --- API metadata ---
     api_v1_prefix: str = Field(default="/api/v1")

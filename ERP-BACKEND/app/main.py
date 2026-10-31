@@ -8,10 +8,10 @@ Code owns the workflow; TypeSafe supplies programmable common sense:
 
 import logging
 import time
-from collections import defaultdict
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
+import redis.asyncio as redis
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -34,17 +34,18 @@ logging.basicConfig(
 logger = logging.getLogger("erp03")
 
 
-class RateLimitMiddleware:
-    """Simple in-memory rate limiter using sliding window.
+class RedisRateLimitMiddleware:
+    """Redis-backed sliding window rate limiter.
 
+    Uses Redis sorted sets for distributed rate limiting across workers.
     Honours ``X-Forwarded-For`` only when the immediate peer is in
-    ``trusted_proxies`` (prevents spoofing). Evicts idle client buckets to
-    bound memory. Single-process scope: limits are not shared across workers.
+    ``trusted_proxies`` (prevents spoofing).
     """
 
     def __init__(
         self,
         app,
+        redis_url: str,
         requests_per_window: int = 100,
         window_seconds: int = 60,
         trusted_proxies: set[str] | None = None,
@@ -53,7 +54,14 @@ class RateLimitMiddleware:
         self.requests_per_window = requests_per_window
         self.window_seconds = window_seconds
         self.trusted_proxies = trusted_proxies or set()
-        self.requests: dict[str, list[float]] = defaultdict(list)
+
+        # Handle fakeredis URL scheme for tests
+        if redis_url.startswith("fakeredis://"):
+            import fakeredis.aioredis
+
+            self.redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+        else:
+            self.redis = redis.from_url(redis_url, encoding="utf-8", decode_responses=True)
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
@@ -70,22 +78,20 @@ class RateLimitMiddleware:
                 client_ip = forwarded.split(",")[0].strip() or peer_ip
 
         now = time.time()
-        window_start = now - self.window_seconds
+        key = f"ratelimit:{client_ip}"
 
-        # Clean old requests for this client.
-        self.requests[client_ip] = [ts for ts in self.requests[client_ip] if ts > window_start]
+        # Sliding window using Redis sorted set
+        pipe = await self.redis.pipeline()
+        await pipe.zremrangebyscore(key, 0, now - self.window_seconds)
+        await pipe.zcard(key)
+        await pipe.zadd(key, {str(now): now})
+        await pipe.expire(key, self.window_seconds)
+        results = await pipe.execute()
 
-        # Evict idle buckets to bound memory.
-        stale = [
-            ip
-            for ip, ts_list in self.requests.items()
-            if not ts_list or ts_list[-1] <= window_start
-        ]
-        for ip in stale:
-            del self.requests[ip]
+        current_count = results[1]
 
         # Check rate limit
-        if len(self.requests[client_ip]) >= self.requests_per_window:
+        if current_count >= self.requests_per_window:
             response = JSONResponse(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 content={"detail": "Rate limit exceeded"},
@@ -95,7 +101,8 @@ class RateLimitMiddleware:
             return
 
         # Record request
-        self.requests[client_ip].append(now)
+        await self.redis.zadd(f"ratelimit:{client_ip}", {str(time.time()): time.time()})
+        await self.redis.expire(f"ratelimit:{client_ip}", self.window_seconds)
 
         await self.app(scope, receive, send)
 
@@ -195,7 +202,8 @@ app.add_middleware(
 # Rate limiting middleware (respects settings.rate_limit_enabled)
 if settings.rate_limit_enabled:
     app.add_middleware(
-        RateLimitMiddleware,
+        RedisRateLimitMiddleware,
+        redis_url=settings.redis_url or "redis://localhost:6379/0",
         requests_per_window=settings.rate_limit_requests,
         window_seconds=settings.rate_limit_window,
         trusted_proxies={ip.strip() for ip in settings.trusted_proxies.split(",") if ip.strip()},
