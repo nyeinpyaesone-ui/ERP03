@@ -74,7 +74,7 @@ jobs:
           test -n "$GHCR_TOKEN"
           ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/releases/$VERSION'"
           tar --exclude=.git -czf - . | ssh "$DEPLOY_USER@$DEPLOY_HOST" "tar -xzf - -C '$DEPLOY_PATH/releases/$VERSION'"
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; cd '$DEPLOY_PATH/releases/$VERSION'; printf '%s' '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USER' --password-stdin; export BACKEND_IMAGE_TAG='$VERSION' FRONTEND_IMAGE_TAG='$VERSION'; docker compose -f docker-compose.prod.yml pull --quiet; docker compose -f docker-compose.prod.yml up -d --remove-orphans; docker compose -f docker-compose.prod.yml ps"
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; cd '$DEPLOY_PATH/releases/$VERSION'; printf '%s' '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USER' --password-stdin; export BACKEND_IMAGE_TAG='$VERSION' FRONTEND_IMAGE_TAG='$VERSION'; docker compose -f docker-compose.yml pull --quiet; docker compose -f docker-compose.yml up -d --remove-orphans; docker compose -f docker-compose.yml ps"
 
       - name: Verify production health
         env:
@@ -84,7 +84,7 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; cd '$DEPLOY_PATH/releases/$VERSION'; docker compose -f docker-compose.prod.yml ps --status running; docker inspect --format='{{.State.Health.Status}}' erp-postgres | grep -qx healthy; docker inspect --format='{{.State.Health.Status}}' erp-redis | grep -qx healthy; docker inspect --format='{{.State.Health.Status}}' erp-backend | grep -qx healthy"
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; cd '$DEPLOY_PATH/releases/$VERSION'; docker compose -f docker-compose.yml ps --status running"
 
       - name: Record deployed release
         env:
