@@ -81,7 +81,7 @@ class RedisRateLimitMiddleware:
         key = f"ratelimit:{client_ip}"
 
         # Sliding window using Redis sorted set
-        pipe = await self.redis.pipeline()
+        pipe = self.redis.pipeline()
         await pipe.zremrangebyscore(key, 0, now - self.window_seconds)
         await pipe.zcard(key)
         await pipe.zadd(key, {str(now): now})
@@ -99,10 +99,6 @@ class RedisRateLimitMiddleware:
             )
             await response(scope, receive, send)
             return
-
-        # Record request
-        await self.redis.zadd(f"ratelimit:{client_ip}", {str(time.time()): time.time()})
-        await self.redis.expire(f"ratelimit:{client_ip}", self.window_seconds)
 
         await self.app(scope, receive, send)
 

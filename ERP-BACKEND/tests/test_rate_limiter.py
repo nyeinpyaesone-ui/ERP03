@@ -1,6 +1,6 @@
 """Coverage for the Redis-backed rate limiter's IP resolution and hygiene."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from app.main import RedisRateLimitMiddleware
@@ -15,8 +15,13 @@ async def test_xff_ignored_from_untrusted_peer():
     with patch("redis.asyncio.from_url") as mock_redis:
         mock_redis_instance = AsyncMock()
         mock_redis.return_value = mock_redis_instance
-        mock_redis_instance.pipeline.return_value = AsyncMock()
-        mock_redis_instance.pipeline.return_value.execute = AsyncMock(return_value=[None, 0])
+        mock_pipeline = MagicMock()
+        mock_pipeline.zremrangebyscore = AsyncMock()
+        mock_pipeline.zcard = AsyncMock()
+        mock_pipeline.zadd = AsyncMock()
+        mock_pipeline.expire = AsyncMock()
+        mock_pipeline.execute = AsyncMock(return_value=[None, 0])
+        mock_redis_instance.pipeline = MagicMock(return_value=mock_pipeline)
 
         mw = RedisRateLimitMiddleware(
             _noop_app, redis_url="redis://localhost:6379/0", trusted_proxies=set()
@@ -29,8 +34,8 @@ async def test_xff_ignored_from_untrusted_peer():
         }
         await mw(scope, None, None)
         # Verify XFF from untrusted peer is ignored
-        mock_redis_instance.zadd.assert_called()
-        args, _ = mock_redis_instance.zadd.call_args
+        mock_pipeline.zadd.assert_called()
+        args, _ = mock_pipeline.zadd.call_args
         assert "1.2.3.4" in str(args)
 
 
@@ -39,8 +44,13 @@ async def test_xff_honoured_from_trusted_proxy():
     with patch("redis.asyncio.from_url") as mock_redis:
         mock_redis_instance = AsyncMock()
         mock_redis.return_value = mock_redis_instance
-        mock_redis_instance.pipeline.return_value = AsyncMock()
-        mock_redis_instance.pipeline.return_value.execute = AsyncMock(return_value=[None, 0])
+        mock_pipeline = MagicMock()
+        mock_pipeline.zremrangebyscore = AsyncMock()
+        mock_pipeline.zcard = AsyncMock()
+        mock_pipeline.zadd = AsyncMock()
+        mock_pipeline.expire = AsyncMock()
+        mock_pipeline.execute = AsyncMock(return_value=[None, 0])
+        mock_redis_instance.pipeline = MagicMock(return_value=mock_pipeline)
 
         mw = RedisRateLimitMiddleware(
             _noop_app, redis_url="redis://localhost:6379/0", trusted_proxies={"1.2.3.4"}
@@ -53,8 +63,8 @@ async def test_xff_honoured_from_trusted_proxy():
         }
         await mw(scope, None, None)
         # Verify XFF from trusted proxy is honoured
-        mock_redis_instance.zadd.assert_called()
-        args, _ = mock_redis_instance.zadd.call_args
+        mock_pipeline.zadd.assert_called()
+        args, _ = mock_pipeline.zadd.call_args
         assert "9.9.9.9" in str(args)
 
 
@@ -64,14 +74,19 @@ async def test_rate_limit_returns_429_after_threshold():
         mock_redis_instance = AsyncMock()
         mock_redis.return_value = mock_redis_instance
         # First call returns count=1, second call returns count=2 (exceeds limit)
-        mock_redis_instance.pipeline.return_value = AsyncMock()
-        mock_redis_instance.pipeline.return_value.execute = AsyncMock(
+        mock_pipeline = MagicMock()
+        mock_pipeline.zremrangebyscore = AsyncMock()
+        mock_pipeline.zcard = AsyncMock()
+        mock_pipeline.zadd = AsyncMock()
+        mock_pipeline.expire = AsyncMock()
+        mock_pipeline.execute = AsyncMock(
             side_effect=[
                 [None, 1],  # First request: count=1
                 [None, 2],  # Second request: count=2
                 [None, 3],  # Third request: count=3 (exceeds limit of 2)
             ]
         )
+        mock_redis_instance.pipeline = MagicMock(return_value=mock_pipeline)
 
         mw = RedisRateLimitMiddleware(
             _noop_app,
