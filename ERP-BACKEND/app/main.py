@@ -1,145 +1,260 @@
-import json
+"""ERP03 FastAPI application with TypeSafe System One judgment integration.
+
+Code owns the workflow; TypeSafe supplies programmable common sense:
+- Error classification drives retry-after headers (code decision, model annotation).
+- Transaction risk scoring gates high-risk sales (code decision, model annotation).
+- TypeSafe client lifecycle is bound to the app lifespan.
+"""
+
 import logging
-import os
 import time
-import uuid
 from contextlib import asynccontextmanager
-from time import perf_counter
+from uuid import uuid4
 
-from fastapi import FastAPI, Response
+import redis.asyncio as redis
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from fastapi.responses import JSONResponse
 
-from app.database import engine, Base
-from app.routers import (
-    auth, crm, hr, inventory, finance, projects,
-    documents, reports, workflows, payments,
-    integrations, integration_v1, analytics, admin, websocket, health
+from app.api.auth import router as auth_router
+from app.api.catalog import router as catalog_router
+from app.api.health import router as health_router
+from app.api.purchasing import router as purchasing_router
+from app.api.sales import router as sales_router
+from app.api.transactions import router as transactions_router
+from app.core.config import settings
+from app.core.errors import AppError
+from app.core.metrics import REQUEST_COUNT, REQUEST_LATENCY, metrics_app
+from app.core.typesafe import typesafe
+
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
-from app.config import settings
-from app.integration_runtime import models as integration_runtime_models  # noqa: F401
+logger = logging.getLogger("erp03")
 
 
-IS_TEST_MODE = os.getenv("TESTING", "false").lower() == "true" or os.getenv("TEST_MODE", "false").lower() == "true"
+class RedisRateLimitMiddleware:
+    """Redis-backed sliding window rate limiter.
 
+    Uses Redis sorted sets for distributed rate limiting across workers.
+    Honours ``X-Forwarded-For`` only when the immediate peer is in
+    ``trusted_proxies`` (prevents spoofing).
+    """
 
-class JsonFormatter(logging.Formatter):
-    def format(self, record):
-        payload = {
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created)),
-            "level": record.levelname,
-            "logger": record.name,
-            "message": record.getMessage(),
-        }
-        for key in ("request_id", "method", "path", "status", "duration_ms"):
-            value = getattr(record, key, None)
-            if value is not None:
-                payload[key] = value
-        if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
-        return json.dumps(payload, ensure_ascii=False)
+    def __init__(
+        self,
+        app,
+        redis_url: str,
+        requests_per_window: int = 100,
+        window_seconds: int = 60,
+        trusted_proxies: set[str] | None = None,
+    ):
+        self.app = app
+        self.requests_per_window = requests_per_window
+        self.window_seconds = window_seconds
+        self.trusted_proxies = trusted_proxies or set()
 
+        # Handle fakeredis URL scheme for tests
+        if redis_url.startswith("fakeredis://"):
+            import fakeredis.aioredis
 
-logger = logging.getLogger("erp03.api")
-if not logger.handlers:
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
-    logger.addHandler(handler)
-logger.setLevel(logging.INFO)
-logger.propagate = False
+            self.redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+        else:
+            self.redis = redis.from_url(redis_url, encoding="utf-8", decode_responses=True)
 
-HTTP_REQUESTS = Counter("http_requests_total", "Total HTTP requests", ["method", "path", "status"])
-HTTP_REQUEST_DURATION = Histogram("http_request_duration_seconds", "HTTP request duration in seconds", ["method", "path"])
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Get client IP, honouring X-Forwarded-For only from trusted peers.
+        peer_ip = scope.get("client", ("unknown", 0))[0] or "unknown"
+        client_ip = peer_ip
+        if peer_ip in self.trusted_proxies:
+            headers = dict(scope.get("headers", []))
+            forwarded = headers.get(b"x-forwarded-for", b"").decode().strip()
+            if forwarded:
+                client_ip = forwarded.split(",")[0].strip() or peer_ip
+
+        now = time.time()
+        key = f"ratelimit:{client_ip}"
+
+        # Sliding window using Redis sorted set
+        pipe = self.redis.pipeline()
+        await pipe.zremrangebyscore(key, 0, now - self.window_seconds)
+        await pipe.zcard(key)
+        await pipe.zadd(key, {str(now): now})
+        await pipe.expire(key, self.window_seconds)
+        results = await pipe.execute()
+
+        current_count = results[1]
+
+        # Check rate limit
+        if current_count >= self.requests_per_window:
+            response = JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content={"detail": "Rate limit exceeded"},
+                headers={"Retry-After": str(self.window_seconds)},
+            )
+            await response(scope, receive, send)
+            return
+
+        await self.app(scope, receive, send)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if not IS_TEST_MODE:
-        Base.metadata.create_all(bind=engine)
+    """Bind TypeSafe client lifecycle to the app.
+
+    ``close()`` is guaranteed to run on shutdown so the SDK's HTTP client
+    and any buffered judgments are flushed cleanly.
+    """
     yield
+    if settings.typesafe_enabled:
+        await typesafe.close()
 
 
 app = FastAPI(
-    title=settings.APP_NAME,
-    description="Enterprise Resource Planning system of record",
-    version=settings.APP_VERSION,
+    title=settings.app_name,
+    version=settings.version,
+    docs_url="/docs",
+    redoc_url="/redoc",
     lifespan=lifespan,
 )
 
 
+@app.exception_handler(AppError)
+async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+    """Map typed domain errors to the stable error envelope exactly once.
+
+    TypeSafe classification is non-blocking: if it is unavailable or slow,
+    the HTTP error is still returned. When available and confident,
+    ``Retry-After`` is derived from the classification (code-owned decision).
+    """
+    request_id = request.headers.get("X-Request-ID") or uuid4().hex
+    headers = {"X-Request-ID": request_id}
+
+    classification = None
+    if settings.typesafe_enabled:
+        classification = await typesafe.classify_error(
+            error_code=exc.code,
+            error_message=exc.message,
+            endpoint=str(request.url.path),
+            method=request.method,
+            request_id=request_id,
+        )
+        if classification is not None:
+            # Confidence gates acting on the judgment.
+            if classification.confidence < 0.40:
+                logger.warning(
+                    "Low-confidence error classification request_id=%s "
+                    "selected=%s confidence=%.2f escalate=True",
+                    request_id,
+                    classification.selected,
+                    classification.confidence,
+                )
+            if classification.is_retryable and classification.retry_after_seconds is not None:
+                headers["Retry-After"] = str(classification.retry_after_seconds)
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        headers=headers,
+        content={
+            "error": {
+                "code": exc.code,
+                "message": exc.message,
+                "request_id": request_id,
+                "typesafe": (
+                    {
+                        "selected": classification.selected,
+                        "probability": classification.probability,
+                        "confidence": classification.confidence,
+                        "escalate": classification.escalate,
+                    }
+                    if classification is not None
+                    else None
+                ),
+            },
+        },
+    )
+
+
+app.mount("/metrics", metrics_app)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "X-Request-ID",
+        "X-Idempotency-Key",
+        "Retry-After",
+    ],
+)
+
+# Rate limiting middleware (respects settings.rate_limit_enabled)
+if settings.rate_limit_enabled:
+    app.add_middleware(
+        RedisRateLimitMiddleware,
+        redis_url=settings.redis_url or "redis://localhost:6379/0",
+        requests_per_window=settings.rate_limit_requests,
+        window_seconds=settings.rate_limit_window,
+        trusted_proxies={ip.strip() for ip in settings.trusted_proxies.split(",") if ip.strip()},
+    )
+
+
 @app.middleware("http")
-async def observability_middleware(request, call_next):
-    start = perf_counter()
-    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-    status_code = 500
+async def request_context(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or uuid4().hex
+    started = time.perf_counter()
     try:
         response = await call_next(request)
-        status_code = response.status_code
-        response.headers["X-Request-ID"] = request_id
-        return response
     except Exception:
-        logger.exception("Unhandled request exception", extra={"request_id": request_id, "method": request.method, "path": request.url.path})
-        raise
-    finally:
-        duration = perf_counter() - start
-        path = request.url.path
-        HTTP_REQUESTS.labels(request.method, path, str(status_code)).inc()
-        HTTP_REQUEST_DURATION.labels(request.method, path).observe(duration)
-        logger.info("HTTP request", extra={"request_id": request_id, "method": request.method, "path": path, "status": status_code, "duration_ms": round(duration * 1000, 2)})
+        logger.exception(
+            "Unhandled request error request_id=%s path=%s", request_id, request.url.path
+        )
+        response = JSONResponse(
+            status_code=500,
+            headers={"X-Request-ID": request_id},
+            content={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Internal server error",
+                    "request_id": request_id,
+                }
+            },
+        )
+    duration = time.perf_counter() - started
+    route = request.scope.get("route")
+    route_name = getattr(route, "path", request.url.path)
+    REQUEST_COUNT.labels(request.method, route_name, str(response.status_code)).inc()
+    REQUEST_LATENCY.labels(request.method, route_name).observe(duration)
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    logger.info(
+        "request method=%s path=%s status=%s duration_ms=%.2f request_id=%s",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration * 1000,
+        request_id,
+    )
+    return response
 
 
-cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
-app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
-
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
-app.include_router(crm.router, prefix="/api/v1/crm", tags=["CRM"])
-app.include_router(hr.router, prefix="/api/v1/hr", tags=["HR"])
-app.include_router(inventory.router, prefix="/api/v1/inventory", tags=["Inventory"])
-app.include_router(finance.router, prefix="/api/v1/finance", tags=["Finance"])
-app.include_router(projects.router, prefix="/api/v1/projects", tags=["Projects"])
-app.include_router(documents.router, prefix="/api/v1/documents", tags=["Documents"])
-app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
-app.include_router(workflows.router, prefix="/api/v1/workflows", tags=["Workflows"])
-app.include_router(payments.router, prefix="/api/v1/payments", tags=["Payments"])
-app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["Integrations"])
-app.include_router(integration_v1.router)
-app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
-app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
-app.include_router(websocket.router, prefix="/api/v1/ws", tags=["WebSocket"])
-app.include_router(health.router, prefix="/api/v1", tags=["Health Checks"])
-
-from app.middleware.error_handler import register_exception_handlers
-register_exception_handlers(app)
+@app.get("/api/v1", tags=["system"])
+async def api_root() -> dict[str, str]:
+    return {"service": "erp03", "status": "ready", "version": settings.version}
 
 
-@app.get("/")
-async def root():
-    return {
-        "name": settings.APP_NAME,
-        "version": settings.APP_VERSION,
-        "status": "running",
-        "system": "ERP System of Record",
-        "ai_boundary": "external",
-        "features": [
-            "Core ERP (CRM, HR, Inventory, Finance, Projects)",
-            "Document Management",
-            "Reports & Analytics",
-            "Workflow Automation",
-            "Payments",
-            "WebSocket Real-time",
-            "PWA with Offline Support",
-            "Bulk Import/Export",
-            "Alembic Migrations",
-            "Versioned ERP-AI Integration",
-        ],
-    }
-
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "service": "erp-backend"}
-
-
-@app.get("/metrics", include_in_schema=False)
-async def metrics():
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+app.include_router(health_router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(sales_router, prefix="/api/v1")
+app.include_router(catalog_router, prefix="/api/v1")
+app.include_router(purchasing_router, prefix="/api/v1")
+app.include_router(transactions_router, prefix="/api/v1")

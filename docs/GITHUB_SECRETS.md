@@ -1,49 +1,73 @@
-# GitHub Actions Secrets Setup
+# GitHub Repository Secrets Configuration — ERP03
 
-## Required Secrets
+Configure these in GitHub: **Settings → Secrets and variables → Actions**
 
-Go to **Settings → Secrets and variables → Actions** in your GitHub repository.
+## Required Repository Secrets
 
-### Docker Hub (for CI/CD releases)
-| Secret | Value | How to get |
-|--------|-------|------------|
-| `DOCKER_USERNAME` | Your Docker Hub username | https://hub.docker.com |
-| `DOCKER_PASSWORD` | Your Docker Hub password or token | Account Settings → Security |
+| Secret Name | Description | Required For |
+|-------------|-------------|--------------|
+| `DOCKERHUB_USERNAME` | Docker Hub username (e.g., `powerrangeranikg`) | Container build & push to Docker Hub |
+| `DOCKERHUB_TOKEN` | Docker Hub personal access token | Container push to Docker Hub |
+| `POSTGRES_PASSWORD` | PostgreSQL database password | docker-compose / CI services |
+| `SECRET_KEY` | Application secret key (min 32 chars in production) | Backend / docker-compose / production |
+| `DATABASE_URL` | SQLAlchemy async database URL | Backend / CI tests |
 
-### Deployment (for Kubernetes)
-| Secret | Value | How to get |
-|--------|-------|------------|
-| `KUBE_CONFIG` | Base64-encoded kubeconfig | `cat ~/.kube/config \| base64` |
-| `SSH_PRIVATE_KEY` | Your server SSH key | `cat ~/.ssh/id_rsa` |
+## Container Registry — Docker Hub
 
-### Cloud (optional)
-| Secret | Value | How to get |
-|--------|-------|------------|
-| `AWS_ACCESS_KEY_ID` | AWS IAM key | AWS Console → IAM |
-| `AWS_SECRET_ACCESS_KEY` | AWS IAM secret | AWS Console → IAM |
-| `GOOGLE_APPLICATION_CREDENTIALS` | GCP service account JSON | GCP Console → IAM |
+ERP03 publishes container images to Docker Hub:
 
-### API Keys (for production)
-| Secret | Value | How to get |
-|--------|-------|------------|
-| `OPENAI_API_KEY` | OpenAI API key | https://platform.openai.com |
-| `SENTRY_DSN` | Sentry project DSN | https://sentry.io |
-| `STRIPE_SECRET_KEY` | Stripe secret key | https://dashboard.stripe.com |
+- Backend: `powerrangeranikg/erp03-backend`
+- Frontend: `powerrangeranikg/erp03-frontend`
 
-## Setting Up Secrets
+### Authentication
+
+Docker Hub credentials must be configured as repository secrets:
+- `DOCKERHUB_USERNAME` — your Docker Hub username
+- `DOCKERHUB_TOKEN` — Docker Hub access token (not password)
+
+For local docker pushes to Docker Hub:
 
 ```bash
-# Using GitHub CLI (if installed)
-gh secret set DOCKER_USERNAME --body "your-username"
-gh secret set DOCKER_PASSWORD --body "your-password"
+# Log in to Docker Hub locally
+echo $DOCKERHUB_TOKEN | docker login docker.io -u $DOCKERHUB_USERNAME --password-stdin
 
-# Or manually via GitHub web interface:
-# Settings → Secrets and variables → Actions → New repository secret
+# Push an image
+docker push powerrangeranikg/erp03-backend:latest
 ```
 
-## Verification
+### Required Permission Settings
 
-After setting secrets, verify with:
+In the repository, ensure:
+
+1. **Settings → Actions → General → Workflow permissions** → "Read and write permissions" (enables `${{ github.token }}` for any workflow needs)
+2. **Settings → Actions → General → Fork pull request workflows** → as needed
+
+## Docker Compose Local Development
+
+### Minimal profile (default — SQLite journal)
+
 ```bash
-gh secret list
+docker compose up -d
 ```
+
+### Full profile (PostgreSQL)
+
+```bash
+POSTGRES_PASSWORD=your-secure-password \
+SECRET_KEY=your-32-char-secret \
+CORS_ORIGINS=https://your-domain.com \
+docker compose --profile full up -d
+```
+
+### Environment variables for compose
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `POSTGRES_DB` | `erp03` | PostgreSQL database name |
+| `POSTGRES_USER` | `erp03` | PostgreSQL username |
+| `POSTGRES_PASSWORD` | *(required)* | PostgreSQL password |
+| `SECRET_KEY` | *(required)* | App secret key |
+| `DATABASE_URL` | `sqlite+aiosqlite:///data/erp03.sqlite3` | Backend DB URL |
+| `CORS_ORIGINS` | *(required)* | Comma-separated allowed CORS origins |
+| `DATABASE_PATH` | `/data/erp03.sqlite3` | SQLite journal path |
+| `ENVIRONMENT` | `production` | App environment |

@@ -1,113 +1,615 @@
 #!/usr/bin/env bash
-###############################################################################
-# ERP SOLUTION — Environment Setup
-# Run this after cloning the repository
-###############################################################################
+#
+# ERP03 — automated, cross-platform development bootstrap.
+#
+# Detects the host platform (Linux / macOS / WSL), verifies or installs the
+# required toolchain, provisions an isolated virtualenv, installs pinned
+# backend + frontend dependencies, generates a secure .env when missing,
+# and optionally starts local infrastructure (Docker Compose) and runs the
+# full qualification gate.
+#
+# Usage:
+#   ./scripts/setup.sh [options]
+#
+# Options:
+#   --with-infra     Start Docker Compose services (postgres/backend/frontend...)
+#                    after bootstrap completes.
+#   --qualify        Run scripts/qualify.sh at the end (full CI-equivalent gate).
+#   --skip-frontend  Do not install frontend npm dependencies.
+#   --sync-secrets   Sync GitHub secrets availability (values not readable via API).
+#   --env-type       Target environment: development (default) | production.
+#   --force          Overwrite existing .env files when regenerating.
+#   --help           Show this help.
+#
+set -Eeuo pipefail
 
-set -e
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BACKEND_DIR="$ROOT_DIR/ERP-BACKEND"
+FRONTEND_DIR="$ROOT_DIR/frontend"
+VENV_DIR="${VENV_DIR:-$ROOT_DIR/.venv}"
 
-C='[0;36m'; G='[0;32m'; Y='[1;33m'; NC='[0m'
+WITH_INFRA=false
+QUALIFY=false
+SKIP_FRONTEND=false
+SYNC_SECRETS=false
+ENV_TYPE="development"
+FORCE=false
 
-info()  { echo -e "${C}[i]${NC} $1"; }
-ok()    { echo -e "${G}[✓]${NC} $1"; }
-warn()  { echo -e "${Y}[!]${NC} $1"; }
+log()  { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
+warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
+die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
-echo "=========================================="
-echo "  ERP SOLUTION Environment Setup"
-echo "=========================================="
-echo ""
+usage() {
+  sed -n '3,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
 
-# Check prerequisites
-info "Checking prerequisites..."
-
-for cmd in docker docker-compose git node npm python3 pip3; do
-    if command -v "$cmd" &>/dev/null; then
-        ok "$cmd found"
-    else
-        warn "$cmd not found (may be optional)"
-    fi
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --with-infra) WITH_INFRA=true ;;
+    --qualify) QUALIFY=true ;;
+    --skip-frontend) SKIP_FRONTEND=true ;;
+    --sync-secrets) SYNC_SECRETS=true ;;
+    --env-type) ENV_TYPE="${2:-}"; shift ;;
+    --force) FORCE=true ;;
+    --help|-h) usage; exit 0 ;;
+    *) die "unknown option: $1 (see --help)" ;;
+  esac
+  shift
 done
 
-echo ""
+# Validate env type
+case "$ENV_TYPE" in
+  development|production) ;;
+  *) die "Invalid --env-type: $ENV_TYPE (must be development|production)" ;;
+esac
 
-# Setup backend
-if [ -d "backend" ]; then
-    info "Setting up backend..."
-    cd backend
+# ---------------------------------------------------------------------------
+# 1. Platform detection
+# ---------------------------------------------------------------------------
+detect_platform() {
+  local os arch
+  os="$(uname -s)"
+  arch="$(uname -m)"
+  case "$os" in
+    Linux)
+      if grep -qiE '(microsoft|wsl)' /proc/version 2>/dev/null; then
+        PLATFORM="wsl"
+      else
+        PLATFORM="linux"
+      fi
+      ;;
+    Darwin) PLATFORM="macos" ;;
+    MINGW*|MSYS*|CYGWIN*) PLATFORM="windows-bash" ;;
+    *) die "unsupported platform: $os" ;;
+  esac
+  ARCH="$arch"
+  # Package manager preference for optional install hints.
+  if command -v apt-get >/dev/null; then PKG="apt"
+  elif command -v dnf >/dev/null; then PKG="dnf"
+  elif command -v brew >/dev/null; then PKG="brew"
+  else PKG="none"
+  fi
+}
 
-    if [ ! -d "venv" ]; then
-        python3 -m venv venv
-        ok "Virtual environment created"
+# ---------------------------------------------------------------------------
+# 2. Toolchain verification (auto-detect suitable services & runtimes)
+# ---------------------------------------------------------------------------
+require_cmd() {
+  local cmd="$1" hint="${2:-}"
+  if command -v "$cmd" >/dev/null 2>&1; then
+    return 0
+  fi
+  if [[ -n "$hint" ]]; then
+    die "$cmd is required but was not found. Install hint [$PKG]: $hint"
+  fi
+  die "$cmd is required but was not found."
+}
+
+python_cmd() {
+  # Prefer an explicit 3.12+ interpreter; fall back to python3.
+  for candidate in python3.12 python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1 &&
+       "$candidate" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)' 2>/dev/null; then
+      echo "$candidate"
+      return 0
     fi
+  done
+  return 1
+}
 
-    source venv/bin/activate
+check_toolchain() {
+  log "Toolchain check ($PLATFORM/$arch_lower via $PKG)"
+  local py
+  py="$(python_cmd)" || die "Python >= 3.12 is required. Install hint [$PKG]: python3.12"
+  PY_VERSION="$("$py" --version 2>&1)"
+  log "Using $py ($PY_VERSION)"
+  require_cmd node "nodejs (LTS 20+)"
+  require_cmd npm "bundled with nodejs"
+  NODE_MAJOR="$(node --version | sed 's/v\([0-9]*\).*/\1/')"
+  (( NODE_MAJOR >= 18 )) || die "Node >= 18 required, found $(node --version)"
+  if docker_available; then
+    log "Docker detected — compose services available locally"
+  else
+    warn "Docker not found: skipping container-based services (backend still runs against SQLite/Postgres URLs you provide)"
+  fi
+}
 
-    if [ -f "requirements.txt" ]; then
-        pip install -r requirements.txt
-        ok "Python dependencies installed"
-    fi
+docker_available() {
+  command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1
+}
 
-    cd ..
-fi
+compose_cmd() {
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+  elif command -v docker-compose >/dev/null 2>&1; then
+    docker-compose "$@"
+  else
+    die "docker compose is required for --with-infra"
+  fi
+}
 
-# Setup frontend
-if [ -d "frontend" ]; then
-    info "Setting up frontend..."
-    cd frontend
+# ---------------------------------------------------------------------------
+# 3. Auto-Configuration Engine — Dynamic, zero-touch environment setup
+# ---------------------------------------------------------------------------
+check_gh_auth() {
+  local PKG="${PKG:-$(command -v apt >/dev/null && echo apt || command -v brew >/dev/null && echo brew || command -v choco >/dev/null && echo choco || echo 'package-manager')}"
+  if ! command -v gh >/dev/null 2>&1; then
+    die "GitHub CLI (gh) not found. Install hint [$PKG]: gh"
+  fi
+  if ! gh auth status >/dev/null 2>&1; then
+    die "gh not authenticated. Run: gh auth login"
+  fi
+}
 
-    if [ -f "package.json" ]; then
-        npm install
-        ok "Node dependencies installed"
-    fi
+# Centralized secret registry — single source of truth for all environments
+# Fields MUST match ERP-BACKEND/app/core/config.py Settings model
+declare -A SECRET_SPECS=(
+  # [secret_name]="description|generator|required_for"
+  ["SECRET_KEY"]="Application secret key|token_urlsafe(48)|all"
+  ["POSTGRES_PASSWORD"]="PostgreSQL password|token_hex(24)|production,compose"
+  ["REDIS_PASSWORD"]="Redis password|token_hex(24)|compose"
+  ["DOCKERHUB_TOKEN"]="Docker Hub PAT|from_github|ci,production"
+  ["DB_PASSWORD"]="Production DB password|from_github|production"
+  ["DB_HOST"]="Production DB host|from_github|production"
+  ["REDIS_USER"]="Redis username|default:default|compose"
+  ["REDIS_ACCOUNT_NUMBER"]="Upstash Redis account|from_github|production"
+  ["API_REDIS_KEY"]="Upstash Redis REST API key|from_github|production"
+  ["OLLAMA_IMAGE_TAG"]="Ollama version|fixed:0.32.5|all"
+)
 
-    cd ..
-fi
+# Generate secure values using system python3 (no venv dependency)
+generate_secure_value() {
+  local spec="$1"
+  case "$spec" in
+    token_urlsafe* ) local n="${spec#token_urlsafe(}"; n="${n%)}"; python3 -c "import secrets; print(secrets.token_urlsafe($n))" ;;
+    token_hex* ) local n="${spec#token_hex(}"; n="${n%)}"; head -c "$n" /dev/urandom | od -An -tx1 | tr -d ' \n' ;;
+    default:* ) echo "${spec#default:}" ;;
+    fixed:* ) echo "${spec#fixed:}" ;;
+    from_github ) echo "" ;;  # placeholder, filled from GitHub if available
+    * ) echo "$spec" ;;
+  esac
+}
 
-# Setup mobile
-if [ -d "mobile" ]; then
-    info "Setting up mobile app..."
-    cd mobile
+# Derive GitHub owner/repo from git remote
+gh_owner_repo() {
+  local url
+  url="$(git -C "$ROOT_DIR" config --get remote.origin.url 2>/dev/null || echo "")"
+  # Handle git@github.com:owner/repo.git or https://github.com/owner/repo.git
+  if [[ "$url" =~ github.com[:/]([^/]+)/([^/.]+) ]]; then
+    echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+  else
+    echo "nyeinpyaesone-ui/ERP03"  # fallback
+  fi
+}
 
-    if [ -f "package.json" ]; then
-        npm install
-        ok "Mobile dependencies installed"
-    fi
+sync_github_secrets() {
+  log "Syncing GitHub secrets metadata..."
+  check_gh_auth
+  local owner_repo gh_secrets
+  owner_repo="$(gh_owner_repo)"
+  gh_secrets="$(gh secret list --repo "$owner_repo" --json name 2>/dev/null || echo '[]')"
+  log "Available GitHub secrets: $(echo "$gh_secrets" | python3 -c "import sys, json; [print(x['name'], end=' ') for x in json.load(sys.stdin)]" 2>/dev/null || echo "jq not available")"
+  log "Note: Secret values are not readable via GitHub API — they must be set in CI/CD environment"
+}
 
-    cd ..
-fi
+auto_configure_all() {
+  log "🔧 Auto-configuring environment ($ENV_TYPE)..."
 
-# Create environment files
-info "Creating environment files..."
+  # 1. Ensure venv exists for later use (but generate secrets with system python)
+  if [[ ! -d "$VENV_DIR" ]]; then
+    local py; py="$(python_cmd)"
+    "$py" -m venv "$VENV_DIR"
+  fi
+  "$VENV_DIR/bin/pip" install --quiet --upgrade pip
+  "$VENV_DIR/bin/pip" install --quiet -r "$BACKEND_DIR/requirements.txt"
+  "$VENV_DIR/bin/pip" install --quiet -r "$BACKEND_DIR/dev-requirements.txt"
 
-if [ ! -f "backend/.env" ]; then
-    cat > backend/.env << EOF
-DATABASE_URL=postgresql://erp:erp_secret@localhost:5432/erp_solution
-REDIS_URL=redis://localhost:6379/0
-SECRET_KEY=change-this-in-production-$(openssl rand -hex 16)
+  # 2. Generate ALL secret values dynamically
+  declare -A SECRETS
+  for name in "${!SECRET_SPECS[@]}"; do
+    IFS='|' read -r desc generator required <<< "${SECRET_SPECS[$name]}"
+    SECRETS[$name]="$(generate_secure_value "$generator")"
+  done
+
+  # 3. Try to pull values from GitHub secrets (for CI/production values)
+  if $SYNC_SECRETS && check_gh_auth 2>/dev/null; then
+    log "Fetching available secrets from GitHub..."
+    local gh_secrets owner_repo
+    owner_repo="$(gh_owner_repo)"
+    gh_secrets="$(gh secret list --repo "$(gh_owner_repo)" --json name 2>/dev/null || echo '[]')"
+    for name in "${!SECRET_SPECS[@]}"; do
+      IFS='|' read -r desc generator required <<< "${SECRET_SPECS[$name]}"
+      if [[ "$generator" == "from_github" ]] && echo "$gh_secrets" | grep -q "\"$name\""; then
+        SECRETS[$name]="__GITHUB_SECRET__"
+        log "  ✓ $name configured in GitHub (will be injected at runtime)"
+      fi
+    done
+  fi
+
+  # 4. Generate backend .env — ONLY fields defined in Settings model (extra="forbid")
+  local backend_env="$BACKEND_DIR/.env"
+  if [[ -f "$backend_env" && "$FORCE" != "true" ]]; then
+    log "Keeping existing $backend_env (use --force to regenerate)"
+  else
+    log "Generating $backend_env..."
+    mkdir -p "$BACKEND_DIR/.local"
+    if [[ "$ENV_TYPE" == "development" ]]; then
+      cat > "$backend_env" <<EOF
+# ERP03 Backend Config — AUTO-GENERATED development
 ENVIRONMENT=development
-OLLAMA_URL=http://localhost:11434
+SECRET_KEY=${SECRETS[SECRET_KEY]}
+LOG_LEVEL=DEBUG
+DATABASE_URL=sqlite+aiosqlite:///$ROOT_DIR/ERP-BACKEND/.local/erp03.sqlite3
+DATABASE_PATH=$ROOT_DIR/ERP-BACKEND/.local/erp03.sqlite3
+DB_POOL_SIZE=5
+DB_MAX_OVERFLOW=10
+DB_POOL_RECYCLE=1800
+DB_ECHO=false
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:8000
+TYPESAFE_ENABLED=false
+TYPESAFE_API_KEY=
+JWT_EXPIRY_MINUTES=30
+REDIS_URL=
+REDIS_PASSWORD=
+REDIS_DB=0
+API_V1_PREFIX=/api/v1
+API_TITLE=ERP03 API
+API_VERSION=1.0.0
+API_DOCS_URL=/docs
+API_REDOC_URL=/redoc
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
+PASSWORD_MIN_LENGTH=12
+BCRYPT_ROUNDS=12
+IDEMPOTENCY_TTL_HOURS=24
+IDEMPOTENCY_CLEANUP_INTERVAL=3600
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_REQUESTS=100
+RATE_LIMIT_WINDOW=60
+TRUSTED_PROXIES=
+WEBHOOK_SECRET=
+WEBHOOK_TIMEOUT=30
+OTEL_ENABLED=false
+OTEL_EXPORTER_OTLP_ENDPOINT=
+DEBUG=true
 EOF
-    ok "backend/.env created"
-fi
-
-if [ ! -f "frontend/.env" ]; then
-    cat > frontend/.env << EOF
-REACT_APP_API_URL=http://localhost:8000
-REACT_APP_WS_URL=ws://localhost:8000
+    else
+      local db_host="${SECRETS[DB_HOST]:-localhost}"
+      local db_pass="${SECRETS[DB_PASSWORD]}"
+      # Ensure DB_PASSWORD is not empty for production
+      if [[ -z "$db_pass" || "$db_pass" == "__GITHUB_SECRET__" ]]; then
+        warn "DB_PASSWORD not set locally; generate a strong one or set in GitHub secrets"
+        db_pass="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+      fi
+      cat > "$backend_env" <<EOF
+# ERP03 Backend Config — AUTO-GENERATED production
+ENVIRONMENT=production
+SECRET_KEY=${SECRETS[SECRET_KEY]}
+LOG_LEVEL=INFO
+DATABASE_URL=postgresql+asyncpg://erp03:${db_pass}@${db_host}:5432/erp03
+DATABASE_PATH=
+DB_POOL_SIZE=20
+DB_MAX_OVERFLOW=30
+DB_POOL_RECYCLE=3600
+DB_ECHO=false
+CORS_ORIGINS=https://your-domain.com
+TYPESAFE_ENABLED=true
+TYPESAFE_API_KEY=
+JWT_EXPIRY_MINUTES=15
+REDIS_URL=redis://:${SECRETS[REDIS_PASSWORD]}@redis:6379/0
+REDIS_PASSWORD=${SECRETS[REDIS_PASSWORD]}
+REDIS_DB=0
+API_V1_PREFIX=/api/v1
+API_TITLE=ERP03 API
+API_VERSION=1.0.0
+API_DOCS_URL=/docs
+API_REDOC_URL=/redoc
+ACCESS_TOKEN_EXPIRE_MINUTES=15
+REFRESH_TOKEN_EXPIRE_DAYS=30
+PASSWORD_MIN_LENGTH=12
+BCRYPT_ROUNDS=14
+IDEMPOTENCY_TTL_HOURS=168
+IDEMPOTENCY_CLEANUP_INTERVAL=3600
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_REQUESTS=1000
+RATE_LIMIT_WINDOW=60
+TRUSTED_PROXIES=
+WEBHOOK_SECRET=
+WEBHOOK_TIMEOUT=30
+OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+DEBUG=false
 EOF
-    ok "frontend/.env created"
-fi
+    fi
+    chmod 600 "$backend_env"
+    log "  ✓ Backend config written"
+  fi
 
-echo ""
-echo "=========================================="
-echo "  ✅ Setup Complete!"
-echo "=========================================="
-echo ""
-echo "Next steps:"
-echo "  1. Start services:  docker-compose up -d"
-echo "  2. Run backend:     cd backend && source venv/bin/activate && uvicorn app.main:app --reload"
-echo "  3. Run frontend:    cd frontend && npm run dev"
-echo "  4. Run mobile:      cd mobile && npx expo start"
-echo ""
-echo "API docs: http://localhost:8000/docs"
-echo ""
+  # 5. Generate .env.compose for Docker Compose (both prod and dev)
+  local compose_env="$ROOT_DIR/.env.compose"
+  if [[ -f "$compose_env" && "$FORCE" != "true" ]]; then
+    log "Keeping existing $compose_env (use --force to regenerate)"
+  else
+    log "Generating $compose_env..."
+    # Use same passwords across all configs for consistency
+    local pg_pass="${SECRETS[POSTGRES_PASSWORD]}"
+    local redis_pass="${SECRETS[REDIS_PASSWORD]}"
+    local redis_user="${SECRETS[REDIS_USER]}"
+    cat > "$compose_env" <<EOF
+# ERP03 Docker Compose Environment — AUTO-GENERATED
+# Environment: ${ENV_TYPE}
+# Usage: docker compose --env-file .env.compose up -d
+#        docker compose -f docker-compose.dev.yml --env-file .env.compose up -d
+
+# Database (use 'erp03' consistently everywhere)
+POSTGRES_DB=erp03
+POSTGRES_USER=erp03
+POSTGRES_PASSWORD=${pg_pass}
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+
+# Redis
+REDIS_PASSWORD=${redis_pass}
+REDIS_USER=${redis_user}
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_URL=redis://:${redis_pass}@redis:6379/0
+REDIS_ACCOUNT_NUMBER=${SECRETS[REDIS_ACCOUNT_NUMBER]}
+API_REDIS_KEY=${SECRETS[API_REDIS_KEY]}
+
+# Docker Hub (for container.yml CI)
+DOCKERHUB_USERNAME=powerrangeranikg
+DOCKERHUB_TOKEN=${SECRETS[DOCKERHUB_TOKEN]}
+DOCKERHUB_IMAGE_BACKEND=powerrangeranikg/erp03-backend
+DOCKERHUB_IMAGE_FRONTEND=powerrangeranikg/erp03-frontend
+IMAGE_TAG=${IMAGE_TAG:-latest}
+
+# Backend (production uses pre-built images; dev uses this for build-time)
+SECRET_KEY=${SECRETS[SECRET_KEY]}
+ENVIRONMENT=${ENV_TYPE}
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+API_URL=http://localhost:8000
+WS_URL=ws://localhost:8000
+DATABASE_URL=postgresql+asyncpg://erp03:${pg_pass}@postgres:5432/erp03
+OLLAMA_URL=http://ollama:11434
+
+# Frontend (Vite build-time injection)
+VITE_API_BASE_URL=/api
+VITE_WS_URL=ws://localhost:8000
+VITE_APP_TITLE=ERP03
+
+# Ollama
+OLLAMA_IMAGE_TAG=${SECRETS[OLLAMA_IMAGE_TAG]}
+
+# NGINX (production reverse proxy)
+NGINX_HTTP_PORT=80
+NGINX_HTTPS_PORT=443
+SSL_CERT_PATH=/etc/nginx/ssl/cert.pem
+SSL_KEY_PATH=/etc/nginx/ssl/key.pem
+EOF
+    chmod 600 "$compose_env"
+    log "  ✓ Compose config written"
+  fi
+
+  # 6. Generate frontend .env for Vite build
+  local frontend_env="$FRONTEND_DIR/.env"
+  if [[ -f "$frontend_env" && "$FORCE" != "true" ]]; then
+    log "Keeping existing $frontend_env"
+  else
+    log "Generating $frontend_env..."
+    cat > "$frontend_env" <<EOF
+# ERP03 Frontend Build Config — AUTO-GENERATED
+VITE_API_BASE_URL=/api
+VITE_WS_URL=ws://localhost:8000
+VITE_APP_TITLE=ERP03
+VITE_APP_VERSION=1.0.0
+VITE_ENABLE_DEVTOOLS=true
+VITE_THEME=light
+EOF
+    log "  ✓ Frontend config written"
+  fi
+
+  # 7. Generate .env.example for documentation (no secrets, just templates)
+  local example_env="$ROOT_DIR/.env.example"
+  if [[ ! -f "$example_env" || "$FORCE" == "true" ]]; then
+    log "Generating $example_env..."
+    cat > "$example_env" <<'EOF'
+# ERP03 Environment Template — Copy to .env and fill in values
+# NEVER commit real credentials to version control
+
+# Core
+ENVIRONMENT=development
+SECRET_KEY=your-secret-key-min-32-chars
+LOG_LEVEL=DEBUG
+
+# Database (SQLite for dev, PostgreSQL for production)
+DATABASE_URL=sqlite+aiosqlite:///./.local/erp03.sqlite3
+DATABASE_PATH=./.local/erp03.sqlite3
+
+# Database Pool (auto-tuned by ENVIRONMENT)
+DB_POOL_SIZE=5
+DB_MAX_OVERFLOW=10
+DB_POOL_RECYCLE=1800
+DB_ECHO=false
+
+# Redis (optional)
+REDIS_URL=redis://localhost:6379/0
+REDIS_PASSWORD=
+REDIS_DB=0
+
+# CORS
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+
+# TypeSafe (optional)
+TYPESAFE_ENABLED=false
+TYPESAFE_API_KEY=
+
+# JWT
+JWT_EXPIRY_MINUTES=30
+
+# Auth
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
+PASSWORD_MIN_LENGTH=12
+BCRYPT_ROUNDS=12
+
+# Idempotency
+IDEMPOTENCY_TTL_HOURS=24
+IDEMPOTENCY_CLEANUP_INTERVAL=3600
+
+# Rate Limiting
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_REQUESTS=100
+RATE_LIMIT_WINDOW=60
+
+# Webhooks
+WEBHOOK_SECRET=
+WEBHOOK_TIMEOUT=30
+
+# Observability
+OTEL_ENABLED=false
+OTEL_EXPORTER_OTLP_ENDPOINT=
+
+# Debug
+DEBUG=true
+EOF
+    log "  ✓ Example config written"
+  fi
+
+  # 8. Verify configuration loads correctly
+  log "Verifying configuration..."
+  (cd "$BACKEND_DIR" && "$VENV_DIR/bin/python" -c "
+from app.core.config import settings
+print(f'  ✓ Environment: {settings.environment}')
+print(f'  ✓ Database: {settings.database_url.split(\"://\")[0]}')
+print(f'  ✓ Secret key: {len(settings.secret_key)} chars')
+print(f'  ✓ CORS origins: {settings.cors_origins}')
+print(f'  ✓ Redis URL: {settings.redis_url}')
+print(f'  ✓ Pool size: {settings.db_pool_size}/{settings.db_max_overflow}')
+") 2>/dev/null || warn "Config verification will run on backend start"
+
+  log "✅ Auto-configuration complete!"
+  log ""
+  log "📋 Generated files:"
+  log "  • $backend_env"
+  log "  • $compose_env"
+  log "  • $frontend_env"
+  log "  • $example_env"
+  log ""
+  log "🚀 Ready to start:"
+  log "  source .venv/bin/activate"
+  log "  ./scripts/setup.sh --with-infra   # Start all services (uses .env.compose)"
+  log "  ./scripts/setup.sh --qualify      # Run full test gate"
+}
+
+# ---------------------------------------------------------------------------
+# 4. Backend environment provisioning (legacy path — kept for compatibility)
+# ---------------------------------------------------------------------------
+setup_backend() {
+  log "Provisioning Python virtualenv at $VENV_DIR"
+  local py
+  py="$(python_cmd)"
+  if [[ ! -d "$VENV_DIR" ]]; then
+    "$py" -m venv "$VENV_DIR"
+  fi
+  # shellcheck disable=SC1091
+  source "$VENV_DIR/bin/activate"
+  pip install --quiet --upgrade pip || pip install --quiet --upgrade pip
+  pip install --quiet --requirement "$BACKEND_DIR/requirements.txt" || pip install --quiet --requirement "$BACKEND_DIR/requirements.txt"
+  pip install --quiet --requirement "$BACKEND_DIR/dev-requirements.txt" || pip install --quiet --requirement "$BACKEND_DIR/dev-requirements.txt"
+  log "Backend dependencies installed (pinned versions verified by CI)"
+}
+
+# ---------------------------------------------------------------------------
+# 5. Frontend dependencies
+# ---------------------------------------------------------------------------
+setup_frontend() {
+  if $SKIP_FRONTEND; then
+    log "Skipping frontend install (--skip-frontend)"
+    return
+  fi
+  log "Installing frontend dependencies"
+  (cd "$FRONTEND_DIR" && npm ci --no-audit --no-fund --silent)
+}
+
+# ---------------------------------------------------------------------------
+# 6. Optional infrastructure + smoke verification
+# ---------------------------------------------------------------------------
+start_infra() {
+  if ! docker_available; then
+    die "--with-infra requested but Docker daemon is unavailable"
+  fi
+  log "Starting Docker Compose stack using .env.compose..."
+  # Use the generated .env.compose for consistent secrets
+  (cd "$ROOT_DIR" && compose_cmd --env-file .env.compose up -d --build)
+  log "Compose stack started: API http://localhost:8000/docs · UI http://localhost:3000"
+}
+
+smoke_test() {
+  log "Running hermetic test suite as bootstrap smoke test"
+  # Force hermetic SQLite for smoke test regardless of .env config
+  # Must override ENVIRONMENT too, otherwise production validation fails
+  local tmpdir="$(mktemp -d)"
+  local db_url="sqlite+aiosqlite:///$tmpdir/erp03.sqlite3"
+  local db_path="$tmpdir/erp03.sqlite3"
+  (cd "$BACKEND_DIR" && ENVIRONMENT=development DATABASE_URL="$db_url" DATABASE_PATH="$db_path" "$VENV_DIR/bin/pytest" -q)
+}
+
+# ---------------------------------------------------------------------------
+main() {
+  detect_platform
+  arch_lower="$(echo "$ARCH" | tr '[:upper:]' '[:lower:]')"
+
+  if $SYNC_SECRETS; then
+    sync_github_secrets
+    # If only syncing secrets, exit early unless other flags set
+    if ! $WITH_INFRA && ! $QUALIFY; then
+      log "Secrets sync complete. Run without --sync-secrets to continue bootstrap."
+      exit 0
+    fi
+  fi
+
+  check_toolchain
+
+  # Use auto_configure_all for full config generation; falls back to legacy path
+  if [[ -f "$BACKEND_DIR/.env" && "$FORCE" != "true" ]]; then
+    log "Using existing $BACKEND_DIR/.env (use --force to regenerate)"
+    setup_backend
+  else
+    auto_configure_all
+  fi
+
+  setup_frontend
+
+  # Run smoke test after full setup
+  smoke_test
+
+  if $WITH_INFRA; then start_infra; fi
+  if $QUALIFY; then
+    log "Running full qualification gate"
+    bash "$ROOT_DIR/scripts/qualify.sh"
+  fi
+  log "ERP03 bootstrap complete ($PLATFORM). Activate the env with: source .venv/bin/activate"
+}
+
+main "$@"
