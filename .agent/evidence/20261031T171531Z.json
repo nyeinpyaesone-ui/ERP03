@@ -1,0 +1,1 @@
+{"env":"proot","arch":"aarch64","commit":"66cf4e3d","used_pg":false,"steps":["ruff","migrate","tests","frontend"],"current":"frontend","result":"PASS"}
