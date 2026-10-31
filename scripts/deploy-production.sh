@@ -37,7 +37,9 @@ echo "   (Image verification would use: docker manifest inspect $IMAGE_DIGEST)"
 # 4. Validate manifests
 echo "==> [4/12] Validating Kubernetes manifests"
 for f in infra/kubernetes/base/*.yaml; do
-    python3 -c "import yaml; yaml.safe_load(open('$f'))" && echo "   $f: OK" || { echo "   $f: INVALID"; exit 1; }
+    PYTHON_CMD="python3"
+    [ -x ".venv/bin/python" ] && PYTHON_CMD=".venv/bin/python"
+    $PYTHON_CMD -c "import yaml; list(yaml.safe_load_all(open('$f')))" && echo "   $f: OK" || { echo "   $f: INVALID"; exit 1; }
 done
 
 # 5. Authenticate cluster
