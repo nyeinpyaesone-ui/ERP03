@@ -51,40 +51,15 @@ Production-focused AI ERP modular-monolith. FastAPI backend (`ERP-BACKEND/`), Re
 ## Exact Developer Commands
 
 ```bash
-# ─── Bootstrap ──────────────────────────────────────────────────
-./scripts/setup.sh                          # venv + deps + .env + smoke
-./scripts/setup.sh --qualify                # full CI-equivalent gate
-./scripts/setup.sh --with-infra             # + docker compose up
-
-# ─── Backend (run from repo root) ───────────────────────────────
-source .venv/bin/activate
-
-# Lint → typecheck → test (order matters)
-cd ERP-BACKEND && ruff check app tests alembic
-cd ERP-BACKEND && ruff format --check app tests alembic
-cd ERP-BACKEND && python -m compileall -q app alembic
-cd ERP-BACKEND && alembic upgrade head
-cd ERP-BACKEND && pytest -q                 # 52 passed, 1 PG-only skip
-
-# Single test
-cd ERP-BACKEND && pytest tests/test_api.py::test_api_root -v
-
-# ─── Frontend ───────────────────────────────────────────────────
-cd frontend && npm ci --no-audit --no-fund
-# Vite may crash on low-memory hosts; fall back to:
-cd frontend && npm run build                 # outputs frontend/dist/
-
-# ─── Docker (requires daemon) ───────────────────────────────────
-docker compose -f docker-compose.dev.yml up --build   # dev: 5173/8000/5432
-docker compose up --build                    # prod minimal
-docker compose --profile full up             # + Postgres + migrate job
-
-# ─── Make targets ───────────────────────────────────────────────
-make dev | test | lint | build | up | down | build-backend | build-frontend | build-all
+./scripts/agent/bootstrap.sh     # idempotent; safe to re-run
+./scripts/agent/verify.sh        # the only completion gate
+make agent-verify                # same as above
 ```
 
----
+Environment differences (proot arm64, Codespaces, CI) are inside those scripts.
+See `docs/agent/ENVIRONMENTS.md`. Never hardcode `apt`, `sudo`, `docker` or `systemd`.
 
+---
 ## Environment & Secrets
 
 ### Two `.env` Files — Never Mix
@@ -185,7 +160,7 @@ alembic history
 ```python
 # RedisRateLimitMiddleware (app/main.py:37-101)
 # - Redis sorted sets (ZSET) for sliding window
-# - ZREMANGEBYSCORE for window cleanup, ZCARD for count
+# - ZREMRANGEBYSCORE for window cleanup, ZCARD for count
 # - ZADD + EXPIRE for request recording
 # - Config via settings: rate_limit_enabled, rate_limit_requests, rate_limit_window
 # - Returns 429 + Retry-After header
@@ -233,7 +208,7 @@ CONFIDENCE_ESCALATE_THRESHOLD = 0.40  # escalate to human
 # Non-blocking: error response returned even if TypeSafe fails
 # Error classification → Retry-After header
 # Transaction risk score → high-risk gate (score ≥ 75)
-# Idempotency Noul → yes = same command (replay)
+# Idempotency: yes = same command (replay)
 ```
 
 ---
@@ -242,7 +217,7 @@ CONFIDENCE_ESCALATE_THRESHOLD = 0.40  # escalate to human
 
 ```bash
 # Unit tests (pytest + asyncio)
-pytest -q                           # all (52 passed, 1 PG-only skip)
+pytest -q                           # all (57 passed, 1 skipped)
 pytest tests/test_api.py -v         # single file
 pytest -k "sale" -v                 # filter by name
 pytest tests/test_rate_limiter.py -v # rate limiter tests (3 tests)
@@ -251,7 +226,7 @@ pytest tests/test_rate_limiter.py -v # rate limiter tests (3 tests)
 # tests/test_erp_integration.py::test_bootstrap_login_and_pos_sale_round_trip
 
 # Frontend build verification
-cd frontend && ./scripts/build-frontend.sh && ls dist/
+./scripts/build-frontend.sh && ls dist/   # run from repo root
 ```
 
 ### Test Fixtures (`tests/conftest.py`)
@@ -271,7 +246,7 @@ cd frontend && ./scripts/build-frontend.sh && ls dist/
 | `security.yml` | schedule/PR | pip-audit + CodeQL |
 | `container.yml` | push tag/main/release** | **Docker Hub multi-arch (amd64/arm64) + provenance + SBOM** |
 | `iac.yml` | push/PR | terraform fmt/validate/plan |
-| `release.yml` | workflow_dispatch | SemVer tag → GitHub Release → PyPI |
+| `release.yml` | push: tags `v*` | SemVer tag → GitHub Release → PyPI |
 
 **Secrets required:**
 - `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (container.yml)
@@ -288,9 +263,9 @@ cd frontend && ./scripts/build-frontend.sh && ls dist/
 # - PostgreSQL + Redis service containers with health checks
 # - Wait for PG readiness: pg_isready + psql SELECT 1 (30 retries × 2s)
 # - DATABASE_URL uses service hostname: postgres:5432
-# - REDIS_URL uses service hostname: redis:6379
-# - Migration retry: 5 attempts with exponential backoff (5s, 10s, 15s, 20s, 25s)
-# - Test suite retry: 3 attempts with 5s/10s/15s backoff
+# - REDIS_URL is redis://:erp03@redis:6379/0 but the service sets no password (known CI bug)
+# - Migration/test retries currently MASK failures (ci.yml:78-97) — not a feature
+# - Fix: exit 1 after the last attempt
 # - Frontend: VITE_API_BASE_URL=/api build arg for nginx proxy
 ```
 
@@ -300,8 +275,8 @@ cd frontend && ./scripts/build-frontend.sh && ls dist/
 
 | Issue | Cause | Workaround |
 |-------|-------|------------|
-| Python 3.14 (not 3.12) | System Python newer | `asyncpg==0.32.0` (no 0.30.0 wheel); `typesafe` optional |
-| Vite `Bus error` | Low memory (144Mi free) | Use `scripts/build-frontend.sh` (esbuild) |
+| Python 3.14 locally vs 3.12 in CI | System Python newer | 3.12 is canonical; `asyncpg==0.30.0` is pinned and works on 3.14 |
+| Vite `Bus error` | Low memory | `NODE_OPTIONS=--max-old-space-size=512`, then `./scripts/build-frontend.sh` (Vite, not esbuild) |
 | Docker daemon | No iptables/root in container | CI builds images; local compose unavailable |
 | `gh auth` | No browser | Use PAT: `echo "<pat>" \| gh auth login --with-token` |
 | Deploy key | SSH key not on GitHub | `gh repo deploy-key add --allow-write` |
@@ -351,6 +326,14 @@ cd ERP-BACKEND
 ENVIRONMENT=production SECRET_KEY="x"*32 DATABASE_URL=postgresql+asyncpg://... \
   python -c "from app.core.config import settings; print(settings.environment)"
 ```
+
+## Environment Contract
+
+- Verify with `bash scripts/agent/verify.sh`; never claim completion without its `RESULT` line.
+- Every run writes `.agent/evidence/<stamp>.json`; quote that path.
+- `[SKIP] docker reason=no-daemon (proot)` is expected on Termux/proot — never fake a pass.
+- The suite runs from `ERP-BACKEND/`; coverage is enforced by `ERP-BACKEND/pytest.ini`.
+- Markers are `integration` and `requires_database`. There is no `postgres` marker.
 
 ---
 
