@@ -65,3 +65,4 @@ Thumbs.db
 ERP-BACKEND/.local/
 *.pid
 *.sock
+coverage.xml
