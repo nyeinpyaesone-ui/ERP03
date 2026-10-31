@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: erp03-frontend
   namespace: erp03
+  labels:
+    app: erp03-frontend
 spec:
   replicas: 2
   selector:
@@ -13,21 +15,41 @@ spec:
       labels:
         app: erp03-frontend
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: frontend
           image: docker.io/powerrangeranikg/erp03-frontend@sha256:REPLACE_WITH_REAL_DIGEST
           ports:
-            - containerPort: 80
+            - containerPort: 8080
+              name: http
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 3
+            failureThreshold: 10
+            timeoutSeconds: 3
           readinessProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080
             periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
           livenessProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080
             periodSeconds: 20
+            failureThreshold: 3
+            timeoutSeconds: 3
           resources:
             requests:
               cpu: 50m
@@ -35,3 +57,8 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

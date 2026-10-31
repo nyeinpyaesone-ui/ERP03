@@ -5,7 +5,10 @@ resources:
   - configmap.yaml
   - erp03-secrets.yaml
   - erp-data-pvc.yaml
+  - redis.yaml
+  - postgres.yaml
   - backend-deployment.yaml
   - backend-service.yaml
   - frontend-deployment.yaml
   - frontend-service.yaml
+  - ingress-rbac-netpol.yaml

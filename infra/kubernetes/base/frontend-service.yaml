@@ -8,4 +8,5 @@ spec:
     app: erp03-frontend
   ports:
     - port: 80
-      targetPort: 80
+      targetPort: 8080
+      name: http

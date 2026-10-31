@@ -3,9 +3,12 @@ kind: Kustomization
 resources:
   - ../../base
 images:
-  - name: erp03-backend
+  - name: docker.io/powerrangeranikg/erp03-backend
     newName: docker.io/powerrangeranikg/erp03-backend
-    newTag: "latest"
-  - name: erp03-frontend
+    newTag: "1.1.0-rc"
+  - name: docker.io/powerrangeranikg/erp03-frontend
     newName: docker.io/powerrangeranikg/erp03-frontend
-    newTag: "latest"
+    newTag: "1.1.0-rc"
+namespace: erp03-staging
+commonLabels:
+  environment: staging

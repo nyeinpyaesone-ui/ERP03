@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     # --- Core ---
     secret_key: SecretStr = SecretStr("development-only-change-me")
     app_name: str = "ERP03 API"
-    version: str = "1.0.0"
+    version: str = "1.1.0"
     environment: str = "development"
     log_level: str = "INFO"
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     # --- API metadata ---
     api_v1_prefix: str = Field(default="/api/v1")
     api_title: str = Field(default="ERP03 API")
-    api_version: str = Field(default="1.0.0")
+    api_version: str = Field(default="1.1.0")
     api_docs_url: str = Field(default="/docs")
     api_redoc_url: str = Field(default="/redoc")
 

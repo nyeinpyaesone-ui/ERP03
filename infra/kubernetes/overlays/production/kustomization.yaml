@@ -3,9 +3,29 @@ kind: Kustomization
 resources:
   - ../../base
 images:
-  - name: erp03-backend
+  - name: docker.io/powerrangeranikg/erp03-backend
     newName: docker.io/powerrangeranikg/erp03-backend
-    newTag: "latest"
-  - name: erp03-frontend
+    newTag: "1.1.0"
+    digest: sha256:REPLACE_WITH_REAL_BACKEND_DIGEST
+  - name: docker.io/powerrangeranikg/erp03-frontend
     newName: docker.io/powerrangeranikg/erp03-frontend
-    newTag: "latest"
+    newTag: "1.1.0"
+    digest: sha256:REPLACE_WITH_REAL_FRONTEND_DIGEST
+namespace: erp03
+commonLabels:
+  environment: production
+patches:
+  - target:
+      kind: Deployment
+      name: erp03-backend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: Deployment
+      name: erp03-frontend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
