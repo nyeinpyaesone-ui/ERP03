@@ -1,12 +1,225 @@
+@import "./design/tokens.css";
+@import "./design/reset.css";
+@import "./components/ui/base.css";
+
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f7fb; color: #172033; }
-.shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-.card { width: min(720px, 100%); padding: clamp(28px, 6vw, 56px); border: 1px solid #e2e7f0; border-radius: 24px; background: #fff; box-shadow: 0 18px 60px rgba(23,32,51,.08); }
-.eyebrow { margin: 0 0 12px; font-size: 12px; font-weight: 800; letter-spacing: .14em; color: #667085; }
-h1 { margin: 0; font-size: clamp(32px, 6vw, 56px); line-height: 1.04; letter-spacing: -.04em; }
-.subtitle { margin: 18px 0 28px; color: #667085; font-size: 17px; }
-.status { display: inline-flex; align-items: center; gap: 9px; padding: 9px 13px; border-radius: 999px; background: #f1f3f7; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
-.status span { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-.status.online { color: #16794c; background: #eaf8f0; }
-.status.offline { color: #b42318; background: #fef0ef; }
-.status.checking { color: #667085; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  font-family: var(--erp-font-sans);
+  font-size: var(--erp-text-base);
+  font-weight: var(--erp-font-normal);
+  line-height: var(--erp-line-normal);
+  color: var(--erp-text);
+  background: var(--erp-bg);
+}
+
+/* ── Layout ── */
+.products-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--erp-space-6) var(--erp-space-8);
+  border-bottom: var(--erp-border-width) solid var(--erp-border);
+  background: var(--erp-surface);
+}
+
+.page-header__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--erp-space-3);
+}
+
+.brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--erp-radius-md);
+  background: linear-gradient(135deg, var(--erp-brand), var(--erp-brand-hover));
+  color: var(--erp-text-inverse);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--erp-font-bold);
+  font-size: var(--erp-text-xl);
+  box-shadow: var(--erp-shadow-sm);
+}
+
+.page-header__brand div {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-name {
+  font-size: var(--erp-text-lg);
+  font-weight: var(--erp-font-bold);
+  color: var(--erp-text);
+  letter-spacing: -0.02em;
+}
+
+.brand-sub {
+  font-size: var(--erp-text-xs);
+  color: var(--erp-text-muted);
+}
+
+.page-header__actions {
+  display: flex;
+  gap: var(--erp-space-3);
+}
+
+.header-signout {
+  appearance: none;
+  border: var(--erp-border-width) solid var(--erp-border);
+  border-radius: var(--erp-radius-md);
+  background: var(--erp-surface);
+  color: var(--erp-text-muted);
+  font-size: var(--erp-text-sm);
+  font-weight: var(--erp-font-medium);
+  padding: var(--erp-space-2) var(--erp-space-4);
+  cursor: pointer;
+  transition: all var(--erp-transition-fast);
+}
+.header-signout:hover {
+  border-color: var(--erp-brand);
+  color: var(--erp-brand);
+}
+
+.page-main {
+  flex: 1;
+  padding: var(--erp-space-6) var(--erp-space-8);
+  overflow-x: auto;
+}
+
+/* ── List page chrome ── */
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--erp-space-6);
+}
+
+.list-title {
+  font-size: var(--erp-text-2xl);
+  font-weight: var(--erp-font-bold);
+  letter-spacing: -0.02em;
+}
+
+.list-subtitle {
+  font-size: var(--erp-text-sm);
+  color: var(--erp-text-muted);
+  margin-top: var(--erp-space-1);
+}
+
+.list-actions {
+  display: flex;
+  gap: var(--erp-space-3);
+}
+
+.list-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--erp-space-4);
+  margin-bottom: var(--erp-space-5);
+}
+
+.table-section {
+  margin-bottom: var(--erp-space-6);
+}
+
+/* ── Table refinements ── */
+.td.numeric, .th.numeric {
+  text-align: right;
+}
+
+.td.sku {
+  font-family: var(--erp-font-mono);
+  font-size: var(--erp-text-sm);
+  font-weight: var(--erp-font-medium);
+}
+
+.skeleton-row td {
+  padding: var(--erp-space-4);
+}
+
+.empty-row td {
+  text-align: center;
+  padding: var(--erp-space-10);
+  color: var(--erp-text-muted);
+}
+
+/* ── Forms ── */
+.create-form {
+  max-width: 900px;
+}
+
+.price-input {
+  display: flex;
+  align-items: center;
+  gap: var(--erp-space-2);
+}
+
+.price-prefix {
+  padding: 0 var(--erp-space-3);
+  color: var(--erp-text-muted);
+  font-size: var(--erp-text-sm);
+  font-weight: var(--erp-font-medium);
+}
+
+.input-icon {
+  padding: 0 var(--erp-space-3);
+  color: var(--erp-text-muted);
+}
+
+/* ── Alerts ── */
+.alert {
+  padding: var(--erp-space-4);
+  border-radius: var(--erp-radius-md);
+  font-size: var(--erp-text-sm);
+  font-weight: var(--erp-font-medium);
+  margin-bottom: var(--erp-space-4);
+}
+.alert--danger {
+  background: var(--erp-danger-subtle);
+  color: var(--erp-danger);
+  border: var(--erp-border-width) solid var(--erp-danger);
+}
+
+/* ── Toast (page-scoped) ── */
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--erp-space-3);
+  padding: var(--erp-space-4) var(--erp-space-5);
+  border-radius: var(--erp-radius-lg);
+  background-color: var(--erp-surface);
+  border: var(--erp-border-width) solid var(--erp-border);
+  box-shadow: var(--erp-shadow-lg);
+  color: var(--erp-text);
+  font-size: var(--erp-text-sm);
+  font-weight: var(--erp-font-medium);
+  animation: toast-in var(--erp-transition-normal);
+}
+.toast--success { border-left: 4px solid var(--erp-success); }
+.toast--danger { border-left: 4px solid var(--erp-danger); }
+.toast__icon { width: 16px; height: 16px; flex-shrink: 0; }
+.toast__dismiss {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--erp-text-muted);
+  cursor: pointer;
+  padding: var(--erp-space-1);
+  border-radius: var(--erp-radius-sm);
+}
+.toast__dismiss:hover { background-color: var(--erp-surface-muted); color: var(--erp-text); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translatey(8px); }
+  to { opacity: 1; transform: translatey(0); }
+}
