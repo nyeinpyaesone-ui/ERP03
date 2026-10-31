@@ -3,11 +3,11 @@ redis==8.1.0
 uvicorn[standard]==0.35.0
 pydantic-settings==2.10.1
 sqlalchemy[asyncio]==2.0.43
-asyncpg==0.30.0
+asyncpg==0.32.0
 alembic==1.16.5
 argon2-cffi==25.1.0
-PyJWT==2.10.1
-python-multipart==0.0.20
+PyJWT==2.15.1
+python-multipart==0.0.22
 email-validator==2.3.0
 prometheus-client==0.26.0
 aiosqlite==0.20.0
