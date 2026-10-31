@@ -1,0 +1,24 @@
+---
+description: Operations and DevOps rules
+alwaysApply: false
+globs:
+  - "docker-compose*.yml"
+  - "Makefile"
+  - "ERP-BACKEND/Dockerfile"
+  - "frontend/Dockerfile"
+  - ".github/workflows/**/*.yml"
+  - "scripts/*.sh"
+  - "docs/DEPLOY_RUNBOOK.md"
+  - "docs/ROLLBACK_RUNBOOK.md"
+---
+
+# Operations Rules
+
+- All workflows run on `ubuntu-latest`; concurrency groups use `github.ref` only (no null PR numbers).
+- `migrate` service is a one-time deploy job with `required: true` on backend depends_on.
+- Frontend reproducible builds via `npm ci` + `package-lock.json`.
+- Dockerfile installs deps to shared `/opt/appdeps` prefix with `--chown=app:app`.
+- Non-root `app` user in backend and frontend runtime images.
+- `/metrics` protected by bearer token auth.
+- Release sequence: Plan → Validate → Build → Test → Security → Artifact → Approval → Deploy → Smoke → Observe → Release/rollback.
+- Do not force-push by default; never rewrite shared history without authorization.

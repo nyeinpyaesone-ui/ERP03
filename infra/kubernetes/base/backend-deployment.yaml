@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: erp03-backend
+  namespace: erp03
+  labels:
+    app: erp03-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: erp03-backend
+  template:
+    metadata:
+      labels:
+        app: erp03-backend
+    spec:
+      serviceAccountName: erp03-backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: backend
+          image: docker.io/powerrangeranikg/erp03-backend@sha256:REPLACE_WITH_REAL_DIGEST
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: erp03-runtime
+            - secretRef:
+                name: erp03-secrets
+          env:
+            - name: DATABASE_URL
+              value: "postgresql+asyncpg://erp03:$(POSTGRES_PASSWORD)@erp03-postgres:5432/erp03"
+            - name: REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@erp03-redis:6379/0"
+          volumeMounts:
+            - name: erp-data
+              mountPath: /app/.local
+            - name: tmp
+              mountPath: /tmp
+          startupProbe:
+            httpGet:
+              path: /api/v1/healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/readyz
+              port: 8000
+            periodSeconds: 10
+            failureThreshold: 6
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /api/v1/healthz
+              port: 8000
+            periodSeconds: 20
+            failureThreshold: 3
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: erp-data
+          persistentVolumeClaim:
+            claimName: erp-data-pvc
+        - name: tmp
+          emptyDir: {}

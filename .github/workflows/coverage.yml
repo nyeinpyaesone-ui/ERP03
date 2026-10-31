@@ -1,0 +1,75 @@
+name: Coverage
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: erp03
+          POSTGRES_USER: erp03
+          POSTGRES_PASSWORD: erp03
+        options: >-
+          --health-cmd "pg_isready -U erp03 -d erp03"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ERP-BACKEND/requirements.txt
+          pip install -r ERP-BACKEND/dev-requirements.txt
+
+      - name: Run tests with coverage
+        env:
+          DATABASE_URL: postgresql+asyncpg://erp03:erp03@localhost:5432/erp03
+          REDIS_URL: redis://localhost:6379/0
+          RATE_LIMIT_ENABLED: "false"
+          SECRET_KEY: "ci-secret-key-for-testing-only-32chars!!"
+          ENVIRONMENT: development
+        run: |
+          cd ERP-BACKEND
+          python -m pytest -q --cov=app --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ERP-BACKEND/coverage.xml
+          flags: backend
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}

@@ -1,30 +1,33 @@
 # Changelog
 
-## [1.0.0] — 2026-06-19
+All notable changes to ERP03 are documented here.
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-### Initial Release
-- 12 production modules extracted and organized
-- 295+ source files
-- Multi-version backend (v1.8, v2.1, v2.2)
-- React Native mobile application
-- BI Dashboard, POS, MRP, E-commerce frontend modules
-- Kubernetes deployment manifests
-- CI/CD pipeline (GitHub Actions)
-- Docker Compose setup
-- Full documentation
+## [Unreleased]
 
-### Modules
-| Module | Version | Status |
-|--------|---------|--------|
-| DevOps & CI/CD | — | ✅ |
-| BI Dashboard | v3.2 | ✅ |
-| Core System | v2.2 | ✅ |
-| Core System | v2.1 | ✅ |
-| Core System | v1.8 | ✅ |
-| Retail POS | v2.9 | ✅ |
-| Manufacturing/MRP | v2.7 | ✅ |
-| Mobile App | v2.5 | ✅ |
-| Knowledge System | — | ✅ |
-| Kubernetes Deployment | v3.1 | ✅ |
-| Integration Guide | — | ✅ |
-| E-commerce Storefront | v3.0 | ✅ |
+### Added
+- Redis-backed rate limiter (`RedisRateLimitMiddleware`) with ZSET sliding window
+- Devcontainer with Docker Compose (app + PostgreSQL + Redis)
+- CI workflow for building/pushing dev images to Docker Hub
+- `doctor.sh` health check script with venv path and docker daemon checks
+- AGENTS.md comprehensive developer instructions
+- SECURITY.md, .editorconfig, issue templates, pre-commit config
+
+### Fixed
+- `doctor.sh` venv path resolution (root `.venv` vs `ERP-BACKEND/.venv`)
+- `doctor.sh` docker compose availability check (daemon may not be running)
+- Rate limiter trusted-proxy XFF resolution and 429 threshold tests
+
+### Changed
+- CI pipeline: PostgreSQL + Redis service containers with health checks
+- Frontend build: `VITE_API_BASE_URL=/api` build arg for nginx proxy
+
+## [1.0.0] - 2026-10-30
+
+### Added
+- Initial modular monolith: FastAPI backend + React/Vite frontend
+- POS sale idempotency with SHA-256 fingerprint
+- Cross-module operation orchestration (6-state machine)
+- TypeSafe System One integration (optional)
+- Terraform infrastructure modules (AWS/GCP/Azure)
+- Comprehensive test suite (57 tests, 1 PG-only skip)

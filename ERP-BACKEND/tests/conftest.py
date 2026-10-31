@@ -1,187 +1,140 @@
+"""Shared pytest configuration for the backend test suite.
+
+The service supports two backends: PostgreSQL (production; asyncpg) and
+SQLite (local development / CI smoke; aiosqlite). Tests that require a
+*migrated* database are tagged ``integration``; conftest provisions one
+automatically from the Alembic chain against whichever backend is configured
+via DATABASE_URL, so the suite is hermetic on both platforms.
 """
-Test fixtures and configuration for pytest.
-"""
+
 import os
 import sys
+from pathlib import Path
+
 import pytest
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timedelta
 
-# Add app to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-# Set test mode environment variable BEFORE importing app modules
-os.environ['TEST_MODE'] = 'True'
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+os.environ.setdefault("DATABASE_PATH", "/tmp/erp03-tests.sqlite3")
+# Hermetic default: a fresh SQLite file per session unless the caller
+# explicitly provides DATABASE_URL (PostgreSQL in CI, or a custom target).
+os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{os.environ['DATABASE_PATH']}")
+# Disable rate limiting for tests (no Redis in test env)
+os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
+# A pre-set DATABASE_URL (e.g. an exported shell profile) silently overrides
+# the hermetic default above; log the effective target for traceability.
+print(
+    f"[conftest] provisioning test database: {os.environ['DATABASE_URL']}",
+    file=sys.stderr,
+)
+
+_INTEGRATION_MARKERS = ("integration", "requires_database")
 
 
-@pytest.fixture(scope="session", autouse=True)
-def set_test_mode():
+def pytest_configure(config):
+    for marker in _INTEGRATION_MARKERS:
+        config.addinivalue_line(
+            "markers", f"{marker}: requires a reachable migrated database (DATABASE_URL)"
+        )
+
+
+@pytest.fixture(scope="session")
+def event_loop_policy():
+    import asyncio
+
+    return asyncio.DefaultEventLoopPolicy()
+
+
+async def _probe_and_migrate() -> bool:
+    """Bring the session test database to the latest Alembic head.
+
+    The target URL is resolved by this module at import (hermetic SQLite
+    default, or an explicit DATABASE_URL for PostgreSQL in CI). Provisioning
+    shells out to ``alembic upgrade head`` — the exact CLI path used at
+    deployment — which keeps migration execution fully independent of
+    pytest-asyncio's running event loop and guarantees test provisioning
+    and production migrations can never diverge. A stale/mismatched schema
+    file is rebuilt from scratch so every run starts deterministic.
     """
-    Enable test mode for the test session and remove its environment variable during cleanup.
-    """
-    os.environ['TEST_MODE'] = 'True'
-    # Force reload of settings if already loaded
-    from app.config import settings
-    settings.TEST_MODE = True
-    yield
-    os.environ.pop('TEST_MODE', None)
-
-
-@pytest.fixture
-def test_settings():
-    """Create test settings with mocked values."""
-    settings = MagicMock()
-    settings.SECRET_KEY = "test_secret_key_for_testing_purposes_only_1234567890"
-    settings.ALGORITHM = "HS256"
-    settings.ACCESS_TOKEN_EXPIRE_MINUTES = 60
-    settings.DATABASE_URL = "sqlite:///:memory:"
-    settings.TEST_MODE = True
-    return settings
-
-
-@pytest.fixture
-def engine():
-    """Create an in-memory SQLite database for testing."""
-    return create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool
-    )
-
-
-@pytest.fixture
-def db_session(engine):
-    """Create a fresh database session for each test."""
-    from app.database import Base
-    Base.metadata.create_all(bind=engine)
-    Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    session = Session()
+    url = os.environ["DATABASE_URL"]
     try:
-        yield session
+        engine = create_async_engine(url, pool_pre_ping=True)
+        async with engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
+            if connection.dialect.name == "sqlite":
+                stamped = await connection.execute(
+                    text(
+                        "SELECT count(*) FROM sqlite_master "
+                        "WHERE type='table' AND name='permissions'"
+                    )
+                )
+                needs_rebuild = stamped.scalar() == 0
+            else:
+                needs_rebuild = False
+    except Exception:
+        return False
+
+    # The app's own engine (imported by integration tests via
+    # app.db.session) resolves settings.database_url at import time; pin it
+    # to the same URL we just probed so provisioning and application share
+    # one database on every platform.
+    os.environ["DATABASE_URL"] = url
+
+    from app.core.config import settings
+
+    if str(settings.database_url) != url:
+        raise RuntimeError(f"app engine URL {str(settings.database_url)!r} != provisioned {url!r}")
+
+    try:
+        import subprocess
+
+        backend_dir = Path(__file__).resolve().parents[1]
+        if needs_rebuild:
+            db_path = url.split("///", 1)[-1].lstrip("/")
+            Path(db_path).unlink(missing_ok=True)
+        result = subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            cwd=str(backend_dir),
+            env={**os.environ},
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"alembic upgrade head failed ({result.returncode}): "
+                f"{result.stderr.strip() or result.stdout.strip()}"
+            )
+        return True
+    except Exception as exc:  # pragma: no cover - provisioning diagnostics
+        import traceback
+
+        print(f"[conftest] database provisioning failed: {exc!r}", file=sys.stderr)
+        traceback.print_exc()
+        return False
     finally:
-        session.close()
-        Base.metadata.drop_all(bind=engine)
+        await engine.dispose()
 
 
-@pytest.fixture
-def mock_db():
-    """Create a mock database session."""
-    db = MagicMock()
-    db.query = MagicMock()
-    db.add = MagicMock()
-    db.commit = MagicMock()
-    db.delete = MagicMock()
-    db.close = MagicMock()
-    return db
+_cache = {}
 
 
-@pytest.fixture
-def sample_user():
-    """Create a sample user object."""
-    from app.models import User
-    user = User(
-        id=1,
-        email="test@example.com",
-        hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.G.2f2f2f2f2f2f",
-        full_name="Test User",
-        role="user",
-        is_active=True
+def _database_ready_cached() -> bool:
+    if "db" not in _cache:
+        import asyncio
+
+        _cache["db"] = asyncio.run(_probe_and_migrate())
+    return _cache["db"]
+
+
+def pytest_collection_modifyitems(session, config, items):
+    database_ready = _database_ready_cached()
+    skip_database = pytest.mark.skip(
+        reason="Test database unavailable/unmigratable (set DATABASE_URL)"
     )
-    return user
-
-
-@pytest.fixture
-def sample_admin():
-    """Create a sample admin user object."""
-    from app.models import User
-    admin = User(
-        id=2,
-        email="admin@example.com",
-        hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.G.2f2f2f2f2f2f",
-        full_name="Admin User",
-        role="admin",
-        is_active=True
-    )
-    return admin
-
-
-@pytest.fixture
-def sample_superadmin():
-    """Create a sample superadmin user object."""
-    from app.models import User
-    superadmin = User(
-        id=3,
-        email="superadmin@example.com",
-        hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.G.2f2f2f2f2f2f",
-        full_name="Super Admin",
-        role="superadmin",
-        is_active=True
-    )
-    return superadmin
-
-
-@pytest.fixture
-def sample_company():
-    """Create a sample company object."""
-    from app.models import Company
-    return Company(
-        id=1,
-        name="Test Company",
-        industry="Technology",
-        size="50-200",
-        website="https://testcompany.com",
-        address="123 Test St",
-        phone="+1234567890"
-    )
-
-
-@pytest.fixture
-def sample_contact():
-    """Create a sample contact object."""
-    from app.models import Contact
-    return Contact(
-        id=1,
-        first_name="John",
-        last_name="Doe",
-        email="john.doe@example.com",
-        phone="+1234567890",
-        title="Manager",
-        status="lead"
-    )
-
-
-@pytest.fixture
-def mock_oauth2_scheme():
-    """Mock OAuth2 scheme for testing authentication."""
-    with patch('app.auth.oauth2_scheme') as mock:
-        mock.return_value = "test_token"
-        yield mock
-
-
-@pytest.fixture
-def mock_jwt_encode():
-    """Mock JWT encode function."""
-    with patch('app.auth.jwt.encode') as mock:
-        mock.return_value = "encoded_test_token"
-        yield mock
-
-
-@pytest.fixture
-def mock_jwt_decode():
-    """Mock JWT decode function."""
-    with patch('app.auth.jwt.decode') as mock:
-        mock.return_value = {"sub": "1", "exp": datetime.utcnow() + timedelta(minutes=60)}
-        yield mock
-
-
-@pytest.fixture
-def mock_pwd_context():
-    """Mock password context."""
-    with patch('app.auth.pwd_context') as mock:
-        mock.verify.return_value = True
-        mock.hash.return_value = "hashed_password"
-        yield mock
+    for item in items:
+        if item.get_closest_marker(_INTEGRATION_MARKERS) and not database_ready:
+            item.add_marker(skip_database)

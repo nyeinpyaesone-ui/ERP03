@@ -1,0 +1,98 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: erp03
+      POSTGRES_PASSWORD: erp03
+      POSTGRES_DB: erp03
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp03 -d erp03"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass erp03
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "erp03", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build:
+      context: ./ERP-BACKEND
+      dockerfile: Dockerfile
+    environment:
+      ENVIRONMENT: development
+      SECRET_KEY: dev-secret-key-change-me-32chars
+      DATABASE_URL: postgresql+asyncpg://erp03:erp03@postgres:5432/erp03
+      DATABASE_PATH: /app/.local/erp03.sqlite3
+    volumes:
+      - erp_local:/app/.local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >-
+      sh -c "alembic upgrade head"
+    restart: "no"
+
+  backend:
+    build:
+      context: ./ERP-BACKEND
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://erp03:erp03@postgres:5432/erp03
+      - CORS_ORIGINS=http://localhost:5173
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+      - DATABASE_PATH=/app/.local/erp03.sqlite3
+      - REDIS_URL=redis://:erp03@redis:6379/0
+      - REDIS_PASSWORD=erp03
+    volumes:
+      - ./ERP-BACKEND:/app
+      - /app/__pycache__
+      - /app/.venv
+      - erp_local:/app/.local
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  frontend:
+    # Dev server (Vite HMR). The production nginx image is used only in
+    # docker-compose.yml's `frontend` service — do not reuse it here.
+    image: node:20-alpine
+    working_dir: /src
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/src
+      - /src/node_modules
+    environment:
+      - VITE_API_BASE_URL=/api
+    command: >
+      sh -c "npm ci --no-audit --no-fund && npm run dev -- --host 0.0.0.0 --port 5173"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  erp_local:
+  redis_data:
