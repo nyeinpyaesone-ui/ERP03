@@ -82,8 +82,14 @@ fi
 # Manifest validation
 echo "── Manifests ──"
 MANIFEST_OK=true
+PYTHON_CMD="python3"
+if [ -x ".venv/bin/python" ]; then
+    PYTHON_CMD=".venv/bin/python"
+elif [ -x "/home/admin/projects/nyeinpyaesone-ui/ERP03/.venv/bin/python" ]; then
+    PYTHON_CMD="/home/admin/projects/nyeinpyaesone-ui/ERP03/.venv/bin/python"
+fi
 for f in infra/kubernetes/base/*.yaml; do
-    python3 -c "import yaml; yaml.safe_load(open('$f'))" 2>/dev/null || { MANIFEST_OK=false; break; }
+    $PYTHON_CMD -c "import yaml; list(yaml.safe_load_all(open('$f')))" 2>/dev/null || { MANIFEST_OK=false; break; }
 done
 $MANIFEST_OK && check "Kubernetes manifests valid YAML" "OK" || check "Kubernetes manifests valid YAML" "FAIL"
 
