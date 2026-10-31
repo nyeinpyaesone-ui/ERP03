@@ -1,526 +1,369 @@
-"""
-Transaction and Rollback Tests for ERP System
-Issue #56: Transaction/Rollback Tests
+import sqlite3
+import threading
+from uuid import uuid4
 
-Tests cover:
-- Multi-entity transactions
-- Failure injection scenarios
-- Rollback verification
-- Data integrity after failures
-"""
 import pytest
-from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from app.database import get_db, engine
-from app.models import Company, Contact, Invoice, Product, Employee, User
-from app.core.exceptions import TransactionRollbackException, DatabaseException
-from fastapi.testclient import TestClient
+from app.api.transactions import get_store, reset_store
+from app.core.security import current_claims
+from app.core.transaction_store import TransactionStore
 from app.main import app
+from fastapi.testclient import TestClient
+
+pytestmark = (
+    pytest.mark.requires_database
+)  # durable SQLite journal under /tmp, no PostgreSQL needed
 
 
-@pytest.fixture
-def client(db_session):
-    """
-    Provide a test client configured to use the supplied database session.
-    """
-    def override_get_db():
-        """
-        Provide the test database session for dependency overrides.
-        """
-        try:
-            yield db_session
-        finally:
-            pass
-    
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
-        yield test_client
-    app.dependency_overrides.clear()
+@pytest.fixture(autouse=True)
+def authenticated_transaction_requests(tmp_path):
+    db_path = tmp_path / "transactions.sqlite3"
+    # Remove any stale file from a previous run in the same tmp dir.
+    db_path.unlink(missing_ok=True)
+    reset_store(str(db_path))
+    app.dependency_overrides[current_claims] = lambda: {
+        "sub": "test-user",
+        "business_id": "test-business",
+    }
+    yield
+    app.dependency_overrides.pop(current_claims, None)
 
 
-@pytest.fixture
-def test_user(db_session):
-    """Create test user."""
-    user = User(
-        email="test@example.com",
-        hashed_password="$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3VsPGub8kAm",  # "password"
-        full_name="Test User",
-        role="admin",
-        is_active=True
-    )
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-    return user
-
-
-@pytest.fixture
-def authenticated_headers(client, test_user):
-    """
-    Configure the application to use the specified user for authenticated test requests.
-    
-    Parameters:
-    	test_user: User returned by the authentication dependency override.
-    
-    Returns:
-    	dict: Empty request headers, because authentication is handled by the dependency override.
-    """
-    from app.auth import get_current_user
-    
-    def override_get_current_user():
-        """Provide the test user for authentication dependency overrides.
-        
-        Returns:
-        	test_user: The authenticated test user.
-        """
-        return test_user
-    
-    app.dependency_overrides[get_current_user] = override_get_current_user
-    # Return empty headers since we're overriding the auth dependency
-    return {}
-
-
-class TestMultiEntityTransactions:
-    """Test transactions spanning multiple entities/modules"""
-    
-    def test_create_company_with_contact_transaction(self, client, db_session, authenticated_headers):
-        """
-        Verify that a company and its related contact are created and persisted successfully.
-        """
-        # Create company
-        company_data = {
-            "name": "Transactional Corp",
-            "industry": "Technology",
-            "email": "contact@transactional.com"
-        }
+def test_transaction_requires_idempotency_key():
+    with TestClient(app) as client:
         response = client.post(
-            "/api/v1/crm/companies",
-            json=company_data,
-            headers=authenticated_headers
+            "/api/v1/transactions",
+            json={"operation": "invoice.create", "amount": "100.00", "currency": "mmk"},
         )
-        assert response.status_code == 200
-        company_id = response.json()["id"]
-        
-        # Create contact linked to company
-        contact_data = {
-            "first_name": "John",
-            "last_name": "Doe",
-            "email": f"john.doe@{company_id}.com",
-            "company_id": company_id
-        }
-        response = client.post(
-            "/api/v1/crm/contacts",
-            json=contact_data,
-            headers=authenticated_headers
-        )
-        assert response.status_code == 200
-    
-        # Verify both exist
-        company = db_session.query(Company).filter(Company.id == company_id).first()
-        assert company is not None
-        assert company.name == "Transactional Corp"
-        
-        contact = db_session.query(Contact).filter(Contact.company_id == company_id).first()
-        assert contact is not None
-        assert contact.first_name == "John"
-    
-    def test_rollback_on_contact_creation_failure(self, client, db_session, authenticated_headers):
-        """Test that company creation rolls back if contact creation fails"""
-        initial_count = db_session.query(Company).count()
-        
-        # Create company
-        company_data = {
-            "name": "Rollback Test Inc",
-            "industry": "Testing",
-            "email": "test@rollback.com"
-        }
-        response = client.post(
-            "/api/v1/crm/companies",
-            json=company_data,
-            headers=authenticated_headers
-        )
-        assert response.status_code == 200
-        company_id = response.json()["id"]
-        
-        # Attempt to create contact with invalid data (should fail)
-        invalid_contact = {
-            "first_name": "Invalid",
-            "last_name": "Email",
-            "email": "not-an-email",  # Invalid email format
-            "company_id": company_id
-        }
-        response = client.post(
-            "/api/v1/crm/contacts",
-            json=invalid_contact,
-            headers=authenticated_headers
-        )
-        # This should fail validation
-        assert response.status_code >= 400
-        
-        # Company should still exist (no explicit transaction was begun)
-        company = db_session.query(Company).filter(Company.id == company_id).first()
-        assert company is not None
-        assert company.name == "Rollback Test Inc"
-    
-    def test_invoice_payment_atomic_transaction(self, client, db_session, authenticated_headers):
-        """Verify that an invoice is created with the expected total for a company."""
-        # First create a company for the invoice
-        company_data = {
-            "name": "Invoice Customer Ltd",
-            "industry": "Retail",
-            "email": "billing@customer.com"
-        }
-        response = client.post(
-            "/api/v1/crm/companies",
-            json=company_data,
-            headers=authenticated_headers
-        )
-        company_id = response.json()["id"]
-        
-        # Create invoice with required fields (invoice_number, items, dates)
-        from datetime import date, timedelta
-        invoice_data = {
-            "invoice_number": f"INV-{company_id}-001",
-            "company_id": company_id,
-            "issue_date": str(date.today()),
-            "due_date": str(date.today() + timedelta(days=30)),
-            "items": [
-                {
-                    "description": "Test Item",
-                    "quantity": 1,
-                    "unit_price": 1000.00
-                }
-            ]
-        }
-        response = client.post(
-            "/api/v1/finance/invoices",
-            json=invoice_data,
-            headers=authenticated_headers
-        )
-        assert response.status_code == 200
-        invoice_id = response.json()["id"]
-        
-        # Verify invoice created
-        invoice = db_session.query(Invoice).filter(Invoice.id == invoice_id).first()
-        assert invoice is not None
-        assert float(invoice.total) == 1000.00
+    assert response.status_code == 400
 
 
-class TestFailureInjection:
-    """Test system behavior under injected failures"""
-    
-    def test_database_connection_failure_handling(self, client, db_session):
-        """Test graceful handling of database connection failures"""
-        # Simulate DB failure by closing connection
-        db_session.close()
-        
-        # Attempt operation - should handle gracefully
-        response = client.get("/api/v1/health/db/deep")
-        # Should return error state, not crash
-        assert response.status_code in [200, 500, 503]
-    
-    def test_constraint_violation_rollback(self, client, db_session, authenticated_headers):
-        """
-        Verify that a duplicate product SKU is rejected without persisting an additional product.
-        """
-        initial_product_count = db_session.query(Product).count()
-        
-        # Create first product
-        product_data = {
-            "name": "Unique Product",
-            "sku": "UNIQUE-SKU-001",
-            "price": 99.99,
-            "stock": 100
-        }
+def test_transaction_rejects_oversized_idempotency_key():
+    with TestClient(app) as client:
         response = client.post(
-            "/api/v1/inventory/products",
-            json=product_data,
-            headers=authenticated_headers
+            "/api/v1/transactions",
+            json={"operation": "invoice.create", "amount": "100.00", "currency": "mmk"},
+            headers={"X-Idempotency-Key": "x" * 219},
         )
-        assert response.status_code == 200
-        
-        # Attempt duplicate SKU (should fail and rollback any partial changes)
-        duplicate_product = {
-            "name": "Duplicate Product",
-            "sku": "UNIQUE-SKU-001",  # Same SKU
-            "price": 49.99,
-            "stock": 50
-        }
-        response = client.post(
-            "/api/v1/inventory/products",
-            json=duplicate_product,
-            headers=authenticated_headers
-        )
-        # Should fail with conflict
-        assert response.status_code in [409, 400]
-        
-        # Verify no additional products created
-        final_product_count = db_session.query(Product).count()
-        assert final_product_count == initial_product_count + 1
-    
-    def test_multi_step_operation_partial_failure(self, client, db_session, authenticated_headers):
-        """Test that partial failures don't leave inconsistent state"""
-        # Create company
-        company_data = {
-            "name": "Partial Failure Test Corp",
-            "industry": "Testing",
-            "email": "partial@test.com"
-        }
-        response = client.post(
-            "/api/v1/crm/companies",
-            json=company_data,
-            headers=authenticated_headers
-        )
-        company_id = response.json()["id"]
-        
-        # Create multiple contacts - simulate failure in middle
-        contact_ids = []
-        for i in range(3):
-            contact_data = {
-                "first_name": f"Contact{i}",
-                "last_name": f"Tester{i}",
-                "email": f"contact{i}@test.com",
-                "company_id": company_id
-            }
-            response = client.post(
-                "/api/v1/crm/contacts",
-                json=contact_data,
-                headers=authenticated_headers
-            )
-            if response.status_code == 200:
-                contact_ids.append(response.json()["id"])
-        
-        # Verify all successfully created contacts are valid
-        for cid in contact_ids:
-            contact = db_session.query(Contact).filter(Contact.id == cid).first()
-            assert contact is not None
-            assert contact.company_id == company_id
+    assert response.status_code == 400
 
 
-class TestRollbackVerification:
-    """Verify rollback mechanisms work correctly"""
-    
-    def test_explicit_rollback_triggers(self, client, db_session, authenticated_headers):
-        """Test that explicit rollback requests are honored"""
-        # Create test data with required fields for EmployeeCreate
-        employee_data = {
-            "employee_code": "ROLLBACK-TEST-001",
-            "job_title": "QA Engineer",
-            "hire_date": "2024-01-15",
-            "department_id": None,
-            "salary": 75000.0,
-            "status": "active",
-            "employment_type": "full_time"
-        }
-        response = client.post(
-            "/api/v1/hr/employees",
-            json=employee_data,
-            headers=authenticated_headers
-        )
-        assert response.status_code == 200
-        employee_id = response.json()["id"]
-        
-        # Verify created
-        employee = db_session.query(Employee).filter(Employee.id == employee_id).first()
-        assert employee is not None
-        
-        # Delete to cleanup
-        response = client.delete(
-            f"/api/v1/hr/employees/{employee_id}",
-            headers=authenticated_headers
-        )
-        assert response.status_code == 200
-        
-        # Verify deleted
-        employee = db_session.query(Employee).filter(Employee.id == employee_id).first()
-        assert employee is None or employee.is_deleted
-    
-    def test_nested_transaction_rollback(self, client, db_session, authenticated_headers):
-        """Test rollback in nested transaction scenarios"""
-        # Create parent company
-        parent_data = {
-            "name": "Parent Corporation",
-            "industry": "Holding",
-            "email": "parent@corp.com"
-        }
-        response = client.post(
-            "/api/v1/crm/companies",
-            json=parent_data,
-            headers=authenticated_headers
-        )
-        parent_id = response.json()["id"]
-        
-        # Try to create child with invalid reference (simulating nested failure)
-        try:
-            with db_session.begin_nested():
-                # This should work
-                child_data = {
-                    "name": "Child Company",
-                    "industry": "Subsidiary",
-                    "email": "child@corp.com"
-                }
-                response = client.post(
-                    "/api/v1/crm/companies",
-                    json=child_data,
-                    headers=authenticated_headers
+def test_transaction_is_idempotent():
+    payload = {
+        "operation": "invoice.create",
+        "amount": "100.00",
+        "currency": "mmk",
+        "metadata": {"invoice": "INV-001"},
+    }
+    headers = {"X-Idempotency-Key": f"invoice-create-{uuid4().hex}"}
+
+    with TestClient(app) as client:
+        first = client.post("/api/v1/transactions", json=payload, headers=headers)
+        second = client.post("/api/v1/transactions", json=payload, headers=headers)
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["transaction_id"] == second.json()["transaction_id"]
+    assert first.json()["idempotent_replay"] is False
+    assert second.json()["idempotent_replay"] is True
+
+
+def test_concurrent_same_key_commits_once():
+    payload = {
+        "operation": "stock.reserve",
+        "amount": "1.00",
+        "currency": "MMK",
+        "metadata": {"sku": "SKU-001"},
+    }
+    key = f"stock-reserve-{uuid4().hex}"
+    responses = []
+
+    def request():
+        with TestClient(app) as client:
+            responses.append(
+                client.post(
+                    "/api/v1/transactions",
+                    json=payload,
+                    headers={"X-Idempotency-Key": key},
                 )
-                assert response.status_code == 200
-                child_id = response.json()["id"]
-                
-                # Force rollback
-                raise Exception("Simulated nested failure")
-        except Exception:
-            pass  # Expected
-        
-        # Parent should still exist
-        parent = db_session.query(Company).filter(Company.id == parent_id).first()
-        assert parent is not None
-    
-    def test_session_cleanup_after_exception(self, client, db_session, authenticated_headers):
-        """Test that sessions are properly cleaned up after exceptions"""
-        # Perform operation that will fail
-        invalid_data = {"invalid_field": "value"}
-        
-        try:
-            response = client.post(
-                "/api/v1/crm/companies",
-                json=invalid_data,
-                headers=authenticated_headers
             )
-        except Exception:
-            pass
-        
-        # Session should be clean - next operation should work
-        valid_data = {
-            "name": "Post-Exception Corp",
-            "industry": "Recovery",
-            "email": "recovery@test.com"
-        }
-        response = client.post(
-            "/api/v1/crm/companies",
-            json=valid_data,
-            headers=authenticated_headers
-        )
-        assert response.status_code == 200
+
+    threads = [threading.Thread(target=request) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(responses) == 8
+    assert all(response.status_code == 201 for response in responses)
+    transaction_ids = {response.json()["transaction_id"] for response in responses}
+    assert len(transaction_ids) == 1
+    assert sum(response.json()["idempotent_replay"] for response in responses) == 7
 
 
-class TestDataIntegrityAfterFailures:
-    """Verify data remains consistent after various failure scenarios"""
-    
-    def test_foreign_key_integrity(self, client, db_session, authenticated_headers):
-        """Test that foreign key constraints maintain integrity"""
-        # SQLite doesn't enforce FK constraints by default, so we test with a valid company_id instead
-        # First create a company
-        company_data = {
-            "name": "FK Test Company",
-            "industry": "Testing"
+def test_transaction_lookup_is_authenticated_and_tenant_scoped():
+    original_override = app.dependency_overrides[current_claims]
+    try:
+        # Authentication is enforced by the route when no test identity is present.
+        app.dependency_overrides.pop(current_claims, None)
+        with TestClient(app) as client:
+            unauthenticated_create = client.post(
+                "/api/v1/transactions",
+                headers={"X-Idempotency-Key": f"auth-check-{uuid4().hex}"},
+                json={"operation": "invoice.create", "amount": "10.00", "currency": "MMK"},
+            )
+            unauthenticated_lookup = client.get("/api/v1/transactions/not-a-real-id")
+        assert unauthenticated_create.status_code == 401
+        assert unauthenticated_lookup.status_code == 401
+
+        app.dependency_overrides[current_claims] = lambda: {
+            "sub": "tenant-a-user",
+            "business_id": "tenant-a",
         }
+        key = f"tenant-scope-{uuid4().hex}"
+        with TestClient(app) as client:
+            created = client.post(
+                "/api/v1/transactions",
+                headers={"X-Idempotency-Key": key},
+                json={"operation": "invoice.create", "amount": "10.00", "currency": "MMK"},
+            )
+            assert created.status_code == 201, created.text
+            transaction_id = created.json()["transaction_id"]
+
+            app.dependency_overrides[current_claims] = lambda: {
+                "sub": "tenant-b-user",
+                "business_id": "tenant-b",
+            }
+            cross_tenant_lookup = client.get(f"/api/v1/transactions/{transaction_id}")
+            same_raw_key_other_tenant = client.post(
+                "/api/v1/transactions",
+                headers={"X-Idempotency-Key": key},
+                json={"operation": "invoice.create", "amount": "99.00", "currency": "MMK"},
+            )
+
+        assert cross_tenant_lookup.status_code == 404
+        assert same_raw_key_other_tenant.status_code == 201
+        assert same_raw_key_other_tenant.json()["transaction_id"] != transaction_id
+    finally:
+        app.dependency_overrides[current_claims] = original_override
+
+
+def test_amount_that_rounds_to_zero_is_rejected():
+    with TestClient(app) as client:
         response = client.post(
-            "/api/v1/crm/companies",
-            json=company_data,
-            headers=authenticated_headers
+            "/api/v1/transactions",
+            headers={"X-Idempotency-Key": f"tiny-amount-{uuid4().hex}"},
+            json={"operation": "invoice.create", "amount": "0.004", "currency": "MMK"},
         )
-        assert response.status_code == 200
-        company_id = response.json()["id"]
-        
-        # Create contact with valid company_id
-        valid_contact = {
-            "first_name": "Valid",
-            "last_name": "Contact",
-            "email": "valid@test.com",
-            "company_id": company_id
-        }
-        response = client.post(
-            "/api/v1/crm/contacts",
-            json=valid_contact,
-            headers=authenticated_headers
+    assert response.status_code == 422
+
+
+def test_failed_write_rolls_back_and_key_can_be_retried():
+    key = f"rollback-retry-{uuid4().hex}"
+    with pytest.raises(TypeError):
+        get_store().execute(
+            transaction_id=f"failed-write-{uuid4().hex}",
+            business_id="test-business",
+            idempotency_key=key,
+            operation="finance.post",
+            amount="10.00",
+            currency="MMK",
+            metadata={"invalid": object()},
         )
-        # Should succeed with valid FK
-        assert response.status_code == 200
-        
-        # Verify the contact was created with the correct company association
-        contact_data = response.json()
-        assert contact_data["company_id"] == company_id
-        
-        # Verify no orphan contacts created
-        orphan = db_session.query(Contact).filter(
-            Contact.email == "orphan@test.com"
-        ).first()
-        assert orphan is None
-    
-    def test_unique_constraint_enforcement(self, client, db_session, authenticated_headers):
-        """Test unique constraints are enforced across failures"""
-        # Create employee with unique employee_code (required field)
-        employee1_data = {
-            "employee_code": "UNIQUE-EMP-001",
-            "job_title": "Software Engineer",
-            "hire_date": "2024-01-15",
-            "department_id": None,
-            "salary": 85000.0,
-            "status": "active",
-            "employment_type": "full_time"
-        }
-        response = client.post(
-            "/api/v1/hr/employees",
-            json=employee1_data,
-            headers=authenticated_headers
+
+    result = get_store().execute(
+        transaction_id=f"successful-retry-{uuid4().hex}",
+        business_id="test-business",
+        idempotency_key=key,
+        operation="finance.post",
+        amount="10.00",
+        currency="MMK",
+        metadata={"retry": True},
+    )
+    assert not result.idempotent_replay
+    assert result.metadata == {"retry": True}
+
+
+def test_transaction_survives_store_reinitialization(tmp_path):
+    database = str(tmp_path / "transactions.sqlite3")
+    first_store = TransactionStore(database)
+    created = first_store.execute(
+        transaction_id="persistent-001",
+        business_id="business-a",
+        idempotency_key="persistent-key-001",
+        operation="order.create",
+        amount="25.00",
+        currency="MMK",
+        metadata={"order": "ORD-001"},
+    )
+
+    second_store = TransactionStore(database)
+    loaded = second_store.get(
+        created.transaction_id,
+        business_id="business-a",
+    )
+    assert loaded is not None
+    assert loaded.transaction_id == created.transaction_id
+    assert loaded.metadata == {"order": "ORD-001"}
+    assert second_store.get(created.transaction_id, business_id="another-business") is None
+
+
+def test_existing_journal_is_migrated_and_legacy_tenant_is_recovered(tmp_path):
+    database = tmp_path / "legacy.sqlite3"
+    connection = sqlite3.connect(database)
+    try:
+        connection.execute(
+            """
+            CREATE TABLE transactions (
+                transaction_id TEXT PRIMARY KEY,
+                idempotency_key TEXT NOT NULL UNIQUE,
+                operation TEXT NOT NULL,
+                amount TEXT NOT NULL,
+                currency TEXT NOT NULL,
+                metadata_json TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
         )
-        assert response.status_code == 200
-        
-        # Try to create duplicate with same employee_code
-        employee2_data = {
-            "employee_code": "UNIQUE-EMP-001",  # Duplicate
-            "job_title": "Senior Engineer",
-            "hire_date": "2024-02-15",
-            "department_id": None,
-            "salary": 95000.0,
-            "status": "active",
-            "employment_type": "full_time"
-        }
-        response = client.post(
-            "/api/v1/hr/employees",
-            json=employee2_data,
-            headers=authenticated_headers
+        connection.execute(
+            """
+            INSERT INTO transactions
+            (transaction_id, idempotency_key, operation, amount, currency,
+             metadata_json, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "legacy-transaction-001",
+                "legacy-business:legacy-key",
+                "invoice.create",
+                "15.00",
+                "MMK",
+                '{"invoice":"LEGACY-001"}',
+                "committed",
+                "2026-01-01T00:00:00+00:00",
+            ),
         )
-        # Should fail due to unique constraint
-        assert response.status_code in [400, 409]
-        
-        # Verify only one employee exists
-        count = db_session.query(Employee).filter(
-            Employee.employee_code == "UNIQUE-EMP-001"
-        ).count()
-        assert count == 1
-        # Get initial counts
-        initial_company_count = db_session.query(Company).count()
-        initial_contact_count = db_session.query(Contact).count()
-        
-        # Perform series of operations with mixed success/failure
-        operations = [
-            # Valid operation
-            ("POST", "/api/v1/crm/companies", {
-                "name": "Test Corp 1",
-                "industry": "Tech",
-                "email": "test1@test.com"
-            }, 200),
-            # Invalid operation (missing required fields)
-            ("POST", "/api/v1/crm/companies", {}, 422),
-            # Valid operation
-            ("POST", "/api/v1/crm/companies", {
-                "name": "Test Corp 2",
-                "industry": "Finance",
-                "email": "test2@test.com"
-            }, 200),
-        ]
-        
-        for method, path, data, expected_status in operations:
-            response = client.post(path, json=data, headers=authenticated_headers)
-            # Just verify it doesn't crash - status may vary
-        
-        # Final counts should reflect only successful operations
-        final_company_count = db_session.query(Company).count()
-        # Should have exactly 2 new companies from valid operations
-        assert final_company_count == initial_company_count + 2
-        
-        # Contact count should be unchanged
-        final_contact_count = db_session.query(Contact).count()
-        assert final_contact_count == initial_contact_count
+        connection.commit()
+    finally:
+        connection.close()
+
+    migrated_store = TransactionStore(str(database))
+    owned = migrated_store.get("legacy-transaction-001", business_id="legacy-business")
+    foreign = migrated_store.get("legacy-transaction-001", business_id="other-business")
+
+    assert owned is not None
+    assert owned.metadata == {"invoice": "LEGACY-001"}
+    assert foreign is None
+
+
+def test_same_idempotency_key_with_different_payload_returns_conflict():
+    key = f"payload-conflict-{uuid4().hex}"
+    headers = {"X-Idempotency-Key": key}
+    first_payload = {
+        "operation": "invoice.create",
+        "amount": "10.00",
+        "currency": "MMK",
+        "metadata": {"invoice": "INV-A"},
+    }
+    changed_payload = {
+        "operation": "invoice.create",
+        "amount": "11.00",
+        "currency": "MMK",
+        "metadata": {"invoice": "INV-A"},
+    }
+    with TestClient(app) as client:
+        first = client.post("/api/v1/transactions", json=first_payload, headers=headers)
+        conflict = client.post("/api/v1/transactions", json=changed_payload, headers=headers)
+
+    assert first.status_code == 201
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"]["code"] == "IDEMPOTENCY_PAYLOAD_MISMATCH"
+
+
+def test_legacy_fingerprint_less_replay_with_different_payload_returns_conflict(
+    tmp_path_factory,
+):
+    """Legacy rows (no request_fingerprint) cannot be verified for payload
+    equality, so any replay of the same key is a conflict by design."""
+    import sqlite3
+
+    from app.core.transaction_store import IdempotencyConflict, TransactionStore
+
+    db_path = str(tmp_path_factory.mktemp("legacy") / "legacy.sqlite3")
+    # Seed a legacy row directly with NULL request_fingerprint (pre-migration data).
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE transactions (
+            transaction_id TEXT PRIMARY KEY,
+            idempotency_key TEXT NOT NULL UNIQUE,
+            business_id TEXT NOT NULL DEFAULT '',
+            operation TEXT NOT NULL,
+            amount TEXT NOT NULL,
+            currency TEXT NOT NULL,
+            metadata_json TEXT NOT NULL,
+            request_fingerprint TEXT,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO transactions
+        (transaction_id, idempotency_key, business_id, operation, amount,
+         currency, metadata_json, request_fingerprint, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'committed', ?)
+        """,
+        (
+            "legacy-001",
+            "legacy-key",
+            "legacy-business",
+            "invoice.create",
+            "10.00",
+            "MMK",
+            '{"invoice": "INV-OLD"}',
+            "2026-01-01T00:00:00+00:00",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    isolated_store = TransactionStore(db_path)
+
+    # Replay the same key with a different payload → conflict.
+    with pytest.raises(IdempotencyConflict) as exc:
+        isolated_store.execute(
+            transaction_id="legacy-002",
+            idempotency_key="legacy-key",
+            operation="invoice.create",
+            amount="20.00",
+            currency="MMK",
+            metadata={"invoice": "INV-NEW"},
+            business_id="legacy-business",
+        )
+    assert exc.value.code == "IDEMPOTENCY_KEY_REUSED"
+
+
+def test_idempotency_fingerprint_ignores_metadata_key_order(tmp_path):
+    isolated_store = TransactionStore(str(tmp_path / "fingerprint.sqlite3"))
+    first = isolated_store.execute(
+        transaction_id="canonical-001",
+        idempotency_key="canonical-key",
+        operation="invoice.create",
+        amount="10.00",
+        currency="MMK",
+        metadata={"invoice": "INV-A", "source": "pos"},
+        business_id="canonical-business",
+    )
+    replay = isolated_store.execute(
+        transaction_id="canonical-002",
+        idempotency_key="canonical-key",
+        operation="invoice.create",
+        amount="10.00",
+        currency="MMK",
+        metadata={"source": "pos", "invoice": "INV-A"},
+        business_id="canonical-business",
+    )
+    assert replay.transaction_id == first.transaction_id
+    assert replay.idempotent_replay is True

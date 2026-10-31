@@ -1,71 +1,120 @@
 services:
   postgres:
-    image: postgres:15.18-alpine3.24
-    container_name: erp_solution-postgres
+    image: postgres:15.14
+    profiles: ["full"]
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-erp}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
-      POSTGRES_DB: ${POSTGRES_DB:-erp_solution}
+      POSTGRES_DB: ${POSTGRES_DB:-erp03}
+      POSTGRES_USER: ${POSTGRES_USER:-erp03}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
 
   redis:
-    image: redis:7.4.9-alpine3.21
-    container_name: erp_solution-redis
-    ports:
-      - "6379:6379"
+    image: redis:7-alpine
+    profiles: ["full"]
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
-    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
 
-  erp-backend:
-    build:
-      context: ./ERP-BACKEND
-      dockerfile: Dockerfile
-    container_name: erp_solution-backend
+  migrate:
+    build: ./ERP-BACKEND
+    profiles: ["full"]
     environment:
-      DATABASE_URL: ${DATABASE_URL:-}
-      REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY:-}
-      ENVIRONMENT: development
-      DEBUG: "true"
-    ports:
-      - "8000:8000"
+      ENVIRONMENT: production
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-erp03}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-erp03}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_started
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  backend:
+    image: ${DOCKERHUB_IMAGE_BACKEND:-powerrangeranikg/erp03-backend}:${IMAGE_TAG:-latest}
+    build: ./ERP-BACKEND
+    ports:
+      - "8000:8000"
+    environment:
+      ENVIRONMENT: production
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set to a postgresql+asyncpg:// URL}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
+      DATABASE_PATH: /app/.local/erp03.sqlite3
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
-      - ./ERP-BACKEND:/app
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+      - erp_data:/app/.local
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+        required: true
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
   frontend:
+    image: ${DOCKERHUB_IMAGE_FRONTEND:-powerrangeranikg/erp03-frontend}:${IMAGE_TAG:-latest}
     build:
-      context: ./ERP-BACKEND/frontend-react
-      dockerfile: Dockerfile
-    container_name: erp-frontend
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
     ports:
-      - "3000:80"
+      - "3000:8080"
     depends_on:
-      - erp-backend
-
-  ollama:
-    image: ollama/ollama:0.32.5
-    container_name: erp_solution-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
 
 volumes:
   postgres_data:
+  erp_data:
   redis_data:
-  ollama_data:

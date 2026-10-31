@@ -1,52 +1,39 @@
 #!/usr/bin/env bash
-###############################################################################
-# ERP03 — Safe PostgreSQL backup
-# Usage: ./scripts/backup.sh [output_dir]
-# Required: pg_dump (or docker compose service "postgres")
-# Optional: GPG_RECIPIENT for client-side encryption of the database dump.
-###############################################################################
-set -Eeuo pipefail
+set -euo pipefail
 
-OUTPUT_DIR="${1:-./backups}"
-TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-BACKUP_PATH="${OUTPUT_DIR}/erp03_${TIMESTAMP}"
-DB_USER="${DB_USER:-erp}"
-DB_NAME="${DB_NAME:-erp_solution}"
-GPG_RECIPIENT="${GPG_RECIPIENT:-}"
+# ERP03 Database Backup Script
+# Usage: ./scripts/backup.sh [backup_dir]
+# Environment: DATABASE_URL, BACKUP_DIR, BACKUP_RETENTION_DAYS
 
-mkdir -p "${BACKUP_PATH}"
+BACKUP_DIR="${BACKUP_DIR:-/data/backups}"
+BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
+TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+BACKUP_FILE="$BACKUP_DIR/erp03-$TIMESTAMP.sql.gz"
+CHECKSUM_FILE="$BACKUP_FILE.sha256"
 
-if docker compose ps postgres >/dev/null 2>&1; then
-  echo "Backing up PostgreSQL from compose service..."
-  docker compose exec -T postgres pg_dump -U "${DB_USER}" "${DB_NAME}" > "${BACKUP_PATH}/database.sql"
-elif command -v pg_dump >/dev/null 2>&1; then
-  : "${DATABASE_URL:?DATABASE_URL is required when pg_dump is used directly}"
-  echo "Backing up PostgreSQL using pg_dump..."
-  pg_dump "${DATABASE_URL}" > "${BACKUP_PATH}/database.sql"
-else
-  echo "ERROR: PostgreSQL is unavailable (no compose postgres service and no pg_dump)." >&2
-  exit 1
-fi
+mkdir -p "$BACKUP_DIR"
 
-if [[ -n "${GPG_RECIPIENT}" ]]; then
-  command -v gpg >/dev/null 2>&1 || { echo "ERROR: gpg is required for encrypted backups." >&2; exit 1; }
-  gpg --batch --yes --trust-model always --recipient "${GPG_RECIPIENT}" \
-      --output "${BACKUP_PATH}/database.sql.gpg" --encrypt "${BACKUP_PATH}/database.sql"
-  rm -f "${BACKUP_PATH}/database.sql"
-  DB_ARTIFACT="database.sql.gpg"
-else
-  echo "WARNING: GPG_RECIPIENT is not set; database dump is NOT encrypted." >&2
-  DB_ARTIFACT="database.sql"
-fi
+echo "==> Creating backup: $BACKUP_FILE"
+pg_dump --no-owner --no-acl --format=custom -U erp03 -d erp03 | gzip > "$BACKUP_FILE"
 
-cat > "${BACKUP_PATH}/manifest.txt" <<EOF
-ERP03 backup
-Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-Version: $(git describe --tags --always 2>/dev/null || echo unknown)
-Commit: $(git rev-parse HEAD 2>/dev/null || echo unknown)
-Database artifact: ${DB_ARTIFACT}
+echo "==> Computing checksum"
+sha256sum "$BACKUP_FILE" > "$CHECKSUM_FILE"
 
-Secrets and .env files are intentionally NOT included.
-EOF
+echo "==> Verifying backup integrity"
+gunzip -t "$BACKUP_FILE" && echo "   gzip integrity: OK"
+sha256sum -c "$CHECKSUM_FILE" && echo "   checksum: OK"
 
-printf 'Backup complete: %s\n' "${BACKUP_PATH}"
+# Verify restore capability (dry-run: list contents)
+echo "==> Verifying backup contents"
+pg_restore --list "$BACKUP_FILE" > /dev/null 2>&1 && echo "   restore list: OK" || \
+  (gunzip -c "$BACKUP_FILE" | pg_restore --list - > /dev/null 2>&1 && echo "   restore list: OK")
+
+echo "==> Backup complete: $BACKUP_FILE"
+echo "    Size: $(du -h "$BACKUP_FILE" | cut -f1)"
+echo "    Checksum: $(cat "$CHECKSUM_FILE")"
+
+# Retention cleanup
+echo "==> Cleaning up backups older than $BACKUP_RETENTION_DAYS days"
+find "$BACKUP_DIR" -name "erp03-*.sql.gz" -mtime +"$BACKUP_RETENTION_DAYS" -delete
+find "$BACKUP_DIR" -name "erp03-*.sql.gz.sha256" -mtime +"$BACKUP_RETENTION_DAYS" -delete
+echo "==> Retention cleanup complete"
