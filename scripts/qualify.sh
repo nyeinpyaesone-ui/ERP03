@@ -137,9 +137,39 @@ step_done
 step_begin "compile"
 python3 -m compileall -q app alembic
 if $USE_PG; then
-  ENVIRONMENT=production SECRET_KEY="qualification-secret-key-with-at-least-32-bytes" CORS_ORIGINS="https://erp.example.invalid" DATABASE_URL="$DATABASE_URL" DATABASE_PATH="/tmp/erp03-qualification.sqlite3" python3 -c "from app.main import app; assert any(r.path == '/api/v1/auth/login' for r in app.routes); assert any(r.path == '/api/v1/sales' for r in app.routes); print('production configuration and critical routes: OK')"
+  ENVIRONMENT=production SECRET_KEY="qualification-secret-key-with-at-least-32-bytes" CORS_ORIGINS="https://erp.example.invalid" DATABASE_URL="$DATABASE_URL" DATABASE_PATH="/tmp/erp03-qualification.sqlite3" python3 -c "
+from app.main import app
+def _collect_paths(routes, out):
+    for r in routes:
+        p = getattr(r, 'path', None)
+        if p:
+            out.add(p)
+        orig = getattr(r, 'original_router', None)
+        if orig:
+            _collect_paths(orig.routes, out)
+paths = set()
+_collect_paths(app.routes, paths)
+assert any('/api/v1/auth/login' in p or p == '/auth/login' for p in paths), paths
+assert any('/api/v1/sales' in p or p == '/sales' for p in paths), paths
+print('production configuration and critical routes: OK')
+"
 else
-  ENVIRONMENT=development SECRET_KEY="qualification-secret-key-with-at-least-32-bytes" CORS_ORIGINS="http://localhost:3000,http://localhost:5173" DATABASE_PATH="/tmp/erp03-qualification.sqlite3" python3 -c "from app.main import app; assert any(r.path == '/api/v1/auth/login' for r in app.routes); assert any(r.path == '/api/v1/sales' for r in app.routes); print('development configuration and critical routes: OK')"
+  ENVIRONMENT=development SECRET_KEY="qualification-secret-key-with-at-least-32-bytes" CORS_ORIGINS="http://localhost:3000,http://localhost:5173" DATABASE_PATH="/tmp/erp03-qualification.sqlite3" python3 -c "
+from app.main import app
+def _collect_paths(routes, out):
+    for r in routes:
+        p = getattr(r, 'path', None)
+        if p:
+            out.add(p)
+        orig = getattr(r, 'original_router', None)
+        if orig:
+            _collect_paths(orig.routes, out)
+paths = set()
+_collect_paths(app.routes, paths)
+assert any('/api/v1/auth/login' in p or p == '/auth/login' for p in paths), paths
+assert any('/api/v1/sales' in p or p == '/sales' for p in paths), paths
+print('development configuration and critical routes: OK')
+"
 fi
 
 step_begin "migrate"
