@@ -9,6 +9,53 @@ log() { printf '\n==> %s\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
+QUALIFY_LOG="${QUALIFY_LOG:-}"
+QUALIFY_JSON=""
+QUALIFY_STEPS=()
+QUALIFY_CURRENT="init"
+QUALIFY_USED_PG="false"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --json-out)
+      [ $# -ge 2 ] || die "--json-out requires a path"
+      QUALIFY_JSON="$2"
+      shift 2
+      ;;
+    *) die "unknown argument: $1" ;;
+  esac
+done
+
+step_begin() { QUALIFY_CURRENT="$1"; log "$1"; }
+step_done()  { QUALIFY_STEPS+=("$QUALIFY_CURRENT"); }
+
+write_evidence() {
+  local rc="$1" result="PASS" s
+  [ "$rc" -ne 0 ] && result="FAIL"
+  if [ -n "$QUALIFY_LOG" ]; then
+    : > "$QUALIFY_LOG"
+    for s in "${QUALIFY_STEPS[@]}"; do
+      printf 'PASS\t%s\n' "$s" >> "$QUALIFY_LOG"
+    done
+    [ "$result" = "FAIL" ] && printf 'FAIL\t%s\n' "$QUALIFY_CURRENT" >> "$QUALIFY_LOG"
+  fi
+  [ -n "$QUALIFY_JSON" ] || return 0
+  {
+    printf '{"env":"%s","arch":"%s","commit":"%s","used_pg":%s,"steps":[' \
+      "${AGENT_ENV_NAME:-local}" "$(uname -m)" \
+      "$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo none)" \
+      "$QUALIFY_USED_PG"
+    local first=1
+    for s in "${QUALIFY_STEPS[@]}"; do
+      [ "$first" -eq 1 ] && first=0 || printf ','
+      printf '"%s"' "$s"
+    done
+    printf '],"current":"%s","result":"%s"}\n' "$QUALIFY_CURRENT" "$result"
+  } > "$QUALIFY_JSON"
+}
+
+trap 'rc=$?; trap - EXIT; write_evidence "$rc"; exit "$rc"' EXIT
+
 require_path() {
   local path="$1"
   local description="$2"
@@ -58,8 +105,10 @@ EOF
 }
 
 USE_PG=false
+QUALIFY_USED_PG="false"
 if probe_postgres "$DATABASE_URL"; then
   USE_PG=true
+  QUALIFY_USED_PG="true"
   log "PostgreSQL reachable at $DATABASE_URL — qualification will run against it"
 else
   warn "PostgreSQL not reachable at $DATABASE_URL"
@@ -79,8 +128,13 @@ require_path "$BACKEND_DIR/alembic/versions" "Alembic migration directory"
 require_path "$BACKEND_DIR/app" "backend application package"
 require_path "$FRONTEND_DIR/package.json" "frontend package manifest"
 
-log "Backend syntax and production configuration"
+step_begin "ruff"
 cd "$BACKEND_DIR"
+ruff check app tests alembic
+ruff format --check app tests alembic
+step_done
+
+step_begin "compile"
 python3 -m compileall -q app alembic
 if $USE_PG; then
   ENVIRONMENT=production SECRET_KEY="qualification-secret-key-with-at-least-32-bytes" CORS_ORIGINS="https://erp.example.invalid" DATABASE_URL="$DATABASE_URL" DATABASE_PATH="/tmp/erp03-qualification.sqlite3" python3 -c "from app.main import app; assert any(r.path == '/api/v1/auth/login' for r in app.routes); assert any(r.path == '/api/v1/sales' for r in app.routes); print('production configuration and critical routes: OK')"
@@ -88,15 +142,18 @@ else
   ENVIRONMENT=development SECRET_KEY="qualification-secret-key-with-at-least-32-bytes" CORS_ORIGINS="http://localhost:3000,http://localhost:5173" DATABASE_PATH="/tmp/erp03-qualification.sqlite3" python3 -c "from app.main import app; assert any(r.path == '/api/v1/auth/login' for r in app.routes); assert any(r.path == '/api/v1/sales' for r in app.routes); print('development configuration and critical routes: OK')"
 fi
 
-log "Backend migration"
+step_begin "migrate"
 DATABASE_URL="$DATABASE_URL" alembic upgrade head
+step_done
 
-log "Backend tests"
+step_begin "tests"
 DATABASE_URL="$DATABASE_URL" pytest -q
+step_done
 
-log "Frontend dependency/build"
+step_begin "frontend"
 cd "$FRONTEND_DIR"
 npm ci --no-audit --no-fund
 npm run build
+step_done
 
 log "ERP03 qualification passed"
