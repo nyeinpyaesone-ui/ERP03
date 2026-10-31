@@ -27,7 +27,10 @@ spec:
           ports:
             - containerPort: 6379
               name: redis
-          command: ["redis-server", "--requirepass", "$(REDIS_PASSWORD)", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              redis-server --requirepass "$REDIS_PASSWORD" --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
           env:
             - name: REDIS_PASSWORD
               valueFrom:
@@ -63,10 +66,14 @@ spec:
           volumeMounts:
             - name: redis-data
               mountPath: /data
+            - name: tmp
+              mountPath: /tmp
       volumes:
         - name: redis-data
           persistentVolumeClaim:
             claimName: erp03-redis-pvc
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

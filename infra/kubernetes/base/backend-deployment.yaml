@@ -42,6 +42,8 @@ spec:
           volumeMounts:
             - name: erp-data
               mountPath: /app/.local
+            - name: tmp
+              mountPath: /tmp
           startupProbe:
             httpGet:
               path: /api/v1/healthz
@@ -80,3 +82,5 @@ spec:
         - name: erp-data
           persistentVolumeClaim:
             claimName: erp-data-pvc
+        - name: tmp
+          emptyDir: {}
