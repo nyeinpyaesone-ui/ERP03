@@ -1,0 +1,100 @@
+/* Design tokens — ERP03 production design system.
+   Single source of truth for color, spacing, typography, shadow, motion.
+   Consumed by all UI components; never hardcode raw values in components. */
+:root {
+  /* ── Color palette ── */
+  --erp-bg: #f5f7fb;
+  --erp-surface: #ffffff;
+  --erp-surface-muted: #f1f3f7;
+  --erp-border: #e2e7f0;
+  --erp-border-focus: #4f46e5;
+
+  --erp-text: #172033;
+  --erp-text-muted: #667085;
+  --erp-text-inverse: #ffffff;
+
+  --erp-brand: #4f46e5;
+  --erp-brand-hover: #4338ca;
+  --erp-brand-subtle: #eef0ff;
+
+  --erp-success: #16794c;
+  --erp-success-subtle: #eaf8f0;
+  --erp-warning: #b45309;
+  --erp-warning-subtle: #fffbeb;
+  --erp-danger: #b42318;
+  --erp-danger-subtle: #fef0ef;
+  --erp-info: #1d4ed8;
+  --erp-info-subtle: #eff6ff;
+
+  /* ── Spacing ── */
+  --erp-space-0: 0;
+  --erp-space-1: 4px;
+  --erp-space-2: 8px;
+  --erp-space-3: 12px;
+  --erp-space-4: 16px;
+  --erp-space-5: 20px;
+  --erp-space-6: 24px;
+  --erp-space-8: 32px;
+  --erp-space-10: 40px;
+  --erp-space-12: 48px;
+
+  /* ── Typography ── */
+  --erp-font-sans: Inter, ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --erp-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    monospace;
+  --erp-text-xs: 0.75rem;
+  --erp-text-sm: 0.875rem;
+  --erp-text-base: 1rem;
+  --erp-text-lg: 1.125rem;
+  --erp-text-xl: 1.25rem;
+  --erp-text-2xl: 1.5rem;
+  --erp-text-3xl: 1.875rem;
+  --erp-text-4xl: 2.25rem;
+  --erp-line-tight: 1.2;
+  --erp-line-normal: 1.5;
+  --erp-font-normal: 400;
+  --erp-font-medium: 500;
+  --erp-font-semibold: 600;
+  --erp-font-bold: 700;
+
+  /* ── Border & radius ── */
+  --erp-border-width: 1px;
+  --erp-radius-sm: 6px;
+  --erp-radius-md: 10px;
+  --erp-radius-lg: 16px;
+  --erp-radius-full: 9999px;
+
+  /* ── Shadows ── */
+  --erp-shadow-sm: 0 1px 2px rgba(23, 32, 51, 0.04);
+  --erp-shadow-md: 0 4px 12px rgba(23, 32, 51, 0.06);
+  --erp-shadow-lg: 0 18px 60px rgba(23, 32, 51, 0.08);
+
+  /* ── Motion ── */
+  --erp-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --erp-transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --erp-bg: #0b1021;
+    --erp-surface: #131a2e;
+    --erp-surface-muted: #1c253a;
+    --erp-border: #333e58;
+    --erp-border-focus: #818cf8;
+    --erp-text: #e5e7eb;
+    --erp-text-muted: #9ca3af;
+    --erp-text-inverse: #0b1021;
+    --erp-brand: #818cf8;
+    --erp-brand-hover: #a5b4fc;
+    --erp-brand-subtle: #3730a3;
+    --erp-success: #34d399;
+    --erp-success-subtle: #064e3b;
+    --erp-warning: #fbbf24;
+    --erp-warning-subtle: #713f12;
+    --erp-danger: #f87171;
+    --erp-danger-subtle: #7f1d1d;
+    --erp-info: #60a5fa;
+    --erp-info-subtle: #1c4587;
+  }
+}
