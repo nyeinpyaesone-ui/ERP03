@@ -43,7 +43,13 @@ async def next_invoice_no(session: AsyncSession, *, branch_id: UUID) -> str:
             Invoice.branch_id == branch_id, Invoice.invoice_no.like(f"{prefix}%")
         )
     )
-    sequence = int(last[len(prefix) :]) + 1 if last else 1
+    if last is None:
+        sequence = 1
+    else:
+        try:
+            sequence = int(last[len(prefix) :]) + 1
+        except (TypeError, ValueError):
+            sequence = 1
     return f"{prefix}{sequence:06d}"
 
 

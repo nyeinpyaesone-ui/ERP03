@@ -16,9 +16,9 @@
 #                    after bootstrap completes.
 #   --qualify        Run scripts/qualify.sh at the end (full CI-equivalent gate).
 #   --skip-frontend  Do not install frontend npm dependencies.
-#   --sync-secrets   Fetch secrets from GitHub and create/update .env files.
+#   --sync-secrets   Sync GitHub secrets availability (values not readable via API).
 #   --env-type       Target environment: development (default) | production.
-#   --force          Overwrite existing .env files when syncing secrets.
+#   --force          Overwrite existing .env files when regenerating.
 #   --help           Show this help.
 #
 set -Eeuo pipefail
@@ -40,7 +40,7 @@ warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
-  sed -n '3,23p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 while [[ $# -gt 0 ]]; do
@@ -162,6 +162,7 @@ check_gh_auth() {
 }
 
 # Centralized secret registry — single source of truth for all environments
+# Fields MUST match ERP-BACKEND/app/core/config.py Settings model
 declare -A SECRET_SPECS=(
   # [secret_name]="description|generator|required_for"
   ["SECRET_KEY"]="Application secret key|token_urlsafe(48)|all"
@@ -176,10 +177,11 @@ declare -A SECRET_SPECS=(
   ["OLLAMA_IMAGE_TAG"]="Ollama version|fixed:0.32.5|all"
 )
 
+# Generate secure values using system python3 (no venv dependency)
 generate_secure_value() {
   local spec="$1"
   case "$spec" in
-    token_urlsafe* ) local n="${spec#token_urlsafe(}"; n="${n%)}"; "$VENV_DIR/bin/python" -c "import secrets; print(secrets.token_urlsafe($n))" 2>/dev/null || python3 -c "import secrets; print(secrets.token_urlsafe($n))" ;;
+    token_urlsafe* ) local n="${spec#token_urlsafe(}"; n="${n%)}"; python3 -c "import secrets; print(secrets.token_urlsafe($n))" ;;
     token_hex* ) local n="${spec#token_hex(}"; n="${n%)}"; head -c "$n" /dev/urandom | od -An -tx1 | tr -d ' \n' ;;
     default:* ) echo "${spec#default:}" ;;
     fixed:* ) echo "${spec#fixed:}" ;;
@@ -201,26 +203,26 @@ gh_owner_repo() {
 }
 
 sync_github_secrets() {
-  log "Syncing GitHub secrets to local .env files..."
+  log "Syncing GitHub secrets metadata..."
   check_gh_auth
   local owner_repo gh_secrets
   owner_repo="$(gh_owner_repo)"
   gh_secrets="$(gh secret list --repo "$owner_repo" --json name 2>/dev/null || echo '[]')"
-  log "Available GitHub secrets: $(echo "$gh_secrets" | "$VENV_DIR/bin/python" -c "import sys, json; [print(x['name'], end=' ') for x in json.load(sys.stdin)]" 2>/dev/null || echo "jq not available")"
+  log "Available GitHub secrets: $(echo "$gh_secrets" | python3 -c "import sys, json; [print(x['name'], end=' ') for x in json.load(sys.stdin)]" 2>/dev/null || echo "jq not available")"
   log "Note: Secret values are not readable via GitHub API — they must be set in CI/CD environment"
 }
 
 auto_configure_all() {
   log "🔧 Auto-configuring environment ($ENV_TYPE)..."
 
-  # 1. Ensure venv exists for secret generation
+  # 1. Ensure venv exists for later use (but generate secrets with system python)
   if [[ ! -d "$VENV_DIR" ]]; then
     local py; py="$(python_cmd)"
     "$py" -m venv "$VENV_DIR"
   fi
-  # Use venv pip directly (activation not reliable in script context)
   "$VENV_DIR/bin/pip" install --quiet --upgrade pip
   "$VENV_DIR/bin/pip" install --quiet -r "$BACKEND_DIR/requirements.txt"
+  "$VENV_DIR/bin/pip" install --quiet -r "$BACKEND_DIR/dev-requirements.txt"
 
   # 2. Generate ALL secret values dynamically
   declare -A SECRETS
@@ -244,7 +246,7 @@ auto_configure_all() {
     done
   fi
 
-  # 4. Generate backend .env — essential fields only (matching Settings model)
+  # 4. Generate backend .env — ONLY fields defined in Settings model (extra="forbid")
   local backend_env="$BACKEND_DIR/.env"
   if [[ -f "$backend_env" && "$FORCE" != "true" ]]; then
     log "Keeping existing $backend_env (use --force to regenerate)"
@@ -267,6 +269,29 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:8000
 TYPESAFE_ENABLED=false
 TYPESAFE_API_KEY=
 JWT_EXPIRY_MINUTES=30
+REDIS_URL=
+REDIS_PASSWORD=
+REDIS_DB=0
+API_V1_PREFIX=/api/v1
+API_TITLE=ERP03 API
+API_VERSION=1.0.0
+API_DOCS_URL=/docs
+API_REDOC_URL=/redoc
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
+PASSWORD_MIN_LENGTH=12
+BCRYPT_ROUNDS=12
+IDEMPOTENCY_TTL_HOURS=24
+IDEMPOTENCY_CLEANUP_INTERVAL=3600
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_REQUESTS=100
+RATE_LIMIT_WINDOW=60
+TRUSTED_PROXIES=
+WEBHOOK_SECRET=
+WEBHOOK_TIMEOUT=30
+OTEL_ENABLED=false
+OTEL_EXPORTER_OTLP_ENDPOINT=
+DEBUG=true
 EOF
     else
       local db_host="${SECRETS[DB_HOST]:-localhost}"
@@ -291,13 +316,102 @@ CORS_ORIGINS=https://your-domain.com
 TYPESAFE_ENABLED=true
 TYPESAFE_API_KEY=
 JWT_EXPIRY_MINUTES=15
+REDIS_URL=redis://:${SECRETS[REDIS_PASSWORD]}@redis:6379/0
+REDIS_PASSWORD=${SECRETS[REDIS_PASSWORD]}
+REDIS_DB=0
+API_V1_PREFIX=/api/v1
+API_TITLE=ERP03 API
+API_VERSION=1.0.0
+API_DOCS_URL=/docs
+API_REDOC_URL=/redoc
+ACCESS_TOKEN_EXPIRE_MINUTES=15
+REFRESH_TOKEN_EXPIRE_DAYS=30
+PASSWORD_MIN_LENGTH=12
+BCRYPT_ROUNDS=14
+IDEMPOTENCY_TTL_HOURS=168
+IDEMPOTENCY_CLEANUP_INTERVAL=3600
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_REQUESTS=1000
+RATE_LIMIT_WINDOW=60
+TRUSTED_PROXIES=
+WEBHOOK_SECRET=
+WEBHOOK_TIMEOUT=30
+OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+DEBUG=false
 EOF
     fi
     chmod 600 "$backend_env"
     log "  ✓ Backend config written"
   fi
 
-  # 5. Generate frontend .env for Vite build (uses /api for nginx proxy)
+  # 5. Generate .env.compose for Docker Compose (both prod and dev)
+  local compose_env="$ROOT_DIR/.env.compose"
+  if [[ -f "$compose_env" && "$FORCE" != "true" ]]; then
+    log "Keeping existing $compose_env (use --force to regenerate)"
+  else
+    log "Generating $compose_env..."
+    # Use same passwords across all configs for consistency
+    local pg_pass="${SECRETS[POSTGRES_PASSWORD]}"
+    local redis_pass="${SECRETS[REDIS_PASSWORD]}"
+    local redis_user="${SECRETS[REDIS_USER]}"
+    cat > "$compose_env" <<EOF
+# ERP03 Docker Compose Environment — AUTO-GENERATED
+# Environment: ${ENV_TYPE}
+# Usage: docker compose --env-file .env.compose up -d
+#        docker compose -f docker-compose.dev.yml --env-file .env.compose up -d
+
+# Database (use 'erp03' consistently everywhere)
+POSTGRES_DB=erp03
+POSTGRES_USER=erp03
+POSTGRES_PASSWORD=${pg_pass}
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+
+# Redis
+REDIS_PASSWORD=${redis_pass}
+REDIS_USER=${redis_user}
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_URL=redis://:${redis_pass}@redis:6379/0
+REDIS_ACCOUNT_NUMBER=${SECRETS[REDIS_ACCOUNT_NUMBER]}
+API_REDIS_KEY=${SECRETS[API_REDIS_KEY]}
+
+# Docker Hub (for container.yml CI)
+DOCKERHUB_USERNAME=powerrangeranikg
+DOCKERHUB_TOKEN=${SECRETS[DOCKERHUB_TOKEN]}
+DOCKERHUB_IMAGE_BACKEND=powerrangeranikg/erp03-backend
+DOCKERHUB_IMAGE_FRONTEND=powerrangeranikg/erp03-frontend
+IMAGE_TAG=${IMAGE_TAG:-latest}
+
+# Backend (production uses pre-built images; dev uses this for build-time)
+SECRET_KEY=${SECRETS[SECRET_KEY]}
+ENVIRONMENT=${ENV_TYPE}
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+API_URL=http://localhost:8000
+WS_URL=ws://localhost:8000
+DATABASE_URL=postgresql+asyncpg://erp03:${pg_pass}@postgres:5432/erp03
+OLLAMA_URL=http://ollama:11434
+
+# Frontend (Vite build-time injection)
+VITE_API_BASE_URL=/api
+VITE_WS_URL=ws://localhost:8000
+VITE_APP_TITLE=ERP03
+
+# Ollama
+OLLAMA_IMAGE_TAG=${SECRETS[OLLAMA_IMAGE_TAG]}
+
+# NGINX (production reverse proxy)
+NGINX_HTTP_PORT=80
+NGINX_HTTPS_PORT=443
+SSL_CERT_PATH=/etc/nginx/ssl/cert.pem
+SSL_KEY_PATH=/etc/nginx/ssl/key.pem
+EOF
+    chmod 600 "$compose_env"
+    log "  ✓ Compose config written"
+  fi
+
+  # 6. Generate frontend .env for Vite build
   local frontend_env="$FRONTEND_DIR/.env"
   if [[ -f "$frontend_env" && "$FORCE" != "true" ]]; then
     log "Keeping existing $frontend_env"
@@ -315,7 +429,74 @@ EOF
     log "  ✓ Frontend config written"
   fi
 
-  # 6. Verify configuration loads correctly
+  # 7. Generate .env.example for documentation (no secrets, just templates)
+  local example_env="$ROOT_DIR/.env.example"
+  if [[ ! -f "$example_env" || "$FORCE" == "true" ]]; then
+    log "Generating $example_env..."
+    cat > "$example_env" <<'EOF'
+# ERP03 Environment Template — Copy to .env and fill in values
+# NEVER commit real credentials to version control
+
+# Core
+ENVIRONMENT=development
+SECRET_KEY=your-secret-key-min-32-chars
+LOG_LEVEL=DEBUG
+
+# Database (SQLite for dev, PostgreSQL for production)
+DATABASE_URL=sqlite+aiosqlite:///./.local/erp03.sqlite3
+DATABASE_PATH=./.local/erp03.sqlite3
+
+# Database Pool (auto-tuned by ENVIRONMENT)
+DB_POOL_SIZE=5
+DB_MAX_OVERFLOW=10
+DB_POOL_RECYCLE=1800
+DB_ECHO=false
+
+# Redis (optional)
+REDIS_URL=redis://localhost:6379/0
+REDIS_PASSWORD=
+REDIS_DB=0
+
+# CORS
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+
+# TypeSafe (optional)
+TYPESAFE_ENABLED=false
+TYPESAFE_API_KEY=
+
+# JWT
+JWT_EXPIRY_MINUTES=30
+
+# Auth
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
+PASSWORD_MIN_LENGTH=12
+BCRYPT_ROUNDS=12
+
+# Idempotency
+IDEMPOTENCY_TTL_HOURS=24
+IDEMPOTENCY_CLEANUP_INTERVAL=3600
+
+# Rate Limiting
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_REQUESTS=100
+RATE_LIMIT_WINDOW=60
+
+# Webhooks
+WEBHOOK_SECRET=
+WEBHOOK_TIMEOUT=30
+
+# Observability
+OTEL_ENABLED=false
+OTEL_EXPORTER_OTLP_ENDPOINT=
+
+# Debug
+DEBUG=true
+EOF
+    log "  ✓ Example config written"
+  fi
+
+  # 8. Verify configuration loads correctly
   log "Verifying configuration..."
   (cd "$BACKEND_DIR" && "$VENV_DIR/bin/python" -c "
 from app.core.config import settings
@@ -323,22 +504,26 @@ print(f'  ✓ Environment: {settings.environment}')
 print(f'  ✓ Database: {settings.database_url.split(\"://\")[0]}')
 print(f'  ✓ Secret key: {len(settings.secret_key)} chars')
 print(f'  ✓ CORS origins: {settings.cors_origins}')
+print(f'  ✓ Redis URL: {settings.redis_url}')
+print(f'  ✓ Pool size: {settings.db_pool_size}/{settings.db_max_overflow}')
 ") 2>/dev/null || warn "Config verification will run on backend start"
 
   log "✅ Auto-configuration complete!"
   log ""
   log "📋 Generated files:"
   log "  • $backend_env"
+  log "  • $compose_env"
   log "  • $frontend_env"
+  log "  • $example_env"
   log ""
   log "🚀 Ready to start:"
   log "  source .venv/bin/activate"
-  log "  ./scripts/setup.sh --with-infra   # Start all services"
+  log "  ./scripts/setup.sh --with-infra   # Start all services (uses .env.compose)"
   log "  ./scripts/setup.sh --qualify      # Run full test gate"
 }
 
 # ---------------------------------------------------------------------------
-# 4. Backend environment provisioning (legacy path)
+# 4. Backend environment provisioning (legacy path — kept for compatibility)
 # ---------------------------------------------------------------------------
 setup_backend() {
   log "Provisioning Python virtualenv at $VENV_DIR"
@@ -356,31 +541,7 @@ setup_backend() {
 }
 
 # ---------------------------------------------------------------------------
-# 5. Secure local configuration (.env) — legacy generator (fallback)
-# ---------------------------------------------------------------------------
-generate_env() {
-  local env_file="$BACKEND_DIR/.env"
-  if [[ -f "$env_file" ]]; then
-    log "Keeping existing $env_file"
-    return
-  fi
-  log "Generating secure development $env_file"
-  local secret
-  secret="$("$VENV_DIR/bin/python" -c 'import secrets; print(secrets.token_urlsafe(48))')"
-  cat > "$env_file" <<EOF
-# Generated by scripts/setup.sh — development only, never commit this file.
-ENVIRONMENT=development
-SECRET_KEY=${secret}
-DATABASE_URL=sqlite+aiosqlite:///$ROOT_DIR/ERP-BACKEND/.local/erp03.sqlite3
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173
-DATABASE_PATH=$ROOT_DIR/ERP-BACKEND/.local/erp03.sqlite3
-EOF
-  mkdir -p "$BACKEND_DIR/.local"
-  chmod 600 "$env_file"
-}
-
-# ---------------------------------------------------------------------------
-# 6. Frontend dependencies
+# 5. Frontend dependencies
 # ---------------------------------------------------------------------------
 setup_frontend() {
   if $SKIP_FRONTEND; then
@@ -392,21 +553,26 @@ setup_frontend() {
 }
 
 # ---------------------------------------------------------------------------
-# 7. Optional infrastructure + smoke verification
+# 6. Optional infrastructure + smoke verification
 # ---------------------------------------------------------------------------
 start_infra() {
   if ! docker_available; then
     die "--with-infra requested but Docker daemon is unavailable"
   fi
-  log "Starting Docker Compose stack"
-  (cd "$ROOT_DIR" && POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')}" \
-    SECRET_KEY="$(head -c 48 /dev/urandom | od -An -tx1 | tr -d ' \n')" compose_cmd up -d --build)
+  log "Starting Docker Compose stack using .env.compose..."
+  # Use the generated .env.compose for consistent secrets
+  (cd "$ROOT_DIR" && compose_cmd --env-file .env.compose up -d --build)
   log "Compose stack started: API http://localhost:8000/docs · UI http://localhost:3000"
 }
 
 smoke_test() {
   log "Running hermetic test suite as bootstrap smoke test"
-  (cd "$BACKEND_DIR" && DATABASE_PATH="$(mktemp -d)/erp03.sqlite3" pytest -q)
+  # Force hermetic SQLite for smoke test regardless of .env config
+  # Must override ENVIRONMENT too, otherwise production validation fails
+  local tmpdir="$(mktemp -d)"
+  local db_url="sqlite+aiosqlite:///$tmpdir/erp03.sqlite3"
+  local db_path="$tmpdir/erp03.sqlite3"
+  (cd "$BACKEND_DIR" && ENVIRONMENT=development DATABASE_URL="$db_url" DATABASE_PATH="$db_path" "$VENV_DIR/bin/pytest" -q)
 }
 
 # ---------------------------------------------------------------------------

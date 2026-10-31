@@ -44,6 +44,7 @@ Production-focused AI ERP modular-monolith. FastAPI backend (`ERP-BACKEND/`), Re
 | Branch-row lock serializes invoice_no | `app/services/sales.py:189-197` | `SELECT ... FOR UPDATE` on Branch |
 | Savepoint per payment row | `app/services/sales.py:344-361` | `session.begin_nested()` per Payment |
 | TypeSafe judgments non-blocking | `app/main.py:68-110` | Error returned even if TypeSafe fails |
+| Redis rate limiter uses sorted sets | `app/main.py:37-101` | `ZSET` sliding window, `ZREMRANGEBYSCORE` cleanup |
 
 ---
 
@@ -63,15 +64,15 @@ cd ERP-BACKEND && ruff check app tests alembic
 cd ERP-BACKEND && ruff format --check app tests alembic
 cd ERP-BACKEND && python -m compileall -q app alembic
 cd ERP-BACKEND && alembic upgrade head
-cd ERP-BACKEND && pytest -q                 # 49 passed, 1 PG-only skip
+cd ERP-BACKEND && pytest -q                 # 52 passed, 1 PG-only skip
 
 # Single test
 cd ERP-BACKEND && pytest tests/test_api.py::test_api_root -v
 
 # ─── Frontend ───────────────────────────────────────────────────
 cd frontend && npm ci --no-audit --no-fund
-# Vite crashes on low-memory hosts — use esbuild script:
-./scripts/build-frontend.sh                 # outputs frontend/dist/
+# Vite may crash on low-memory hosts; fall back to:
+cd frontend && npm run build                 # outputs frontend/dist/
 
 # ─── Docker (requires daemon) ───────────────────────────────────
 docker compose -f docker-compose.dev.yml up --build   # dev: 5173/8000/5432
@@ -99,6 +100,7 @@ ENVIRONMENT=development
 SECRET_KEY=<48-char-urlsafe>
 DATABASE_URL=sqlite+aiosqlite:////path/to/erp03.sqlite3
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+REDIS_URL=redis://localhost:6379/0
 
 # Compose .env (copy from .env.compose.example)
 POSTGRES_DB=erp03
@@ -178,6 +180,43 @@ alembic history
 
 ---
 
+## Rate Limiting (Redis-Backed)
+
+```python
+# RedisRateLimitMiddleware (app/main.py:37-101)
+# - Redis sorted sets (ZSET) for sliding window
+# - ZREMANGEBYSCORE for window cleanup, ZCARD for count
+# - ZADD + EXPIRE for request recording
+# - Config via settings: rate_limit_enabled, rate_limit_requests, rate_limit_window
+# - Returns 429 + Retry-After header
+# - Trusted proxy support via X-Forwarded-For
+
+# Config via Settings:
+# rate_limit_enabled: bool = True
+# rate_limit_requests: int = 100
+# rate_limit_window: int = 60
+# redis_url: str = "redis://localhost:6379/0"
+# trusted_proxies: set[str] (from trusted_proxies env)
+```
+
+### Redis Service (Docker Compose)
+
+```yaml
+# docker-compose.yml / docker-compose.dev.yml
+redis:
+  image: redis:7-alpine
+  command: redis-server --requirepass ${REDIS_PASSWORD}
+  environment:
+    REDIS_PASSWORD: ${REDIS_PASSWORD}
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 5s
+    timeout: 3s
+    retries: 5
+```
+
+---
+
 ## TypeSafe Integration (Optional)
 
 ```bash
@@ -203,9 +242,10 @@ CONFIDENCE_ESCALATE_THRESHOLD = 0.40  # escalate to human
 
 ```bash
 # Unit tests (pytest + asyncio)
-pytest -q                           # all
+pytest -q                           # all (52 passed, 1 PG-only skip)
 pytest tests/test_api.py -v         # single file
 pytest -k "sale" -v                 # filter by name
+pytest tests/test_rate_limiter.py -v # rate limiter tests (3 tests)
 
 # Integration tests require PostgreSQL (skipped on SQLite)
 # tests/test_erp_integration.py::test_bootstrap_login_and_pos_sale_round_trip
@@ -226,7 +266,7 @@ cd frontend && ./scripts/build-frontend.sh && ls dist/
 
 | Workflow | Trigger | Key Steps |
 |----------|---------|-----------|
-| `ci.yml` | push/PR to main/feat/**/fix/** | Postgres service → compile → migrate → pytest + npm build |
+| `ci.yml` | push/PR to main/feat/**/fix/** | Postgres + Redis services → compile → migrate (with retry) → pytest + npm build |
 | `quality.yml` | push/PR | ruff check/format + compileall + frontend build |
 | `security.yml` | schedule/PR | pip-audit + CodeQL |
 | `container.yml` | push tag/main/release** | **Docker Hub multi-arch (amd64/arm64) + provenance + SBOM** |
@@ -238,6 +278,21 @@ cd frontend && ./scripts/build-frontend.sh && ls dist/
 - `PYPI_TOKEN` (release.yml)
 
 **Concurrency:** `ci-${{ github.ref }}`, `quality-${{ github.ref }}` cancel in-progress.
+
+---
+
+## CI Pipeline Improvements (2026-10-30)
+
+```yaml
+# ci.yml improvements:
+# - PostgreSQL + Redis service containers with health checks
+# - Wait for PG readiness: pg_isready + psql SELECT 1 (30 retries × 2s)
+# - DATABASE_URL uses service hostname: postgres:5432
+# - REDIS_URL uses service hostname: redis:6379
+# - Migration retry: 5 attempts with exponential backoff (5s, 10s, 15s, 20s, 25s)
+# - Test suite retry: 3 attempts with 5s/10s/15s backoff
+# - Frontend: VITE_API_BASE_URL=/api build arg for nginx proxy
+```
 
 ---
 
@@ -255,8 +310,8 @@ cd frontend && ./scripts/build-frontend.sh && ls dist/
 
 ## Key Files to Understand First
 
-1. `ERP-BACKEND/app/main.py` — App wiring, error handler, middleware, lifespan
-2. `ERP-BACKEND/app/core/config.py` — Settings, validation, auto-tuning
+1. `ERP-BACKEND/app/main.py` — App wiring, error handler, middleware, lifespan, **RedisRateLimitMiddleware**
+2. `ERP-BACKEND/app/core/config.py` — Settings, validation, auto-tuning, Redis pool config
 3. `ERP-BACKEND/app/core/errors.py` — Typed error hierarchy + registry
 4. `ERP-BACKEND/app/services/sales.py` — Atomic POS sale (core domain logic)
 5. `ERP-BACKEND/app/services/orchestration.py` — Cross-module state machine
@@ -264,6 +319,7 @@ cd frontend && ./scripts/build-frontend.sh && ls dist/
 7. `ERP-BACKEND/app/core/typesafe.py` — Optional System One integration
 8. `scripts/setup.sh` / `scripts/qualify.sh` — Bootstrap + CI gate
 9. `.github/workflows/container.yml` — Multi-arch Docker Hub publishing
+10. `ERP-BACKEND/tests/test_rate_limiter.py` — Redis rate limiter tests
 
 ---
 
@@ -305,3 +361,7 @@ ENVIRONMENT=production SECRET_KEY="x"*32 DATABASE_URL=postgresql+asyncpg://... \
 - `scripts/qualify.sh` — CI-equivalent verification gate
 - `docs/PR_MERGE_ORDER.md` — Merge sequence for open PRs
 - `infra/` — Terraform modules for cloud deployment
+- `docs/TODO.md` — Remediation tracker with commit SHAs
+- `docs/DEPLOY_RUNBOOK.md` — Production deployment procedures
+- `docs/CODE_REVIEW.md` — Code review guidelines
+- `docs/RELEASE_GATE.md` — Release gate criteria

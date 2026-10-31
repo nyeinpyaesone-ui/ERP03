@@ -1,5 +1,6 @@
 """Authenticated transaction journal endpoints."""
 
+import threading
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import uuid4
@@ -14,7 +15,26 @@ from app.core.transaction_store import IdempotencyConflict, TransactionResult, T
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
-store = TransactionStore(settings.database_path)
+_store: TransactionStore | None = None
+_store_lock = threading.Lock()
+
+
+def get_store() -> TransactionStore:
+    """Return the process-wide transaction journal (lazy, thread-safe)."""
+    global _store
+    if _store is None:
+        with _store_lock:
+            if _store is None:
+                _store = TransactionStore(settings.database_path)
+    return _store
+
+
+def reset_store(database_path: str | None = None) -> TransactionStore:
+    """Replace the process-wide store (used by tests for hermetic isolation)."""
+    global _store
+    with _store_lock:
+        _store = TransactionStore(database_path or settings.database_path)
+    return _store
 
 
 class TransactionRequest(BaseModel):
@@ -88,7 +108,7 @@ def create_transaction(
 
     business_id = _business_id(claims)
     try:
-        result = store.execute(
+        result = get_store().execute(
             transaction_id=uuid4().hex,
             idempotency_key=f"{business_id}:{idempotency_key}",
             business_id=business_id,
@@ -113,7 +133,7 @@ def get_transaction(
 ) -> TransactionResponse:
     """Return a journal entry owned by the authenticated caller's business."""
     business_id = _business_id(claims)
-    result = store.get(transaction_id, business_id=business_id)
+    result = get_store().get(transaction_id, business_id=business_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return _to_response(result)

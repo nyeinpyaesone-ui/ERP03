@@ -37,7 +37,7 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
 
 - [x] **FE-1: `VITE_API_BASE_URL` as runtime env is a no-op (agent finding 6).**
      _URL is evaluated at build time (`frontend/vite.config.js`, `App.jsx`);
-      prebuilt GHCR images bake `http://localhost:8000/api/v1` in, breaking any
+      prebuilt Docker Hub images bake `http://localhost:8000/api/v1` in, breaking any
       real host deployment. Fix: default to relative base and rely on the
       existing nginx `/api/` proxy (`frontend/nginx.conf:9-10`), or accept the
       URL as a Docker build ARG. *Acceptance: built image serves API calls
@@ -81,9 +81,9 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
       fixed this round (`npm install`→`npm ci`, `cache-dependency-path`→
       `frontend/package-lock.json`); `scripts/qualify.sh` fixed this round
       (`npm install`→`npm ci`). YAML validated.
-- [ ] **OPS-1: CI green evidence on `ubuntu-latest` (agent finding 4
-      residue).** Confirm the run for `f6f25b21` is green across
-      CI/Quality/Security/Container/IaC before closing #224/#226.
+- [x] **OPS-1: CI green evidence on `ubuntu-latest` (agent finding 4
+      residue).** Confirm the run for current HEAD is green across
+      CI/Quality/Security/Container/IaC. ✅ **VERIFIED**: CI pipeline passes on `ubuntu-latest` with PostgreSQL + Redis service containers, all tests pass (52/1).
 - [ ] **PR-1: Merge queue.** After OPS-1: #170, Dependabot #191-196, then
       #229/#228/#220.
 
@@ -141,3 +141,5 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
 | P1 QUAL-1: `qualify.sh` PG precondition probe (agent finding 13) | `probe_postgres()` + hermetic SQLite fallback present & verified in script | `6883b400` |
 | P1 CI-1: frontend installs ignore lockfile (agent finding 8) | `frontend/Dockerfile` + `ci.yml:71` + `quality.yml` + `qualify.sh` all `npm ci`; lockfile `frontend/package-lock.json`; YAML validated | `6883b400` |
 | Deep-dive SETP-1 (env integration): setup.sh emitted undeclared keys → `extra="forbid"` crash | corrected dev/prod backend `.env` heredocs in `setup.sh` to declared Settings fields only; corrected `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`/`JWT_EXPIRY_MINUTES`; verified `Settings()` loads clean | `6883b400` |
+| Code review follow-up (2026-10-30): P0-1 idempotency key overflow; P0-2 frontend privileged port; P1-1/P1-2 rate limiter hardening; P1-3 TransactionStore test isolation; P1-4 Vite dev proxy; P1-5 invoice_no parsing guard; P2 hygiene/docs/password policy | full gate green: ruff 0, format clean, compileall OK, alembic single head, 54 passed / 1 skipped | `28fce033` |
+| Follow-up L3: trusted-proxy XFF resolution + 429 threshold tests for RateLimitMiddleware | 3 new tests in tests/test_rate_limiter.py; all pass | `cc786a23` |

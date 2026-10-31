@@ -10,7 +10,7 @@ This document consolidates all secrets, workflow permissions, branch protection,
 
 | Secret | How to Generate | Purpose |
 |--------|----------------|---------|
-| `GHCR_PAT` | GitHub → Settings → Developer settings → Personal access tokens → Fine-grained token with `write:packages`, `read:packages` | Push container images to GHCR |
+| `DOCKERHUB_TOKEN` | Docker Hub → Account Settings → Security → New Access Token (write access) | Push container images to Docker Hub |
 | `POSTGRES_PASSWORD` | Your chosen strong password | Database access for CI & compose |
 | `SECRET_KEY` | `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` | Application signing / sessions |
 | `DATABASE_URL` | `postgresql+asyncpg://erp03:<password>@postgres:5432/erp03` | Backend database connection |
@@ -42,7 +42,7 @@ This document consolidates all secrets, workflow permissions, branch protection,
 2. Select **"Read and write permissions"**
 3. Click **Save**
 
-This enables `GITHUB_TOKEN` with `packages: write` so the container workflow can push to GHCR without a separate PAT.
+This enables the `DOCKERHUB_TOKEN` (Docker Hub access token) so the container workflow can push to Docker Hub without a separate PAT.
 
 ---
 
@@ -98,11 +98,11 @@ DATABASE_URL=postgresql+asyncpg://erp03:<password>@postgres:5432/erp03
 DATABASE_PATH=./.local/erp03.sqlite3
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 
-GHCR_REGISTRY=ghcr.io
-GHCR_USERNAME=<your-github-username>
-GHCR_TOKEN=<GHCR_PAT-value>
-GHCR_IMAGE_BACKEND=ghcr.io/<your-github-username>/erp03-backend
-GHCR_IMAGE_FRONTEND=ghcr.io/<your-github-username>/erp03-frontend
+DOCKERHUB_REGISTRY=docker.io
+DOCKERHUB_USERNAME=<your-dockerhub-username>
+DOCKERHUB_TOKEN=<DockerHub_PAT-value>
+DOCKERHUB_IMAGE_BACKEND=docker.io/<your-dockerhub-username>/erp03-backend
+DOCKERHUB_IMAGE_FRONTEND=docker.io/<your-dockerhub-username>/erp03-frontend
 IMAGE_TAG=latest
 ```
 
@@ -124,17 +124,17 @@ git tag v1.0.0 && git push origin v1.0.0
 ```
 
 This triggers the Container workflow which builds and pushes:
-- `ghcr.io/nyeinpyaesone-ui/erp03-backend`
-- `ghcr.io/nyeinpyaesone-ui/erp03-frontend`
+- `docker.io/powerrangeranikg/erp03-backend`
+- `docker.io/powerrangeranikg/erp03-frontend`
 
 ---
 
 ## 7. Pull Images
 
 ```bash
-echo $GHCR_PAT | docker login ghcr.io -u $GHCR_USERNAME --password-stdin
-docker pull ghcr.io/nyeinpyaesone-ui/erp03-backend:latest
-docker pull ghcr.io/nyeinpyaesone-ui/erp03-frontend:latest
+echo $DOCKERHUB_TOKEN | docker login docker.io -u $DOCKERHUB_USERNAME --password-stdin
+docker pull docker.io/powerrangeranikg/erp03-backend:latest
+docker pull docker.io/powerrangeranikg/erp03-frontend:latest
 ```
 
 ---
@@ -162,11 +162,11 @@ docker pull ghcr.io/nyeinpyaesone-ui/erp03-frontend:latest
 # Check pipeline ran
 gh run list --repo nyeinpyaesone-ui/ERP03 --limit 5
 
-# Check images in GHCR
+# Check images in Docker Hub
 gh api repos/nyeinpyaesone-ui/ERP03/packages/container/erp03-backend/versions
 
 # Pull and run
-docker run -p 8000:8000 ghcr.io/nyeinpyaesone-ui/erp03-backend:latest
+docker run -p 8000:8000 docker.io/powerrangeranikg/erp03-backend:latest
 curl http://localhost:8000/api/v1/healthz
 ```
 
@@ -175,7 +175,7 @@ curl http://localhost:8000/api/v1/healthz
 ## 10. Important Notes
 
 - **Never paste credentials in chat.** Configure them directly in the GitHub UI.
-- **GHCR_PAT** needs `write:packages` and `read:packages` scopes.
-- **Workflow permissions** must be "Read and write" for `GITHUB_TOKEN` to push to GHCR.
+- **DOCKERHUB_TOKEN** is a Docker Hub access token with push access.
+- **Workflow permissions** must be "Read and write" for `GITHUB_TOKEN` to push to Docker Hub.
 - **Branch protection** requires Code Owners review — `CODEOWNERS` file is already in the repo.
 - All workflows use only official GitHub Actions (`actions/*`, `docker/*`, `github/codeql-action*`).

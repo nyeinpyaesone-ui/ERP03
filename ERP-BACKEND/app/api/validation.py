@@ -2,7 +2,10 @@
 
 from fastapi import HTTPException, status
 
-MAX_IDEMPOTENCY_KEY_LENGTH = 255
+# The key is later prefixed with "{business_id}:" (36-char UUID + colon) before
+# being stored in Invoice.idempotency_key (String(255)). Keep the combined
+# value within the column limit.
+MAX_IDEMPOTENCY_KEY_LENGTH = 218
 
 
 def validate_idempotency_key(key: str | None) -> str:

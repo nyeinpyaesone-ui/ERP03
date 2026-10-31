@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: ghcr.io/nyeinpyaesone-ui/erp03-frontend@sha256:REPLACE_WITH_REAL_DIGEST
+          image: docker.io/powerrangeranikg/erp03-frontend@sha256:REPLACE_WITH_REAL_DIGEST
           ports:
             - containerPort: 80
           readinessProbe:

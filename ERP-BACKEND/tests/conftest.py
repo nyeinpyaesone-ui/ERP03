@@ -22,6 +22,12 @@ os.environ.setdefault("DATABASE_PATH", "/tmp/erp03-tests.sqlite3")
 # Hermetic default: a fresh SQLite file per session unless the caller
 # explicitly provides DATABASE_URL (PostgreSQL in CI, or a custom target).
 os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{os.environ['DATABASE_PATH']}")
+
+# Disable rate limiting for tests to avoid fakeredis concurrency issues
+os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
+
+# Use fakeredis for tests (in-memory Redis implementation)
+os.environ.setdefault("REDIS_URL", "fakeredis://")
 # A pre-set DATABASE_URL (e.g. an exported shell profile) silently overrides
 # the hermetic default above; log the effective target for traceability.
 print(
