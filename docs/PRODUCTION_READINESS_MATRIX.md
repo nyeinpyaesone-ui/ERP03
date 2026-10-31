@@ -9,11 +9,12 @@ This matrix maps the repository implementation checklist to verified repository 
 | Code quality | Ruff lint/format gate added; path filters applied; CI green | PASS |
 | CI/CD | CI + Qualification + Quality + Security + Container + IaC workflows present; runners switched to ubuntu-latest; path filters added; CI green | PASS |
 | Containerization | Non-root backend, health checks, pinned runtime images, Dockerfile deps-path fixed | PASS |
-| Local bootstrap | Compose + env configuration present | PASS |
+| Local bootstrap | Compose + env configuration present; devcontainer with PostgreSQL + Redis services | PASS |
+| Devcontainer | Docker Compose-based devcontainer with pre-built dependencies; Docker Hub push workflow | PASS |
 | Infrastructure as Code | Terraform contract + validation workflow + artifact upload | PASS |
 | Kubernetes | Base manifests, probes, resources, overlays | PARTIAL |
 | Security | Dependency audit + CodeQL + container scanning; alerts added | PASS |
-| Observability | Request IDs, structured request logging, `/metrics` | PARTIAL |
+| Observability | Request IDs, structured request logging, `/metrics` (auth-gated) | PARTIAL |
 | Database protection | Alembic migrations + restore runbook verified | PASS |
 | Release management | SemVer release workflow + notes template + deploy runbook | PASS |
 | Testing | Unit/integration/qualification gates present; idempotency payload mismatch test updated; CI green | PASS |

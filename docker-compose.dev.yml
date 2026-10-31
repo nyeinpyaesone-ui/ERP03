@@ -86,7 +86,7 @@ services:
       - ./frontend:/src
       - /src/node_modules
     environment:
-      - VITE_API_BASE_URL=http://localhost:8000/api/v1
+      - VITE_API_BASE_URL=/api
     command: >
       sh -c "npm ci --no-audit --no-fund && npm run dev -- --host 0.0.0.0 --port 5173"
     depends_on:

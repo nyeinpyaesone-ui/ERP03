@@ -1,6 +1,8 @@
 {
-  "name": "ERP03 Full Stack",
-  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "name": "ERP03 Full Stack Dev",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
   "features": {
     "ghcr.io/devcontainers/features/python:1": {"version": "3.12"},
     "ghcr.io/devcontainers/features/node:1": {"version": "22"},
@@ -8,15 +10,34 @@
   },
   "customizations": {
     "vscode": {
-      "extensions": ["ms-python.python", "ms-python.black-formatter", "ms-python.ruff", "dbaeumer.vscode-eslint", "esbenp.prettier-vscode"],
-      "settings": {"python.defaultInterpreterPath": "/usr/local/bin/python", "editor.formatOnSave": true}
+      "extensions": [
+        "ms-python.python",
+        "ms-python.ruff",
+        "ms-python.black-formatter",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-azuretools.vscode-docker",
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "editor.formatOnSave": true,
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestArgs": ["ERP-BACKEND/tests"]
+      }
     }
   },
-  "forwardPorts": [3000, 5173, 8000, 5432],
+  "forwardPorts": [3000, 5173, 8000, 5432, 6379],
   "portsAttributes": {
+    "3000": {"label": "Frontend (Prod)", "onAutoForward": "notify"},
     "5173": {"label": "Frontend Dev Server", "onAutoForward": "notify"},
-    "8000": {"label": "ERP03 API", "onAutoForward": "notify"}
+    "8000": {"label": "ERP03 API", "onAutoForward": "notify"},
+    "5432": {"label": "PostgreSQL", "onAutoForward": "silent"},
+    "6379": {"label": "Redis", "onAutoForward": "silent"}
   },
   "postCreateCommand": "bash .devcontainer/post-create.sh",
-  "remoteUser": "vscode"
+  "remoteUser": "vscode",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "workspaceFolder": "/workspace"
 }

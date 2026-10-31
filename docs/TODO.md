@@ -60,10 +60,12 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
       rate-limiting. ✅ **VERIFIED**: Settings knob exists
       (`jwt_expiry_minutes`, default 480, ge=1/le=44640); `create_access_token`
       consumes it; `require_permission` re-checks `User.active`/`Business.active`
-      + permission joins. ✅ **RATE LIMITING IMPLEMENTED**: `RateLimitMiddleware`
-      in `app/main.py` with config via `rate_limit_enabled`,
-      `rate_limit_requests`, `rate_limit_window`; default 100 req/min per IP;
-      returns 429 + `Retry-After` header.
+      + permission joins. ✅ **RATE LIMITING IMPLEMENTED (Redis-backed)**:
+      `RedisRateLimitMiddleware` in `app/main.py` with config via
+      `rate_limit_enabled`, `rate_limit_requests`, `rate_limit_window`,
+      `trusted_proxies`; default 100 req/min per IP; returns 429 + `Retry-After`
+      header. Uses Redis ZSET sliding window for distributed rate limiting.
+      Tests: `tests/test_rate_limiter.py` (3 tests, all pass).
 - [x] **SETP-1: setup.sh emits container-absolute SQLite path for host use
       (agent finding 12).** Point `database_url`/`database_path` at the same
       venv-local absolute file. ✅ **FIXED**: `setup.sh` now uses `$ROOT_DIR/ERP-BACKEND/.local/erp03.sqlite3` consistently in both dev/prod configs; `DATABASE_PATH` empty in prod (PostgreSQL); verified Settings loads clean.
