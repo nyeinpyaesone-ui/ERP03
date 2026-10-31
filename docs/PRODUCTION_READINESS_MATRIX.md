@@ -12,14 +12,14 @@ This matrix maps the repository implementation checklist to verified repository 
 | Local bootstrap | Compose + env configuration present; devcontainer with PostgreSQL + Redis services | PASS |
 | Devcontainer | Docker Compose-based devcontainer with pre-built dependencies; Docker Hub push workflow | PASS |
 | Infrastructure as Code | Terraform contract + validation workflow + artifact upload | PASS |
-| Kubernetes | Base manifests, probes, resources, overlays | PARTIAL |
-| Security | Dependency audit + CodeQL + container scanning; alerts added | PASS |
-| Observability | Request IDs, structured request logging, `/metrics` (auth-gated) | PARTIAL |
+| Kubernetes | Base manifests, probes, resources, overlays, Redis, PostgreSQL, Ollama, ingress, RBAC, NetworkPolicy, PDB, security contexts, production/staging overlays | PASS |
+| Security | Dependency audit + CodeQL + container scanning; alerts added; security audit script; non-root containers; NetworkPolicy | PASS |
+| Observability | Request IDs, structured request logging, `/metrics` (auth-gated), Prometheus rules, OTEL collector, Grafana | PASS |
 | Database protection | Alembic migrations + restore runbook verified | PASS |
 | Release management | SemVer release workflow + notes template + deploy runbook | PASS |
 | Testing | Unit/integration/qualification gates present; idempotency payload mismatch test updated; CI green | PASS |
 | Operational runbooks | Deployment, rollback, backup/restore, incident, maintenance | PASS |
-| Final production readiness | All PASS-gates verified; Kubernetes & observability noted as PARTIAL with runbooks | QUALIFIED |
+| Final production readiness | All PASS-gates verified; Kubernetes and observability implemented with comprehensive manifests and monitoring | QUALIFIED |
 
 ## Release blockers
 
