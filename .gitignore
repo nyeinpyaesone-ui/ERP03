@@ -68,3 +68,6 @@ ERP-BACKEND/.local/
 *.pid
 *.sock
 coverage.xml
+
+# Agent runtime artifacts
+.agent/
