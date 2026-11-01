@@ -19,6 +19,10 @@
 #   --sync-secrets   Sync GitHub secrets availability (values not readable via API).
 #   --env-type       Target environment: development (default) | staging | production.
 #   --force          Overwrite existing .env files when regenerating.
+#   --skip-preflight Do not run the pre-configuration check before installing.
+#                    (Preflight runs automatically and blocks installs on
+#                    unmet hard requirements.)
+#   --preflight-only Run only the pre-configuration check, then exit 0/1.
 #   --help           Show this help.
 #
 # Requirements satisfied by this script:
@@ -50,8 +54,11 @@ warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
-  sed -n '3,43p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  awk 'NR>=3 && /^set -Eeuo/{exit} NR>=3 && /^#/{sub(/^# ?/,""); print}' "${BASH_SOURCE[0]}"
 }
+
+WITH_PREFLIGHT=true
+PREFLIGHT_ONLY=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -61,6 +68,8 @@ while [[ $# -gt 0 ]]; do
     --sync-secrets) SYNC_SECRETS=true ;;
     --env-type) ENV_TYPE="${2:-}"; shift ;;
     --force) FORCE=true ;;
+    --skip-preflight) WITH_PREFLIGHT=false ;;
+    --preflight-only) PREFLIGHT_ONLY=true ;;
     --help|-h) usage; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
@@ -146,7 +155,10 @@ check_toolchain() {
   require_cmd npm "bundled with nodejs"
   # Vite 7 requires Node >= 20.19 — same floor as scripts/agent/bootstrap.sh.
   NODE_MAJOR="$(node --version | sed 's/v\([0-9]*\).*/\1/')"
-  (( NODE_MAJOR >= 20 )) || die "Node >= 20.19 required (Vite 7), found $(node --version)"
+  NODE_MINOR="$(node --version | sed 's/v[0-9]*\.\([0-9]*\).*/\1/')"
+  if (( NODE_MAJOR < 20 )) || { (( NODE_MAJOR == 20 )) && (( NODE_MINOR < 19 )); }; then
+    die "Node >= 20.19 required (Vite 7), found $(node --version)"
+  fi
   if ! docker_available; then
     warn "Docker not found: skipping container-based services (backend still runs against SQLite/Postgres URLs you provide)"
   fi
@@ -156,6 +168,147 @@ docker_available() {
   command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1
 }
 
+# ---------------------------------------------------------------------------
+# 2b. Pre-configuration check — accurate, version-specific gate that runs
+#     BEFORE any install trigger (venv creation, pip/npm pulls). It compares
+#     the host toolchain against the pinned compatibility matrix below and
+#     exits non-zero on any hard-requirement miss, so setup never half-
+#     installs against an incompatible runtime. Optional components are
+#     reported as warnings with the exact flag they block.
+# ---------------------------------------------------------------------------
+# Compatibility matrix (single source of truth for preflight; keep in sync
+# with scripts/agent/bootstrap.sh and CI workflow images):
+REQ_PYTHON="3.12"
+REQ_NODE="20.19"          # Vite 7 engine floor; CI uses Node 22 LTS
+REQ_GIT="2.30"
+REQ_NPM="10"              # bundled with Node >= 20
+REQ_COMPOSE_FILE="docker-compose.yml"
+
+ver_ge() {  # ver_ge "20.19.2" "20.19" -> true ; tolerates suffixes like 1.2.3-rc1
+  local IFS=.
+  # shellcheck disable=SC2086
+  local a=(${1:-0}) b=(${2:-0}) i x y
+  for i in 0 1 2; do
+    x="${a[i]:-0}"; x="${x%%[!0-9]*}"; x="${x:-0}"
+    y="${b[i]:-0}"; y="${y%%[!0-9]*}"; y="${y:-0}"
+    if (( x > y )); then return 0; fi
+    if (( x < y )); then return 1; fi
+  done
+  return 0
+}
+
+preflight_check() {
+  log "Pre-configuration check (compatibility gate before installs)"
+  local errors=0 warnings=0
+
+  report() {  # report OK|WARN|FAIL label detail
+    case "$1" in
+      OK)   printf '  \033[0;32m✔\033[0m %-42s %s\n' "$2" "$3" ;;
+      WARN) printf '  \033[1;33m⚠\033[0m %-42s %s\n' "$2" "$3"; warnings=$((warnings+1)) ;;
+      FAIL) printf '  \033[1;31m✘\033[0m %-42s %s\n' "$2" "$3"; errors=$((errors+1)) ;;
+    esac
+  }
+
+  # --- Python interpreter (hard requirement) ---
+  local py py_ver=""
+  if py="$(python_cmd)"; then
+    py_ver="$("$py" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])')"
+    if ver_ge "${py_ver%.*}" "$REQ_PYTHON"; then
+      report OK "python ($py)" "$py_ver >= $REQ_PYTHON"
+    else
+      report FAIL "python ($py)" "$py_ver < $REQ_PYTHON"
+    fi
+  else
+    report FAIL "python >= $REQ_PYTHON" "no 3.12+ interpreter found (python3.12/python3/python)"
+  fi
+
+  # --- git (hard requirement: venv tooling, evidence commits, hooks) ---
+  if command -v git >/dev/null 2>&1; then
+    local git_ver; git_ver="$(git --version | awk '{print $3}')"
+    ver_ge "$git_ver" "$REQ_GIT" \
+      && report OK "git" "$git_ver >= $REQ_GIT" \
+      || report FAIL "git" "$git_ver < $REQ_GIT"
+  else
+    report FAIL "git >= $REQ_GIT" "not installed"
+  fi
+
+  # --- Node + npm (hard requirement for frontend; Vite 7 engine floor) ---
+  if command -v node >/dev/null 2>&1; then
+    local node_ver
+    node_ver="$(node --version | sed 's/^v//')"
+    if ver_ge "$node_ver" "$REQ_NODE"; then
+      report OK "node" "$node_ver >= $REQ_NODE (Vite 7)"
+    else
+      report FAIL "node" "$node_ver < $REQ_NODE (Vite 7 requires 20.19+)"
+    fi
+  elif $SKIP_FRONTEND; then
+    report WARN "node" "not installed; acceptable with --skip-frontend"
+  else
+    report FAIL "node >= $REQ_NODE" "not installed (required by frontend build)"
+  fi
+
+  if command -v npm >/dev/null 2>&1; then
+    local npm_ver; npm_ver="$(npm --version)"
+    ver_ge "$npm_ver" "$REQ_NPM" \
+      && report OK "npm" "$npm_ver >= $REQ_NPM" \
+      || { $SKIP_FRONTEND && report WARN "npm" "$npm_ver < $REQ_NPM (older npm usually still works)" \
+           || report FAIL "npm" "$npm_ver < $REQ_NPM"; }
+  elif ! $SKIP_FRONTEND; then
+    report FAIL "npm >= $REQ_NPM" "not installed (bundled with Node)"
+  fi
+
+  # --- Docker / compose (optional; blocks specific flags only) ---
+  if docker_available; then
+    local dc_ver; dc_ver="$(docker compose version --short 2>/dev/null || echo unknown)"
+    report OK "docker + compose plugin" "daemon reachable (compose v$dc_ver)"
+  else
+    report WARN "docker" "daemon unavailable — [--with-infra] will be refused"
+  fi
+
+  # --- Pinned manifests present (install targets must exist before pulling) ---
+  local f
+  for f in \
+    "ERP-BACKEND/requirements.txt" \
+    "ERP-BACKEND/dev-requirements.txt" \
+    "frontend/package.json" \
+    "frontend/package-lock.json" \
+    "$REQ_COMPOSE_FILE" ; do
+    if [[ -f "$ROOT_DIR/$f" ]]; then
+      report OK "manifest $f" "present"
+    elif [[ "$f" == "$REQ_COMPOSE_FILE" ]]; then
+      report WARN "manifest $f" "missing — compose workflows disabled"
+    else
+      report FAIL "manifest $f" "missing — cannot install pinned deps"
+    fi
+  done
+
+  # --- Repo writability (venv/.env generation targets) ---
+  if [[ -w "$ROOT_DIR" ]]; then
+    report OK "workspace writable" "$ROOT_DIR"
+  else
+    report FAIL "workspace writable" "$ROOT_DIR is not writable"
+  fi
+
+  # --- GitHub CLI (only required when secrets sync is triggered) ---
+  if $SYNC_SECRETS; then
+    if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+      report OK "gh CLI (authenticated)" "$(gh --version | head -1)"
+    else
+      report FAIL "gh CLI authenticated" "required because --sync-secrets was requested"
+    fi
+  fi
+
+  printf '\n==> Preflight summary: %d error(s), %d warning(s)\n' "$errors" "$warnings"
+  if (( errors > 0 )); then
+    die "pre-configuration check failed — fix the ✘ items above (or run with --skip-preflight to override at your own risk)"
+  fi
+  (( warnings > 0 )) && warn "preflight passed with $warnings warning(s); optional features may be disabled"
+  log "✅ Pre-configuration check passed — proceeding to installs"
+}
+
+# ---------------------------------------------------------------------------
+# Version-comparison helpers used by both preflight and toolchain checks.
+# ---------------------------------------------------------------------------
 compose_cmd() {
   if docker compose version >/dev/null 2>&1; then
     docker compose "$@"
@@ -598,6 +751,19 @@ smoke_test() {
 main() {
   detect_platform
   arch_lower="$(echo "$ARCH" | tr '[:upper:]' '[:lower:]')"
+
+  # Pre-configuration gate: runs FIRST, before any install trigger (venv
+  # creation, pip pulls, npm ci) or secrets sync, so incompatible hosts fail
+  # fast with an accurate report instead of a half-provisioned environment.
+  if $WITH_PREFLIGHT; then
+    preflight_check
+  else
+    warn "pre-configuration check skipped (--skip-preflight)"
+  fi
+  if $PREFLIGHT_ONLY; then
+    log "Preflight-only run requested (--preflight-only); no installs performed."
+    exit 0
+  fi
 
   if $SYNC_SECRETS; then
     sync_github_secrets
