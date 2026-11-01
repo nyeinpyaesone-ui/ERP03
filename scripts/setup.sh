@@ -17,9 +17,19 @@
 #   --qualify        Run scripts/qualify.sh at the end (full CI-equivalent gate).
 #   --skip-frontend  Do not install frontend npm dependencies.
 #   --sync-secrets   Sync GitHub secrets availability (values not readable via API).
-#   --env-type       Target environment: development (default) | production.
+#   --env-type       Target environment: development (default) | staging | production.
 #   --force          Overwrite existing .env files when regenerating.
 #   --help           Show this help.
+#
+# Requirements satisfied by this script:
+#   * Python >= 3.12, Node >= 20.19 (Vite 7), git; Docker optional (only for
+#     --with-infra / compose-based services).
+#   * Pinned backend deps: ERP-BACKEND/requirements.txt + dev-requirements.txt
+#     installed into an isolated virtualenv ($VENV_DIR, default ./.venv).
+#   * Frontend deps: frontend/package-lock.json honoured via `npm ci`.
+#   * Generated configs: ERP-BACKEND/.env (fields MUST match the Settings model
+#     in app/core/config.py — extra="forbid"), .env.compose, frontend/.env,
+#     .env.example. Existing files are kept unless --force.
 #
 set -Eeuo pipefail
 
@@ -40,7 +50,7 @@ warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
-  sed -n '3,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,43p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 while [[ $# -gt 0 ]]; do
@@ -59,8 +69,16 @@ done
 
 # Validate env type
 case "$ENV_TYPE" in
-  development|production) ;;
-  *) die "Invalid --env-type: $ENV_TYPE (must be development|production)" ;;
+  development|staging|production) ;;
+  *) die "Invalid --env-type: $ENV_TYPE (must be development|staging|production)" ;;
+esac
+
+# Backend pool sizing written into ERP-BACKEND/.env per tier. The Settings
+# model also auto-tunes, but the generated file must state explicit values.
+case "$ENV_TYPE" in
+  production)   POOL_SIZE=20; POOL_OVERFLOW=30; POOL_RECYCLE=3600 ;;
+  staging)      POOL_SIZE=10; POOL_OVERFLOW=30; POOL_RECYCLE=1800 ;;
+  *)            POOL_SIZE=5;  POOL_OVERFLOW=10; POOL_RECYCLE=900  ;;
 esac
 
 # ---------------------------------------------------------------------------
@@ -123,13 +141,13 @@ check_toolchain() {
   py="$(python_cmd)" || die "Python >= 3.12 is required. Install hint [$PKG]: python3.12"
   PY_VERSION="$("$py" --version 2>&1)"
   log "Using $py ($PY_VERSION)"
-  require_cmd node "nodejs (LTS 20+)"
+  require_cmd git "git (e.g. apt: git | brew: git)"
+  require_cmd node "nodejs (LTS 20.19+; CI uses 22)"
   require_cmd npm "bundled with nodejs"
+  # Vite 7 requires Node >= 20.19 — same floor as scripts/agent/bootstrap.sh.
   NODE_MAJOR="$(node --version | sed 's/v\([0-9]*\).*/\1/')"
-  (( NODE_MAJOR >= 18 )) || die "Node >= 18 required, found $(node --version)"
-  if docker_available; then
-    log "Docker detected — compose services available locally"
-  else
+  (( NODE_MAJOR >= 20 )) || die "Node >= 20.19 required (Vite 7), found $(node --version)"
+  if ! docker_available; then
     warn "Docker not found: skipping container-based services (backend still runs against SQLite/Postgres URLs you provide)"
   fi
 }
@@ -161,20 +179,27 @@ check_gh_auth() {
   fi
 }
 
-# Centralized secret registry — single source of truth for all environments
-# Fields MUST match ERP-BACKEND/app/core/config.py Settings model
+# Centralized secret/variable registry — single source of truth for all env files.
+# Two scopes, deliberately kept separate:
+#   backend  — keys written into ERP-BACKEND/.env. Fields MUST match the
+#              Settings model in ERP-BACKEND/app/core/config.py (extra="forbid":
+#              any unknown key here makes the backend refuse to start).
+#   compose  — keys written ONLY to .env.compose for docker-compose
+#              interpolation (see .env.compose.example header warning).
+# Format: "description|generator|required_for"
 declare -A SECRET_SPECS=(
-  # [secret_name]="description|generator|required_for"
+  # --- Backend settings (Settings model) ---
   ["SECRET_KEY"]="Application secret key|token_urlsafe(48)|all"
-  ["POSTGRES_PASSWORD"]="PostgreSQL password|token_hex(24)|production,compose"
-  ["REDIS_PASSWORD"]="Redis password|token_hex(24)|compose"
-  ["DOCKERHUB_TOKEN"]="Docker Hub PAT|from_github|ci,production"
-  ["DB_PASSWORD"]="Production DB password|from_github|production"
+  ["POSTGRES_PASSWORD"]="PostgreSQL password|token_hex(24)|production,staging,compose"
+  ["REDIS_PASSWORD"]="Redis password|token_hex(24)|staging,production,compose"
   ["DB_HOST"]="Production DB host|from_github|production"
-  ["REDIS_USER"]="Redis username|default:default|compose"
-  ["REDIS_ACCOUNT_NUMBER"]="Upstash Redis account|from_github|production"
-  ["API_REDIS_KEY"]="Upstash Redis REST API key|from_github|production"
-  ["OLLAMA_IMAGE_TAG"]="Ollama version|fixed:0.32.5|all"
+  ["DB_PASSWORD"]="Production DB password|from_github|production"
+  ["DOCKERHUB_TOKEN"]="Docker Hub PAT|from_github|ci,production"
+  # --- Compose-only variables (never placed in the backend .env) ---
+  ["REDIS_USER"]="Redis username (compose only; unused by app config)|default:default|compose"
+  ["REDIS_ACCOUNT_NUMBER"]="Upstash Redis account (external REST rate limiting; compose only)|from_github|production"
+  ["API_REDIS_KEY"]="Upstash Redis REST API key (compose only)|from_github|production"
+  ["OLLAMA_IMAGE_TAG"]="Ollama image tag (k8s/compose manifest pinning; compose only)|fixed:0.5.4|all"
 )
 
 # Generate secure values using system python3 (no venv dependency)
@@ -182,7 +207,7 @@ generate_secure_value() {
   local spec="$1"
   case "$spec" in
     token_urlsafe* ) local n="${spec#token_urlsafe(}"; n="${n%)}"; python3 -c "import secrets; print(secrets.token_urlsafe($n))" ;;
-    token_hex* ) local n="${spec#token_hex(}"; n="${n%)}"; head -c "$n" /dev/urandom | od -An -tx1 | tr -d ' \n' ;;
+    token_hex* ) local n="${spec#token_hex(}"; n="${n%)}"; python3 -c "import secrets; print(secrets.token_hex($n))" ;;
     default:* ) echo "${spec#default:}" ;;
     fixed:* ) echo "${spec#fixed:}" ;;
     from_github ) echo "" ;;  # placeholder, filled from GitHub if available
@@ -253,94 +278,84 @@ auto_configure_all() {
   else
     log "Generating $backend_env..."
     mkdir -p "$BACKEND_DIR/.local"
-    if [[ "$ENV_TYPE" == "development" ]]; then
-      cat > "$backend_env" <<EOF
-# ERP03 Backend Config — AUTO-GENERATED development
-ENVIRONMENT=development
+
+    # Per-tier values (all keys exist in app/core/config.py Settings).
+    local db_url db_path log_level debug origins typesafe jwt_min
+    local tok_min ref_days bcrypt_rounds idem_ttl rl_requests otel otel_endpoint redis_url
+    redis_url=""
+    case "$ENV_TYPE" in
+      development)
+        db_url="sqlite+aiosqlite:///$BACKEND_DIR/.local/erp03.sqlite3"
+        db_path="$BACKEND_DIR/.local/erp03.sqlite3"
+        log_level="DEBUG"; debug="true"
+        origins="http://localhost:3000,http://localhost:5173,http://localhost:8000"
+        typesafe="false"; jwt_min="30"
+        tok_min="30"; ref_days="7"; bcrypt_rounds="12"; idem_ttl="24"
+        rl_requests="100"; otel="false"; otel_endpoint=""
+        ;;
+      staging|production)
+        local db_host="${SECRETS[DB_HOST]:-postgres}"
+        local db_pass="${SECRETS[DB_PASSWORD]}"
+        if [[ -z "$db_pass" || "$db_pass" == "__GITHUB_SECRET__" ]]; then
+          warn "DB_PASSWORD not set locally; generating an ephemeral strong password"
+          db_pass="$(generate_secure_value 'token_hex(24)')"
+        fi
+        db_url="postgresql+asyncpg://erp03:${db_pass}@${db_host}:5432/erp03"
+        # legacy SQLite-backed transaction store path (see app/api/transactions.py)
+        db_path="/app/.local/erp03.sqlite3"
+        log_level="INFO"; debug="false"
+        typesafe="true"; jwt_min="15"
+        tok_min="15"; ref_days="30"; bcrypt_rounds="14"; idem_ttl="168"
+        rl_requests="1000"; otel="true"; otel_endpoint="http://otel-collector:4317"
+        redis_url="redis://:${SECRETS[REDIS_PASSWORD]}@redis:6379/0"
+        if [[ "$ENV_TYPE" == "staging" ]]; then
+          origins="${STAGING_CORS_ORIGINS:-https://staging.your-domain.com}"
+        else
+          origins="${PRODUCTION_CORS_ORIGINS:-https://your-domain.com}"
+        fi
+        ;;
+    esac
+
+    cat > "$backend_env" <<EOF
+# ERP03 Backend Config — AUTO-GENERATED $ENV_TYPE by scripts/setup.sh
+# Every key below MUST exist in ERP-BACKEND/app/core/config.py Settings (extra="forbid").
+ENVIRONMENT=$ENV_TYPE
 SECRET_KEY=${SECRETS[SECRET_KEY]}
-LOG_LEVEL=DEBUG
-DATABASE_URL=sqlite+aiosqlite:///$ROOT_DIR/ERP-BACKEND/.local/erp03.sqlite3
-DATABASE_PATH=$ROOT_DIR/ERP-BACKEND/.local/erp03.sqlite3
-DB_POOL_SIZE=5
-DB_MAX_OVERFLOW=10
-DB_POOL_RECYCLE=1800
+LOG_LEVEL=$log_level
+DATABASE_URL=$db_url
+DATABASE_PATH=$db_path
+DB_POOL_SIZE=$POOL_SIZE
+DB_MAX_OVERFLOW=$POOL_OVERFLOW
+DB_POOL_RECYCLE=$POOL_RECYCLE
 DB_ECHO=false
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:8000
-TYPESAFE_ENABLED=false
+CORS_ORIGINS=$origins
+TYPESAFE_ENABLED=$typesafe
 TYPESAFE_API_KEY=
-JWT_EXPIRY_MINUTES=30
-REDIS_URL=
-REDIS_PASSWORD=
-REDIS_DB=0
-API_V1_PREFIX=/api/v1
-API_TITLE=ERP03 API
-API_VERSION=1.0.0
-API_DOCS_URL=/docs
-API_REDOC_URL=/redoc
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-REFRESH_TOKEN_EXPIRE_DAYS=7
-PASSWORD_MIN_LENGTH=12
-BCRYPT_ROUNDS=12
-IDEMPOTENCY_TTL_HOURS=24
-IDEMPOTENCY_CLEANUP_INTERVAL=3600
-RATE_LIMIT_ENABLED=true
-RATE_LIMIT_REQUESTS=100
-RATE_LIMIT_WINDOW=60
-TRUSTED_PROXIES=
-WEBHOOK_SECRET=
-WEBHOOK_TIMEOUT=30
-OTEL_ENABLED=false
-OTEL_EXPORTER_OTLP_ENDPOINT=
-DEBUG=true
-EOF
-    else
-      local db_host="${SECRETS[DB_HOST]:-localhost}"
-      local db_pass="${SECRETS[DB_PASSWORD]}"
-      # Ensure DB_PASSWORD is not empty for production
-      if [[ -z "$db_pass" || "$db_pass" == "__GITHUB_SECRET__" ]]; then
-        warn "DB_PASSWORD not set locally; generate a strong one or set in GitHub secrets"
-        db_pass="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-      fi
-      cat > "$backend_env" <<EOF
-# ERP03 Backend Config — AUTO-GENERATED production
-ENVIRONMENT=production
-SECRET_KEY=${SECRETS[SECRET_KEY]}
-LOG_LEVEL=INFO
-DATABASE_URL=postgresql+asyncpg://erp03:${db_pass}@${db_host}:5432/erp03
-DATABASE_PATH=
-DB_POOL_SIZE=20
-DB_MAX_OVERFLOW=30
-DB_POOL_RECYCLE=3600
-DB_ECHO=false
-CORS_ORIGINS=https://your-domain.com
-TYPESAFE_ENABLED=true
-TYPESAFE_API_KEY=
-JWT_EXPIRY_MINUTES=15
-REDIS_URL=redis://:${SECRETS[REDIS_PASSWORD]}@redis:6379/0
+JWT_EXPIRY_MINUTES=$jwt_min
+REDIS_URL=$redis_url
 REDIS_PASSWORD=${SECRETS[REDIS_PASSWORD]}
 REDIS_DB=0
 API_V1_PREFIX=/api/v1
 API_TITLE=ERP03 API
-API_VERSION=1.0.0
+API_VERSION=1.1.0
 API_DOCS_URL=/docs
 API_REDOC_URL=/redoc
-ACCESS_TOKEN_EXPIRE_MINUTES=15
-REFRESH_TOKEN_EXPIRE_DAYS=30
+ACCESS_TOKEN_EXPIRE_MINUTES=$tok_min
+REFRESH_TOKEN_EXPIRE_DAYS=$ref_days
 PASSWORD_MIN_LENGTH=12
-BCRYPT_ROUNDS=14
-IDEMPOTENCY_TTL_HOURS=168
+BCRYPT_ROUNDS=$bcrypt_rounds
+IDEMPOTENCY_TTL_HOURS=$idem_ttl
 IDEMPOTENCY_CLEANUP_INTERVAL=3600
 RATE_LIMIT_ENABLED=true
-RATE_LIMIT_REQUESTS=1000
+RATE_LIMIT_REQUESTS=$rl_requests
 RATE_LIMIT_WINDOW=60
 TRUSTED_PROXIES=
 WEBHOOK_SECRET=
 WEBHOOK_TIMEOUT=30
-OTEL_ENABLED=true
-OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
-DEBUG=false
+OTEL_ENABLED=$otel
+OTEL_EXPORTER_OTLP_ENDPOINT=$otel_endpoint
+DEBUG=$debug
 EOF
-    fi
     chmod 600 "$backend_env"
     log "  ✓ Backend config written"
   fi
@@ -378,7 +393,7 @@ REDIS_ACCOUNT_NUMBER=${SECRETS[REDIS_ACCOUNT_NUMBER]}
 API_REDIS_KEY=${SECRETS[API_REDIS_KEY]}
 
 # Docker Hub (for container.yml CI)
-DOCKERHUB_USERNAME=powerrangeranikg
+DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME:-powerrangeranikg}
 DOCKERHUB_TOKEN=${SECRETS[DOCKERHUB_TOKEN]}
 DOCKERHUB_IMAGE_BACKEND=powerrangeranikg/erp03-backend
 DOCKERHUB_IMAGE_FRONTEND=powerrangeranikg/erp03-frontend
@@ -496,17 +511,21 @@ EOF
     log "  ✓ Example config written"
   fi
 
-  # 8. Verify configuration loads correctly
+  # 8. Verify configuration loads correctly — hard gate: Settings uses
+  # extra="forbid", so any drift between this generated file and the model
+  # must fail setup loudly instead of failing silently at first request.
+  # The check forces a hermetic SQLite URL (never connects to real Postgres)
+  # and keeps ENVIRONMENT from the .env so production validators still run.
   log "Verifying configuration..."
-  (cd "$BACKEND_DIR" && "$VENV_DIR/bin/python" -c "
-from app.core.config import settings
-print(f'  ✓ Environment: {settings.environment}')
-print(f'  ✓ Database: {settings.database_url.split(\"://\")[0]}')
-print(f'  ✓ Secret key: {len(settings.secret_key)} chars')
-print(f'  ✓ CORS origins: {settings.cors_origins}')
-print(f'  ✓ Redis URL: {settings.redis_url}')
-print(f'  ✓ Pool size: {settings.db_pool_size}/{settings.db_max_overflow}')
-") 2>/dev/null || warn "Config verification will run on backend start"
+  if ! ( cd "$BACKEND_DIR" && DATABASE_URL="sqlite+aiosqlite:////tmp/erp03-setup-check.sqlite3" \
+      "$VENV_DIR/bin/python" -c '
+from app.core.config import Settings
+s = Settings()
+print(f"  \u2713 Settings loaded ({s.environment}): pool={s.db_pool_size}/{s.db_max_overflow} "
+      f"origins={len(s.cors_origin_list)} redis={\"on\" if s.redis_url else \"off\"}")
+' ); then
+    die "Generated $backend_env does not match the Settings model (extra=\"forbid\"). Fix the env block or re-run with --force."
+  fi
 
   log "✅ Auto-configuration complete!"
   log ""
