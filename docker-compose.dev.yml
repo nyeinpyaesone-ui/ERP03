@@ -34,7 +34,7 @@ services:
       dockerfile: Dockerfile
     environment:
       ENVIRONMENT: development
-      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-me-32chars}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://erp03:${POSTGRES_PASSWORD:-erp03}@postgres:5432/erp03}
       DATABASE_PATH: /app/.local/erp03.sqlite3
     volumes:
