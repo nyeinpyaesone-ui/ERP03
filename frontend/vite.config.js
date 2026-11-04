@@ -24,10 +24,16 @@ export default defineConfig({
     cssCodeSplit: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['lucide-react', 'clsx', 'tailwind-merge'],
-          utils: ['zod', 'react-hook-form', '@hookform/resolvers'],
+        manualChunks: (id) => {
+          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+            return 'vendor';
+          }
+          if (id.includes('lucide-react') || id.includes('clsx') || id.includes('tailwind-merge')) {
+            return 'ui';
+          }
+          if (id.includes('zod') || id.includes('react-hook-form') || id.includes('@hookform/resolvers')) {
+            return 'utils';
+          }
         },
       },
     },

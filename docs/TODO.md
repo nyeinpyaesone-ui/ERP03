@@ -185,3 +185,6 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
 | Perf: frontend code splitting | React.lazy for pages, Vite manual chunk splitting (vendor/ui/utils), esbuild minify | `e726a00` |
 | Perf: nginx caching | gzip compression, 1-year cache for static assets, proxy timeouts | `e726a00` |
 | Fix: hardcoded secret fallbacks | docker-compose.dev.yml SECRET_KEY requires explicit value; .env.example placeholders aligned; PASSWORD_MIN_LENGTH=12 matches config.py | `55503ac` |
+| Upgrade: Python dependencies | SQLAlchemy 2.1.6→2.1.8, pytest-asyncio 1.4.1→1.4.1.post1 | `a574b56` |
+| Upgrade: Frontend dependencies | React Router 7.1.1→7.18.5, React Hook Form 7.54.2→7.91.0, Zod 3.24.2→4.6.7, Lucide React 0.475.0→1.68.0, Axios 1.8.4→1.21.0, Hook Form Resolvers 3.10.0→7.0.2, Tailwind Merge 2.6.0→3.7.0, Vite 6.4.5→5.4.11 (rolled back from 8.3.5 - CSS extraction broken), @vitejs/plugin-react 5.2.0→4.3.4 | `a574b56` |
+| Finding: Tailwind CSS v4 incompatible with Vite/Rolldown | Tailwind CSS v4 does not produce CSS output with Vite 6/8 + Rolldown. Rolled back to v3.4.17 with PostCSS. PostCSS config renamed to .cjs due to "type": "module" in package.json. | `a574b56` |
