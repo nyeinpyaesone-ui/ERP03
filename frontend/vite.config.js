@@ -18,4 +18,18 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    minify: 'esbuild',
+    sourcemap: false,
+    cssCodeSplit: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          ui: ['lucide-react', 'clsx', 'tailwind-merge'],
+          utils: ['zod', 'react-hook-form', '@hookform/resolvers'],
+        },
+      },
+    },
+  },
 });

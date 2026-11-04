@@ -1,12 +1,16 @@
+import { Suspense, lazy } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import DashboardPage from './pages/DashboardPage';
-import SalesPage from './pages/SalesPage';
-import ProductsPage from './pages/ProductsPage';
-import CustomersPage from './pages/CustomersPage';
-import InventoryPage from './pages/InventoryPage';
+
+// Lazy-load page components for code splitting — pages are only fetched
+// when the user navigates to their route.
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const SalesPage = lazy(() => import('./pages/SalesPage'));
+const ProductsPage = lazy(() => import('./pages/ProductsPage'));
+const CustomersPage = lazy(() => import('./pages/CustomersPage'));
+const InventoryPage = lazy(() => import('./pages/InventoryPage'));
 
 const router = createBrowserRouter([
   {
@@ -31,5 +35,9 @@ const router = createBrowserRouter([
 ]);
 
 export default function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50">Loading…</div>}>
+      <RouterProvider router={router} />
+    </Suspense>
+  );
 }
