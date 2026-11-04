@@ -17,6 +17,7 @@ import time
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
+import jwt as pyjwt
 import redis.asyncio as redis
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -68,6 +69,7 @@ class RedisRateLimitMiddleware:
         self.trusted_proxies = trusted_proxies or set()
         self._circuit_open = False
         self._circuit_opened_at: float | None = None
+        self._secret_key = settings.secret_key.get_secret_value()
 
         # Handle fakeredis URL scheme for tests
         if redis_url.startswith("fakeredis://"):
@@ -102,27 +104,23 @@ class RedisRateLimitMiddleware:
         # Get client IP, honouring X-Forwarded-For only from trusted peers.
         peer_ip = scope.get("client", ("unknown", 0))[0] or "unknown"
         client_ip = peer_ip
+        headers = dict(scope.get("headers", []))
         if peer_ip in self.trusted_proxies:
-            headers = dict(scope.get("headers", []))
             forwarded = headers.get(b"x-forwarded-for", b"").decode().strip()
             if forwarded:
                 client_ip = forwarded.split(",")[0].strip() or peer_ip
 
         # Extract business_id from JWT for per-tenant rate limiting
         business_id = None
-        auth_header = dict(scope.get("headers", [])).get(b"authorization", b"").decode()
+        auth_header = headers.get(b"authorization", b"").decode()
         if auth_header.startswith("Bearer "):
             token = auth_header.split(" ", 1)[1]
             try:
-                import jwt as pyjwt
-
-                from app.core.config import settings as _settings
-
                 payload = pyjwt.decode(
                     token,
-                    _settings.secret_key.get_secret_value(),
+                    self._secret_key,
                     algorithms=["HS256"],
-                    options={"verify_exp": False},
+                    options={"verify_exp": False, "verify_signature": False},
                 )
                 business_id = payload.get("business_id")
             except Exception:
