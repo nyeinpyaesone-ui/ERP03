@@ -93,6 +93,6 @@ curl http://localhost:8000/api/v1/healthz
 curl http://localhost:3000
 
 # Docker Hub images
-docker pull docker.io/powerrangeranikg/erp03-backend:latest
-docker pull docker.io/powerrangeranikg/erp03-frontend:latest
+docker pull docker.io/nyeinpyaesone-ui/erp03-backend:latest
+docker pull docker.io/nyeinpyaesone-ui/erp03-frontend:latest
 ```

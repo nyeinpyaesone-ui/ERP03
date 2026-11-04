@@ -1,5 +1,6 @@
 """Canonical ERP03 SQLAlchemy models."""
 
+from app.models.audit import AuditLog
 from app.models.erp import (
     Customer,
     Invoice,
@@ -15,6 +16,7 @@ from app.models.identity import Branch, Business, Permission, Role, User
 from app.models.operations import Operation
 
 __all__ = [
+    "AuditLog",
     "Business",
     "Branch",
     "Permission",

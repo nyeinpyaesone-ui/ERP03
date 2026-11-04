@@ -59,7 +59,7 @@ services:
     restart: "no"
 
   backend:
-    image: ${DOCKERHUB_IMAGE_BACKEND:-powerrangeranikg/erp03-backend}:${IMAGE_TAG:-latest}
+    image: ${DOCKERHUB_IMAGE_BACKEND:-nyeinpyaesone-ui/erp03-backend}:${IMAGE_TAG:-latest}
     build: ./ERP-BACKEND
     ports:
       - "8000:8000"
@@ -96,7 +96,7 @@ services:
           memory: 256M
 
   frontend:
-    image: ${DOCKERHUB_IMAGE_FRONTEND:-powerrangeranikg/erp03-frontend}:${IMAGE_TAG:-latest}
+    image: ${DOCKERHUB_IMAGE_FRONTEND:-nyeinpyaesone-ui/erp03-frontend}:${IMAGE_TAG:-latest}
     build:
       context: ./frontend
       args:

@@ -48,7 +48,7 @@ Two `.env` files — never mix:
 - `ERP-BACKEND/.env` — backend runtime (`SECRET_KEY`, `DATABASE_URL`, `CORS_ORIGINS`, `REDIS_URL`)
 - `.env.compose` — Docker Compose only (`POSTGRES_PASSWORD`, `DOCKERHUB_IMAGE_*`, `SECRET_KEY`)
 
-Docker Hub images (multi-arch amd64/arm64): `powerrangeranikg/erp03-backend`, `powerrangeranikg/erp03-frontend` (`IMAGE_TAG=latest`).
+Docker Hub images (multi-arch amd64/arm64): `nyeinpyaesone-ui/erp03-backend`, `nyeinpyaesone-ui/erp03-frontend` (`IMAGE_TAG=latest`).
 
 Never commit real credentials, `.env` files, or anything under `secrets/`. Do not edit `.env`, `secrets/`, or `.agent/`.
 
