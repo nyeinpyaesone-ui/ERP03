@@ -100,13 +100,13 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
       class).** ✅ **RESOLVED**: Audited all models; only `operations.py` uses
       JSON columns, already using `JSONB().with_variant(JSON, "sqlite")`.
       No Text-mismatch found.
-- [ ] **OPS-2: Container build + Trivy evidence in Codespace (daemon needed).**
-      (BLOCKED: Docker daemon unavailable; Dockerfiles verified manually, .dockerignore added)
-- [ ] **OPS-3: Backup drill: restore dump into scratch PG + alembic_version
-      probe (agent finding 14); backup_verify.sh currently only checks gzip CRC.**
-      (BLOCKED: No PostgreSQL; backup.sh/restore.sh/verify-backup-restore.sh validated)
 - [ ] **ALERT-1: `promtool check rules` + load once in staging Prometheus;**
       (BLOCKED: promtool not installed; YAML rules validated with PyYAML)
+- [ ] **OPS-2: Container build + Trivy evidence in Codespace (daemon needed).**
+      (BLOCKED: Docker daemon unavailable; Dockerfiles verified manually, .dockerignore added)
+- [ ] **OPS-3: Backup drill: restore dump into scratch PG + alembic_version**
+      probe (agent finding 14); backup_verify.sh currently only checks gzip CRC.**
+      (BLOCKED: No PostgreSQL server available; pg_dump/psql client tools installed but no server)
 - [x] **DEP-2: Move pytest/pytest-asyncio/httpx out of prod requirements**
       (agent finding 18) — CI depends on them only because they ship in prod;
       correct ci.yml deps then trim requirements (agent finding 18)
