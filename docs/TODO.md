@@ -176,3 +176,6 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
 | Phase 6 gate: alembic | Single head (0008_audit_log); upgrade head applies | `0b6139a` |
 | Phase 6 gate: pytest | 57 passed, 1 skipped, 0 failed | `0b6139a` |
 | Phase 6 gate: frontend build | dist/ generated with no errors | `f0872a3` |
+| Task 5.5 (follow-up): postcss.config.js added | Tailwind CSS PostCSS config for explicit plugin declaration | `182cd4d` |
+| Setup: non-interactive secret pre-configuration | --secret-key, --db-password, --redis-password, --postgres-password flags + ERP03_* env vars | `182cd4d` |
+| Phase 6 gate re-verified | ruff check/format, compileall, alembic, pytest (57/1/0), frontend build all pass | `182cd4d` |
