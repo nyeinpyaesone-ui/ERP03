@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    JSON,
     DateTime,
-    ForeignKey,
     Index,
     String,
     Text,
@@ -56,9 +56,7 @@ class AuditLog(Base):
     )
 
     id: Mapped[UUID] = mapped_column(GUID(), primary_key=True, default=uuid4)
-    business_id: Mapped[UUID | None] = mapped_column(
-        GUID(), nullable=True, index=True
-    )
+    business_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True, index=True)
     user_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True, index=True)
     action: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     resource_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -66,14 +64,10 @@ class AuditLog(Base):
     request_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
-    before: Mapped[dict | None] = mapped_column(
-        JSONB().with_variant(dict, "sqlite"), nullable=True
-    )
-    after: Mapped[dict | None] = mapped_column(
-        JSONB().with_variant(dict, "sqlite"), nullable=True
-    )
+    before: Mapped[dict | None] = mapped_column(JSONB().with_variant(JSON, "sqlite"), nullable=True)
+    after: Mapped[dict | None] = mapped_column(JSONB().with_variant(JSON, "sqlite"), nullable=True)
     metadata_json: Mapped[dict | None] = mapped_column(
-        JSONB().with_variant(dict, "sqlite"), nullable=True
+        JSONB().with_variant(JSON, "sqlite"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False

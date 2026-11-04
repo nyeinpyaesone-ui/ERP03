@@ -115,7 +115,9 @@ class RedisRateLimitMiddleware:
             token = auth_header.split(" ", 1)[1]
             try:
                 import jwt as pyjwt
+
                 from app.core.config import settings as _settings
+
                 payload = pyjwt.decode(
                     token,
                     _settings.secret_key.get_secret_value(),
@@ -175,6 +177,7 @@ async def lifespan(app: FastAPI):
     if settings.typesafe_enabled:
         await typesafe.close()
     from app.db.session import engine
+
     await engine.dispose()
 
 
@@ -305,7 +308,7 @@ async def request_context(request: Request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     # Remove server header to reduce information leakage
-    response.headers.pop("server", None)
+    response.headers.__delitem__("server") if "server" in response.headers else None
     logger.info(
         "request method=%s path=%s status=%s duration_ms=%.2f request_id=%s",
         request.method,

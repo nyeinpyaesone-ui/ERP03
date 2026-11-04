@@ -9,17 +9,16 @@ available.
 from __future__ import annotations
 
 import time
-from typing import Callable
+from collections.abc import Callable
 from uuid import UUID
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.models.audit import AuditLog, AuditAction
 from app.core.config import settings
 from app.db.session import SessionFactory
-
+from app.models.audit import AuditAction, AuditLog
 
 # Paths that generate audit entries (method, path_pattern) -> action
 AUDIT_ROUTES = {
@@ -38,6 +37,7 @@ def _extract_business_id(request: Request) -> UUID | None:
     """Best-effort extraction of business_id from JWT without verifying."""
     try:
         import jwt as pyjwt
+
         auth = request.headers.get("authorization", "")
         if auth.startswith("Bearer "):
             token = auth.split(" ", 1)[1]
