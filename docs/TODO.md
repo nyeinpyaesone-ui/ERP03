@@ -184,3 +184,4 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
 | Perf: invoice numbering index | 0009 migration: composite index on invoices(branch_id, invoice_no) | `84f1e14` |
 | Perf: frontend code splitting | React.lazy for pages, Vite manual chunk splitting (vendor/ui/utils), esbuild minify | `e726a00` |
 | Perf: nginx caching | gzip compression, 1-year cache for static assets, proxy timeouts | `e726a00` |
+| Fix: hardcoded secret fallbacks | docker-compose.dev.yml SECRET_KEY requires explicit value; .env.example placeholders aligned; PASSWORD_MIN_LENGTH=12 matches config.py | `55503ac` |
