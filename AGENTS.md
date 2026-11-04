@@ -23,12 +23,13 @@ Run from repo root unless noted.
 |---------|---------|
 | Bootstrap | `bash scripts/agent/bootstrap.sh` |
 | Full gate (completion) | `bash scripts/agent/verify.sh` |
-| Lint + format | `make lint` (→ `cd ERP-BACKEND && ruff check app tests alembic` + `ruff format --check`) |
-| Tests | `make test` (→ `cd ERP-BACKEND && pytest -q`); 57 passed, 1 skipped (PG-only concurrency test skips on SQLite) |
-| Single test | `cd ERP-BACKEND && ../.venv/bin/pytest tests/test_api.py -k <name> -q` |
-| Alembic head | `cd ERP-BACKEND && ../.venv/bin/alembic heads` (single head expected) |
-| Migrate | `cd ERP-BACKEND && DATABASE_URL=<url> ../.venv/bin/alembic upgrade head` (before backend start) |
-| Frontend build | `./scripts/build-frontend.sh` (Vite, not esbuild) |
+| Lint + format | `cd ERP-BACKEND && ruff check app tests alembic && ruff format --check app tests alembic` |
+| Tests | `cd ERP-BACKEND && pytest -q` (57 passed, 1 skipped — PG-only concurrency test skips on SQLite) |
+| Single test | `cd ERP-BACKEND && .venv/bin/pytest tests/test_api.py -k <name> -q` |
+| Alembic head | `cd ERP-BACKEND && .venv/bin/alembic heads` (single head expected — currently `0009_invoice_numbering_index`) |
+| Migrate | `cd ERP-BACKEND && DATABASE_URL=<url> .venv/bin/alembic upgrade head` (before backend start) |
+| Frontend build | `./scripts/build-frontend.sh` (Vite 5, not esbuild) |
+| Start backend | `cd ERP-BACKEND && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000` |
 
 CI uses Python 3.12 / Node 22; local Python may be 3.14 (asyncpg 0.32.0 works on 3.14).
 
@@ -37,7 +38,7 @@ CI uses Python 3.12 / Node 22; local Python may be 3.14 (asyncpg 0.32.0 works on
 | Invariant | How to check |
 |-----------|--------------|
 | GitHub Actions pinned to full commit SHAs | `python scripts/pin-github-actions.py --check` must PASS (`sha_pinning_required=true`; 23 refs) |
-| Single Alembic head | `alembic heads` returns one revision |
+| Single Alembic head | `alembic heads` returns one revision (`0009_invoice_numbering_index`) |
 | `Settings.extra == "forbid"` | Any undeclared env var → startup crash (`app/core/config.py`) |
 | Production rejects SQLite | `ENVIRONMENT=production` + SQLite URL → `ValueError` (`app/core/config.py`) |
 
@@ -54,7 +55,7 @@ Never commit real credentials, `.env` files, or anything under `secrets/`. Do no
 
 ## Database & migrations
 
-- Single head only (`0007_operation_orchestration`); review generated migrations in `alembic/versions/`.
+- Single head only (`0009_invoice_numbering_index`); review generated migrations in `alembic/versions/`.
 - `alembic upgrade head` before starting the backend.
 - Integration tests require PostgreSQL; `qualify.sh` falls back to hermetic SQLite when PG is unreachable (expected in proot/Termux).
 - Markers: `integration`, `requires_database`. There is no `postgres` marker.
@@ -94,7 +95,7 @@ Add a DB column: modify `app/models/*.py` → `alembic revision --autogenerate -
 | `ci.yml` | push/PR `main`, `feat/**`, `fix/**` | PG + Redis services → compile → migrate (5 retries) → pytest (3 retries) → frontend build |
 | `quality.yml` | push/PR | ruff check/format + compileall + frontend build |
 | `security.yml` | schedule/PR | pip-audit + CodeQL |
-| `container.yml` | push tag/main/release** | Docker Hub multi-arch (amd64/arm64) + provenance + SBOM |
+| `container.yml` | push tag/main/release | Docker Hub multi-arch (amd64/arm64) + provenance + SBOM |
 | `iac.yml` | push/PR | terraform fmt/validate/plan |
 | `release.yml` | push tags `v*` | SemVer tag → GitHub Release → PyPI |
 
