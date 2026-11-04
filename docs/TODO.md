@@ -150,3 +150,29 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
 | Deep-dive SETP-1 (env integration): setup.sh emitted undeclared keys → `extra="forbid"` crash | corrected dev/prod backend `.env` heredocs in `setup.sh` to declared Settings fields only; corrected `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`/`JWT_EXPIRY_MINUTES`; verified `Settings()` loads clean | `6883b400` |
 | Code review follow-up (2026-10-30): P0-1 idempotency key overflow; P0-2 frontend privileged port; P1-1/P1-2 rate limiter hardening; P1-3 TransactionStore test isolation; P1-4 Vite dev proxy; P1-5 invoice_no parsing guard; P2 hygiene/docs/password policy | full gate green: ruff 0, format clean, compileall OK, alembic single head, 54 passed / 1 skipped | `28fce033` |
 | Follow-up L3: trusted-proxy XFF resolution + 429 threshold tests for RateLimitMiddleware | 3 new tests in tests/test_rate_limiter.py; all pass | `cc786a23` |
+| Task 1.3/3.4: Docker image owner powerrangeranikg → nyeinpyaesone-ui | All compose/K8s/workflow/docs references updated | `b11df29` |
+| Task 1.2: /auth/register endpoint | POST /auth/register creates business+user+Owner role; returns 201 | `9b9194f` |
+| Task 2.1: Redis circuit breaker | Rate limiter fails open when Redis down; half-open after 30s | `9b9194f` |
+| Task 2.2: Per-tenant rate limiting | Rate limit key includes business_id from JWT; IP fallback preserved | `9b9194f` |
+| Task 2.3: Audit logging | AuditLog model + AuditMiddleware + alembic 0008 migration | `9b9194f` |
+| Task 2.4: Security headers | HSTS, Permissions-Policy, server header removed | `9b9194f` |
+| Task 2.5: DB engine disposal | await engine.dispose() in lifespan | `9b9194f` |
+| Task 1.1: Frontend SPA | React 19 + Vite + Tailwind; dist/ built successfully | `f0872a3` |
+| Task 3.1: security.yml workflow | CodeQL + pip-audit + dependency-review created | `bb77746` |
+| Task 3.2: rotate-secrets permissions | secrets: write added | `b11df29` |
+| Task 3.3: mypy enforcement | continue-on-error and || true removed | `b11df29` |
+| Task 4.1: DB pool metrics | active/idle/overflow Prometheus gauges added | `bb77746` |
+| Task 4.2: K8s HPA | production hpa.yaml created + added to kustomization | `bb77746` |
+| Task 4.3: Backup automation | systemd service + timer + README created | `0b6139a` |
+| Task 4.4: DR runbook | docs/DISASTER_RECOVERY.md with RPO/RTO and restore procedures | `0b6139a` |
+| Task 4.5: Resource limits | All base deployments (backend, frontend, postgres, redis, ollama) have requests+limits | `0b6139a` |
+| Task 4.6: OpenAPI branding | description, contact, license_info added to FastAPI | `bb77746` |
+| Task 5.1: TypeScript API client | frontend/src/services/api-client.ts created | `0b6139a` |
+| Task 5.2: Postman collection | tests/postman/ERP03.postman_collection.json created | `0b6139a` |
+| Task 5.5: Docs drift | scripts/build-frontend.sh exists; docs reference resolved | `0b6139a` |
+| Phase 6 gate: ruff check | All checks passed (0 errors) | `0b6139a` |
+| Phase 6 gate: ruff format | All 58 files formatted | `0b6139a` |
+| Phase 6 gate: compileall | app + alembic compile cleanly | `0b6139a` |
+| Phase 6 gate: alembic | Single head (0008_audit_log); upgrade head applies | `0b6139a` |
+| Phase 6 gate: pytest | 57 passed, 1 skipped, 0 failed | `0b6139a` |
+| Phase 6 gate: frontend build | dist/ generated with no errors | `f0872a3` |
