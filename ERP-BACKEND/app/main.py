@@ -183,9 +183,19 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.app_name,
+    description="ERP03 production ERP — modular foundation for multi-tenant retail operations.",
     version=settings.version,
     docs_url="/docs",
     redoc_url="/redoc",
+    contact={
+        "name": "ERP03 Support",
+        "url": "https://erp.example.com/support",
+        "email": "support@erp.example.com",
+    },
+    license_info={
+        "name": "Proprietary",
+        "url": "https://erp.example.com/license",
+    },
     lifespan=lifespan,
 )
 
