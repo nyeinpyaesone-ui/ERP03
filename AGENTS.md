@@ -22,16 +22,17 @@ Run from repo root unless noted.
 | Purpose | Command |
 |---------|---------|
 | Bootstrap | `bash scripts/agent/bootstrap.sh` |
+| Full setup (dev env) | `./scripts/setup.sh` |
 | Full gate (completion) | `bash scripts/agent/verify.sh` |
 | Lint + format | `cd ERP-BACKEND && ruff check app tests alembic && ruff format --check app tests alembic` |
 | Tests | `cd ERP-BACKEND && pytest -q` (57 passed, 1 skipped — PG-only concurrency test skips on SQLite) |
 | Single test | `cd ERP-BACKEND && .venv/bin/pytest tests/test_api.py -k <name> -q` |
 | Alembic head | `cd ERP-BACKEND && .venv/bin/alembic heads` (single head expected — currently `0009_invoice_numbering_index`) |
 | Migrate | `cd ERP-BACKEND && DATABASE_URL=<url> .venv/bin/alembic upgrade head` (before backend start) |
-| Frontend build | `./scripts/build-frontend.sh` (Vite 5, not esbuild) |
+| Frontend build | `./scripts/build-frontend.sh` (Vite 5.4.11) |
 | Start backend | `cd ERP-BACKEND && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000` |
 
-CI uses Python 3.12 / Node 22; local Python may be 3.14 (asyncpg 0.32.0 works on 3.14).
+CI uses Python 3.12 / Node 22; local Python may be 3.14 (asyncpg 0.32.0 works on 3.14). Frontend is Vite 5.4.11 (not Vite 7).
 
 ## Critical invariants (verify before changes)
 
@@ -41,6 +42,7 @@ CI uses Python 3.12 / Node 22; local Python may be 3.14 (asyncpg 0.32.0 works on
 | Single Alembic head | `alembic heads` returns one revision (`0009_invoice_numbering_index`) |
 | `Settings.extra == "forbid"` | Any undeclared env var → startup crash (`app/core/config.py`) |
 | Production rejects SQLite | `ENVIRONMENT=production` + SQLite URL → `ValueError` (`app/core/config.py`) |
+| Ruff config in `pyproject.toml` | target-version py312, line-length 100, excludes `alembic/versions` from src but `ruff check` still scans `alembic/` dir |
 
 ## Environment & secrets
 
@@ -49,9 +51,11 @@ Two `.env` files — never mix:
 - `ERP-BACKEND/.env` — backend runtime (`SECRET_KEY`, `DATABASE_URL`, `CORS_ORIGINS`, `REDIS_URL`)
 - `.env.compose` — Docker Compose only (`POSTGRES_PASSWORD`, `DOCKERHUB_IMAGE_*`, `SECRET_KEY`)
 
+The compose file is **not** read by the backend (Settings uses `extra="forbid"`).
+
 Docker Hub images (multi-arch amd64/arm64): `nyeinpyaesone-ui/erp03-backend`, `nyeinpyaesone-ui/erp03-frontend` (`IMAGE_TAG=latest`).
 
-Never commit real credentials, `.env` files, or anything under `secrets/`. Do not edit `.env`, `secrets/`, or `.agent/`.
+Never commit real credentials, `.env` files, or anything under `secrets/` or `.agent/`. All three are gitignored.
 
 ## Database & migrations
 
@@ -105,7 +109,6 @@ All GitHub Actions references pinned to 40-char commit SHAs. Concurrency groups 
 
 | Issue | Workaround |
 |---------|------------|
-| Vite `Bus error` / OOM | `NODE_OPTIONS=--max-old-space-size=512 ./scripts/build-frontend.sh` |
 | `gh auth` (no browser) | `echo "<pat>\|gh auth login --with-token` |
 | Docker unavailable (proot/Termux) | `[SKIP] docker reason=no-daemon` expected; never fake a pass |
 | `[SKIP] postgres reason=sqlite-fallback` | Expected when PG unreachable; suite fully green on SQLite |
