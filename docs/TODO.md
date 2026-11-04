@@ -179,3 +179,8 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
 | Task 5.5 (follow-up): postcss.config.js added | Tailwind CSS PostCSS config for explicit plugin declaration | `182cd4d` |
 | Setup: non-interactive secret pre-configuration | --secret-key, --db-password, --redis-password, --postgres-password flags + ERP03_* env vars | `182cd4d` |
 | Phase 6 gate re-verified | ruff check/format, compileall, alembic, pytest (57/1/0), frontend build all pass | `182cd4d` |
+| Perf: rate limiter + audit middleware | jwt import moved to module level, secret key cached, bounded semaphore for audit writes | `60fe60c` |
+| Perf: database session | pool metrics wired via SQLAlchemy events, pool_timeout config, connect_args for prepared statements | `60fe60c` |
+| Perf: invoice numbering index | 0009 migration: composite index on invoices(branch_id, invoice_no) | `84f1e14` |
+| Perf: frontend code splitting | React.lazy for pages, Vite manual chunk splitting (vendor/ui/utils), esbuild minify | `e726a00` |
+| Perf: nginx caching | gzip compression, 1-year cache for static assets, proxy timeouts | `e726a00` |
