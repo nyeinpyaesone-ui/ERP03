@@ -1,0 +1,14 @@
+[Unit]
+Description=ERP03 Daily Database Backup
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/erp03/scripts/backup.sh
+EnvironmentFile=/usr/local/bin/erp03/.env.compose
+User=erp03
+Group=erp03
+WorkingDirectory=/usr/local/bin/erp03
+
+[Install]
+WantedBy=multi-user.target
