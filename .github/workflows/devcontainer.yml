@@ -58,6 +58,7 @@ jobs:
             type=sha,format=long
 
       - name: Build and push devcontainer
+        id: build-devcontainer-image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: .
@@ -70,6 +71,40 @@ jobs:
           cache-to: type=gha,mode=max,scope=devcontainer
           provenance: mode=max
           sbom: true
+
+      - name: Verify frontend development manifest architectures
+        if: github.event_name != 'pull_request'
+        env:
+          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/erp03-frontend
+          DIGEST: ${{ steps.build-frontend-dev-image.outputs.digest }}
+        run: |
+          set -Eeuo pipefail
+          docker buildx imagetools inspect --raw "${IMAGE_REF}@${DIGEST}" |
+            jq -e '[.manifests[].platform | select(.os == "linux" and (.architecture == "amd64" or .architecture == "arm64"))] | map(.architecture) | unique | length == 2' >/dev/null
+          {
+            echo "## Frontend development image publication"
+            echo
+            echo "- Image: ${IMAGE_REF}"
+            echo "- Digest: ${DIGEST}"
+            echo "- Verified platforms: linux/amd64, linux/arm64"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify devcontainer manifest architectures
+        if: github.event_name != 'pull_request'
+        env:
+          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/erp03-devcontainer
+          DIGEST: ${{ steps.build-devcontainer-image.outputs.digest }}
+        run: |
+          set -Eeuo pipefail
+          docker buildx imagetools inspect --raw "${IMAGE_REF}@${DIGEST}" |
+            jq -e '[.manifests[].platform | select(.os == "linux" and (.architecture == "amd64" or .architecture == "arm64"))] | map(.architecture) | unique | length == 2' >/dev/null
+          {
+            echo "## Devcontainer image publication"
+            echo
+            echo "- Image: ${IMAGE_REF}"
+            echo "- Digest: ${DIGEST}"
+            echo "- Verified platforms: linux/amd64, linux/arm64"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   build-dev-backend:
     name: Build multi-architecture backend development image
@@ -94,6 +129,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push backend development image
+        id: build-backend-dev-image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: ./ERP-BACKEND
@@ -107,6 +143,23 @@ jobs:
           cache-to: type=gha,mode=max,scope=backend-dev
           provenance: mode=max
           sbom: true
+
+      - name: Verify backend development manifest architectures
+        if: github.event_name != 'pull_request'
+        env:
+          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/erp03-backend
+          DIGEST: ${{ steps.build-backend-dev-image.outputs.digest }}
+        run: |
+          set -Eeuo pipefail
+          docker buildx imagetools inspect --raw "${IMAGE_REF}@${DIGEST}" |
+            jq -e '[.manifests[].platform | select(.os == "linux" and (.architecture == "amd64" or .architecture == "arm64"))] | map(.architecture) | unique | length == 2' >/dev/null
+          {
+            echo "## Backend development image publication"
+            echo
+            echo "- Image: ${IMAGE_REF}"
+            echo "- Digest: ${DIGEST}"
+            echo "- Verified platforms: linux/amd64, linux/arm64"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   build-dev-frontend:
     name: Build multi-architecture frontend development image
@@ -131,6 +184,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push frontend development image
+        id: build-frontend-dev-image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: ./frontend
