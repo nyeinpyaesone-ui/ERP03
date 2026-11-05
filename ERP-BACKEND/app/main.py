@@ -14,8 +14,8 @@ Production hardening:
 
 import logging
 import time
-from typing import Any
 from contextlib import asynccontextmanager
+from typing import Any
 from uuid import uuid4
 
 import jwt as pyjwt
