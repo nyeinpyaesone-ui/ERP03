@@ -3,8 +3,16 @@ name: Deploy staging
 on:
   workflow_dispatch:
     inputs:
-      image_tag:
-        description: "Immutable full commit tag, e.g. sha-<40-character-commit-sha>"
+      source_sha:
+        description: "Full 40-character source commit SHA"
+        required: true
+        type: string
+      backend_digest:
+        description: "Published backend OCI digest (sha256:...)"
+        required: true
+        type: string
+      frontend_digest:
+        description: "Published frontend OCI digest (sha256:...)"
         required: true
         type: string
 
@@ -18,18 +26,28 @@ concurrency:
 jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
-    name: Deploy selected GHCR images to staging
+    name: Deploy selected GHCR digests to staging
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 25
     steps:
-      - name: Validate immutable image tag
+      - name: Validate source and image digests
         env:
-          IMAGE_TAG: ${{ inputs.image_tag }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BACKEND_DIGEST: ${{ inputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
         run: |
           set -Eeuo pipefail
-          [[ "$IMAGE_TAG" =~ ^sha-[0-9a-f]{40}$ ]] || {
-            echo "::error::Only a full immutable sha-<40-character-commit-sha> tag is accepted"
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::source_sha must be a full 40-character lowercase commit SHA"
+            exit 1
+          }
+          [[ "$BACKEND_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::backend_digest must be a sha256 OCI digest"
+            exit 1
+          }
+          [[ "$FRONTEND_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::frontend_digest must be a sha256 OCI digest"
             exit 1
           }
 
@@ -70,26 +88,30 @@ jobs:
             "$STAGING_USER@$STAGING_HOST" \
             "docker login ghcr.io --username $GHCR_USERNAME --password-stdin"
 
-      - name: Deploy, verify health, and rollback on failure
+      - name: Deploy immutable images, verify runtime health, and rollback on failure
         env:
           STAGING_HOST: ${{ secrets.STAGING_SSH_HOST }}
           STAGING_USER: ${{ secrets.STAGING_SSH_USER }}
           STAGING_PORT: ${{ secrets.STAGING_SSH_PORT }}
           DEPLOY_PATH: ${{ vars.STAGING_DEPLOY_PATH }}
-          IMAGE_TAG: ${{ inputs.image_tag }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BACKEND_DIGEST: ${{ inputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
         run: |
           set -Eeuo pipefail
           test -n "$STAGING_HOST"
           test -n "$STAGING_USER"
           test -n "$DEPLOY_PATH"
+          printf -v remote_args '%q %q %q %q' "$DEPLOY_PATH" "$SOURCE_SHA" "$BACKEND_DIGEST" "$FRONTEND_DIGEST"
           port="${STAGING_PORT:-22}"
-          printf -v remote_args '%q %q' "$DEPLOY_PATH" "$IMAGE_TAG"
           ssh -i "$HOME/.ssh/id_ed25519" -p "$port" \
             -o BatchMode=yes -o StrictHostKeyChecking=yes \
             "$STAGING_USER@$STAGING_HOST" "bash -s -- $remote_args" <<'REMOTE'
           set -Eeuo pipefail
           deploy_path="$1"
-          image_tag="$2"
+          source_sha="$2"
+          backend_digest="$3"
+          frontend_digest="$4"
           cd "$deploy_path"
 
           git rev-parse --is-inside-work-tree >/dev/null
@@ -99,18 +121,20 @@ jobs:
             exit 1
           }
 
+          backend_image="ghcr.io/nyeinpyaesone-ui/erp03-backend@$backend_digest"
+          frontend_image="ghcr.io/nyeinpyaesone-ui/erp03-frontend@$frontend_digest"
+
           previous_revision="$(git rev-parse HEAD)"
           previous_backend_id="$(docker compose ps -q backend | head -n 1)"
           previous_frontend_id="$(docker compose ps -q frontend | head -n 1)"
           test -n "$previous_backend_id" && test -n "$previous_frontend_id" || {
-            echo "A healthy prior staging release is required before an in-place deployment"
+            echo "A prior running backend/frontend release is required for safe rollback"
             exit 1
           }
           previous_backend_image="$(docker inspect --format '{{.Config.Image}}' "$previous_backend_id")"
           previous_frontend_image="$(docker inspect --format '{{.Config.Image}}' "$previous_frontend_id")"
           test -n "$previous_backend_image" && test -n "$previous_frontend_image"
 
-          commit_sha="${image_tag#sha-}"
           deployment_started=0
 
           wait_for_health() {
@@ -159,15 +183,28 @@ jobs:
 
           deployment_started=1
           git fetch --no-tags origin main
-          git fetch --no-tags origin "$commit_sha"
-          git merge-base --is-ancestor "$commit_sha" origin/main || {
+          git fetch --no-tags origin "$source_sha"
+          git merge-base --is-ancestor "$source_sha" origin/main || {
             echo "Requested image commit is not reachable from origin/main"
             exit 1
           }
-          git checkout --detach "$commit_sha"
+          git checkout --detach "$source_sha"
 
-          export ERP03_BACKEND_IMAGE="ghcr.io/nyeinpyaesone-ui/erp03-backend:$image_tag"
-          export ERP03_FRONTEND_IMAGE="ghcr.io/nyeinpyaesone-ui/erp03-frontend:$image_tag"
+          docker pull "$backend_image"
+          docker pull "$frontend_image"
+          backend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$backend_image")"
+          frontend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$frontend_image")"
+          test "$backend_revision" = "$source_sha" || {
+            echo "Backend image revision label does not match source_sha"
+            exit 1
+          }
+          test "$frontend_revision" = "$source_sha" || {
+            echo "Frontend image revision label does not match source_sha"
+            exit 1
+          }
+
+          export ERP03_BACKEND_IMAGE="$backend_image"
+          export ERP03_FRONTEND_IMAGE="$frontend_image"
           docker compose pull backend frontend
           docker compose up -d --no-build backend frontend
           wait_for_health
