@@ -170,7 +170,7 @@ jobs:
               set +e
               export ERP03_BACKEND_IMAGE="$previous_backend_image"
               export ERP03_FRONTEND_IMAGE="$previous_frontend_image"
-              docker compose up -d --no-build backend frontend
+              docker compose --profile full up -d --no-build backend frontend
               if wait_for_health; then
                 echo "Previous staging release restored and healthy"
               else
@@ -192,7 +192,7 @@ jobs:
 
           docker pull "$backend_image"
           docker pull "$frontend_image"
-          docker compose run --rm migrate
+          docker compose --profile full run --rm migrate
           backend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$backend_image")"
           frontend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$frontend_image")"
           test "$backend_revision" = "$source_sha" || {
@@ -207,7 +207,7 @@ jobs:
           export ERP03_BACKEND_IMAGE="$backend_image"
           export ERP03_FRONTEND_IMAGE="$frontend_image"
           docker compose pull backend frontend
-          docker compose up -d --no-build backend frontend
+          docker compose --profile full up -d --no-build backend frontend
           wait_for_health
           docker compose ps
           trap - EXIT
