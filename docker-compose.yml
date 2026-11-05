@@ -9,7 +9,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U $\${POSTGRES_USER} -d $\${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -59,7 +59,7 @@ services:
     restart: "no"
 
   backend:
-    image: ${DOCKERHUB_IMAGE_BACKEND:-nyeinpyaesone-ui/erp03-backend}:${IMAGE_TAG:-latest}
+    image: ${ERP03_BACKEND_IMAGE:-ghcr.io/nyeinpyaesone-ui/erp03-backend:${IMAGE_TAG:-latest}}
     build: ./ERP-BACKEND
     ports:
       - "8000:8000"
@@ -82,11 +82,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/healthz', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/readyz', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 30s
     restart: unless-stopped
     deploy:
       resources:
@@ -96,7 +96,7 @@ services:
           memory: 256M
 
   frontend:
-    image: ${DOCKERHUB_IMAGE_FRONTEND:-nyeinpyaesone-ui/erp03-frontend}:${IMAGE_TAG:-latest}
+    image: ${ERP03_FRONTEND_IMAGE:-ghcr.io/nyeinpyaesone-ui/erp03-frontend:${IMAGE_TAG:-latest}}
     build:
       context: ./frontend
       args:
@@ -106,6 +106,12 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
     deploy:
       resources:

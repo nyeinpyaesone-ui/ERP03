@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "Exact published image tag (prefer a full commit SHA tag)"
+        description: "Immutable full commit tag, e.g. sha-<40-character-commit-sha>"
         required: true
         type: string
 
@@ -17,18 +17,19 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy selected images to staging
+    if: github.ref == 'refs/heads/main'
+    name: Deploy selected GHCR images to staging
     runs-on: ubuntu-latest
     environment: staging
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
-      - name: Validate image tag
+      - name: Validate immutable image tag
         env:
           IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           set -Eeuo pipefail
-          [[ "$IMAGE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
-            echo "::error::Invalid image tag"
+          [[ "$IMAGE_TAG" =~ ^sha-[0-9a-f]{40}$ ]] || {
+            echo "::error::Only a full immutable sha-<40-character-commit-sha> tag is accepted"
             exit 1
           }
 
@@ -46,27 +47,30 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Authenticate staging host to Docker Hub
+      - name: Authenticate staging host to GHCR with read-only credentials
         env:
           STAGING_HOST: ${{ secrets.STAGING_SSH_HOST }}
           STAGING_USER: ${{ secrets.STAGING_SSH_USER }}
           STAGING_PORT: ${{ secrets.STAGING_SSH_PORT }}
-          DOCKERHUB_USERNAME: ${{ secrets.STAGING_DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.STAGING_DOCKERHUB_TOKEN }}
+          GHCR_USERNAME: ${{ secrets.STAGING_GHCR_USERNAME }}
+          GHCR_READ_TOKEN: ${{ secrets.STAGING_GHCR_READ_TOKEN }}
         run: |
           set -Eeuo pipefail
           test -n "$STAGING_HOST"
           test -n "$STAGING_USER"
-          test -n "$DOCKERHUB_USERNAME"
-          test -n "$DOCKERHUB_TOKEN"
-          [[ "$DOCKERHUB_USERNAME" =~ ^[A-Za-z0-9-]+$ ]] || exit 1
+          test -n "$GHCR_USERNAME"
+          test -n "$GHCR_READ_TOKEN"
+          [[ "$GHCR_USERNAME" =~ ^[A-Za-z0-9-]+$ ]] || {
+            echo "::error::Invalid GHCR username format"
+            exit 1
+          }
           port="${STAGING_PORT:-22}"
-          printf '%s' "$DOCKERHUB_TOKEN" | ssh -i "$HOME/.ssh/id_ed25519" \
+          printf '%s' "$GHCR_READ_TOKEN" | ssh -i "$HOME/.ssh/id_ed25519" \
             -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=yes \
             "$STAGING_USER@$STAGING_HOST" \
-            "docker login docker.io --username $DOCKERHUB_USERNAME --password-stdin"
+            "docker login ghcr.io --username $GHCR_USERNAME --password-stdin"
 
-      - name: Pull and restart selected images
+      - name: Deploy, verify health, and rollback on failure
         env:
           STAGING_HOST: ${{ secrets.STAGING_SSH_HOST }}
           STAGING_USER: ${{ secrets.STAGING_SSH_USER }}
@@ -86,9 +90,87 @@ jobs:
           deploy_path="$1"
           image_tag="$2"
           cd "$deploy_path"
-          test -f docker-compose.yml || test -f compose.yml
-          export IMAGE_TAG="$image_tag"
+
+          git rev-parse --is-inside-work-tree >/dev/null
+          test -f docker-compose.yml || test -f compose.yml || test -f compose.yaml || test -f docker-compose.yaml
+          test -z "$(git status --porcelain)" || {
+            echo "Staging checkout has local changes; refusing to overwrite them"
+            exit 1
+          }
+
+          previous_revision="$(git rev-parse HEAD)"
+          previous_backend_id="$(docker compose ps -q backend | head -n 1)"
+          previous_frontend_id="$(docker compose ps -q frontend | head -n 1)"
+          test -n "$previous_backend_id" && test -n "$previous_frontend_id" || {
+            echo "A healthy prior staging release is required before an in-place deployment"
+            exit 1
+          }
+          previous_backend_image="$(docker inspect --format '{{.Config.Image}}' "$previous_backend_id")"
+          previous_frontend_image="$(docker inspect --format '{{.Config.Image}}' "$previous_frontend_id")"
+          test -n "$previous_backend_image" && test -n "$previous_frontend_image"
+
+          commit_sha="${image_tag#sha-}"
+          deployment_started=0
+
+          wait_for_health() {
+            for attempt in $(seq 1 36); do
+              all_healthy=1
+              for service in backend frontend; do
+                container_id="$(docker compose ps -q "$service" | head -n 1)"
+                if [ -z "$container_id" ]; then
+                  all_healthy=0
+                  continue
+                fi
+                state="$(docker inspect --format '{{.State.Status}}' "$container_id")"
+                health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$container_id")"
+                if [ "$state" != "running" ] || [ "$health" != "healthy" ]; then
+                  all_healthy=0
+                  echo "$service state=$state health=$health (attempt $attempt/36)"
+                fi
+              done
+              if [ "$all_healthy" -eq 1 ]; then
+                return 0
+              fi
+              sleep 5
+            done
+            return 1
+          }
+
+          rollback_on_exit() {
+            result=$?
+            trap - EXIT
+            if [ "$result" -ne 0 ] && [ "$deployment_started" -eq 1 ]; then
+              echo "Deployment failed; restoring previous code and image references"
+              set +e
+              git checkout --detach "$previous_revision"
+              export ERP03_BACKEND_IMAGE="$previous_backend_image"
+              export ERP03_FRONTEND_IMAGE="$previous_frontend_image"
+              docker compose up -d --no-build backend frontend
+              if wait_for_health; then
+                echo "Previous staging release restored and healthy"
+              else
+                echo "ERROR: automatic rollback did not regain healthy status"
+              fi
+            fi
+            exit "$result"
+          }
+          trap rollback_on_exit EXIT
+
+          deployment_started=1
+          git fetch --no-tags origin main
+          git fetch --no-tags origin "$commit_sha"
+          git merge-base --is-ancestor "$commit_sha" origin/main || {
+            echo "Requested image commit is not reachable from origin/main"
+            exit 1
+          }
+          git checkout --detach "$commit_sha"
+
+          export ERP03_BACKEND_IMAGE="ghcr.io/nyeinpyaesone-ui/erp03-backend:$image_tag"
+          export ERP03_FRONTEND_IMAGE="ghcr.io/nyeinpyaesone-ui/erp03-frontend:$image_tag"
           docker compose pull backend frontend
           docker compose up -d --no-build backend frontend
+          wait_for_health
           docker compose ps
+          trap - EXIT
+          echo "Staging deployment completed; backend and frontend health checks are healthy"
           REMOTE
