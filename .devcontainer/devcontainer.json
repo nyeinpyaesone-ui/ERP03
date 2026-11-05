@@ -20,7 +20,7 @@
         "mtxr.sqltools-driver-pg"
       ],
       "settings": {
-        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.defaultInterpreterPath": "/opt/erp03-venv/bin/python",
         "editor.formatOnSave": true,
         "python.testing.pytestEnabled": true,
         "python.testing.pytestArgs": ["ERP-BACKEND/tests"]
