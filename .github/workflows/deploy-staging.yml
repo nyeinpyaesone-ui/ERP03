@@ -83,9 +83,10 @@ jobs:
           test -n "$STAGING_USER"
           test -n "$DEPLOY_PATH"
           port="${STAGING_PORT:-22}"
+          printf -v remote_args '%q %q' "$DEPLOY_PATH" "$IMAGE_TAG"
           ssh -i "$HOME/.ssh/id_ed25519" -p "$port" \
             -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            "$STAGING_USER@$STAGING_HOST" bash -s -- "$DEPLOY_PATH" "$IMAGE_TAG" <<'REMOTE'
+            "$STAGING_USER@$STAGING_HOST" "bash -s -- $remote_args" <<'REMOTE'
           set -Eeuo pipefail
           deploy_path="$1"
           image_tag="$2"
