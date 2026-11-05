@@ -50,6 +50,7 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and publish multi-architecture frontend
+        id: build-and-push
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: ./frontend
@@ -64,3 +65,13 @@ jobs:
           cache-to: type=gha,mode=max,scope=frontend
           provenance: mode=max
           sbom: true
+
+      - name: Verify published frontend manifest architectures
+        if: github.event_name != 'pull_request'
+        env:
+          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/erp03-frontend
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+        run: |
+          set -Eeuo pipefail
+          docker buildx imagetools inspect --raw "${IMAGE_REF}@${DIGEST}" |
+            jq -e '[.manifests[].platform | select(.os == "linux" and (.architecture == "amd64" or .architecture == "arm64"))] | map(.architecture) | unique | length == 2' >/dev/null
