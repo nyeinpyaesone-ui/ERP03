@@ -2,7 +2,9 @@
 
 ## Published images
 
-The backend and frontend are published to GHCR with both `linux/amd64` and `linux/arm64` targets. The staging workflow accepts only the immutable `sha-<40-character-commit-sha>` tag so the two services can be selected from the same source revision.
+The backend and frontend are published to GHCR with both `linux/amd64` and `linux/arm64` targets. Each publisher verifies the registry manifest platforms and records the image digest in its GitHub Actions job summary. The staging workflow accepts the source commit SHA plus the backend and frontend OCI digests, and checks each image's `org.opencontainers.image.revision` label against that source commit before deployment. Deploying by digest avoids relying on mutable tags.
+
+To prepare a staging request, use the successful main-branch backend and frontend publishing workflow summaries for the same source commit, and copy their exact `sha256:...` digests. Do not use PR workflow runs: PR builds do not publish images.
 
 Staging requires the following GitHub Environment secrets:
 
