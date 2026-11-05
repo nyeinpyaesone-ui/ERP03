@@ -16,7 +16,7 @@ RUN set -eux; \
       fi; \
     done; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates curl docker.io; \
+    apt-get install -y --no-install-recommends ca-certificates curl; \
     rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 22 from the official NodeSource repository.
