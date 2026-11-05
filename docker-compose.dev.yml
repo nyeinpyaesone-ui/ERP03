@@ -2,8 +2,8 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: erp03
-      POSTGRES_PASSWORD: erp03
+      POSTGRES_USER: ${POSTGRES_USER:-erp03}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-erp03}
       POSTGRES_DB: erp03
     ports:
       - "5432:5432"
@@ -17,13 +17,13 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --requirepass erp03
+    command: redis-server --requirepass ${REDIS_PASSWORD:-erp03}
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "erp03", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-erp03}", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -34,8 +34,8 @@ services:
       dockerfile: Dockerfile
     environment:
       ENVIRONMENT: development
-      SECRET_KEY: dev-secret-key-change-me-32chars
-      DATABASE_URL: postgresql+asyncpg://erp03:erp03@postgres:5432/erp03
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://erp03:${POSTGRES_PASSWORD:-erp03}@postgres:5432/erp03}
       DATABASE_PATH: /app/.local/erp03.sqlite3
     volumes:
       - erp_local:/app/.local
@@ -53,13 +53,13 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://erp03:erp03@postgres:5432/erp03
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://erp03:${POSTGRES_PASSWORD:-erp03}@postgres:5432/erp03}
       - CORS_ORIGINS=http://localhost:5173
       - LOG_LEVEL=DEBUG
       - ENVIRONMENT=development
       - DATABASE_PATH=/app/.local/erp03.sqlite3
-      - REDIS_URL=redis://:erp03@redis:6379/0
-      - REDIS_PASSWORD=erp03
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-erp03}@redis:6379/0
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-erp03}
     volumes:
       - ./ERP-BACKEND:/app
       - /app/__pycache__

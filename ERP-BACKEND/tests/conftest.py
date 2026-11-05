@@ -2,7 +2,7 @@
 
 The service supports two backends: PostgreSQL (production; asyncpg) and
 SQLite (local development / CI smoke; aiosqlite). Tests that require a
-*migrated* database are tagged ``integration``; conftest provisions one
+migrated database are tagged integration; conftest provisions one
 automatically from the Alembic chain against whichever backend is configured
 via DATABASE_URL, so the suite is hermetic on both platforms.
 """
@@ -41,19 +41,12 @@ def pytest_configure(config):
         )
 
 
-@pytest.fixture(scope="session")
-def event_loop_policy():
-    import asyncio
-
-    return asyncio.DefaultEventLoopPolicy()
-
-
 async def _probe_and_migrate() -> bool:
     """Bring the session test database to the latest Alembic head.
 
     The target URL is resolved by this module at import (hermetic SQLite
     default, or an explicit DATABASE_URL for PostgreSQL in CI). Provisioning
-    shells out to ``alembic upgrade head`` — the exact CLI path used at
+    shells out to alembic upgrade head — the exact CLI path used at
     deployment — which keeps migration execution fully independent of
     pytest-asyncio's running event loop and guarantees test provisioning
     and production migrations can never diverge. A stale/mismatched schema

@@ -35,10 +35,11 @@ def init_telemetry(service_name: str = "erp03-backend") -> None:
         }
     )
 
-    trace.set_tracer_provider(TracerProvider(resource=resource))
-    trace.get_tracer_provider().add_span_processor(
+    tracer_provider = TracerProvider(resource=resource)
+    tracer_provider.add_span_processor(
         BatchSpanProcessor(OTLPSpanExporter(endpoint="http://otel-collector:4317"))
     )
+    trace.set_tracer_provider(tracer_provider)
 
     reader = PeriodicExportingMetricReader(
         exporter=OTLPMetricExporter(endpoint="http://otel-collector:4317"),

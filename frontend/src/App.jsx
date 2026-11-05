@@ -1,29 +1,43 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy } from 'react';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import Layout from './components/Layout';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
+// Lazy-load page components for code splitting — pages are only fetched
+// when the user navigates to their route.
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const SalesPage = lazy(() => import('./pages/SalesPage'));
+const ProductsPage = lazy(() => import('./pages/ProductsPage'));
+const CustomersPage = lazy(() => import('./pages/CustomersPage'));
+const InventoryPage = lazy(() => import('./pages/InventoryPage'));
+
+const router = createBrowserRouter([
+  {
+    path: '/',
+    element: <Layout />,
+    children: [
+      { index: true, element: <DashboardPage /> },
+      { path: 'sales', element: <SalesPage /> },
+      { path: 'products', element: <ProductsPage /> },
+      { path: 'customers', element: <CustomersPage /> },
+      { path: 'inventory', element: <InventoryPage /> },
+    ],
+  },
+  {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  {
+    path: '/register',
+    element: <RegisterPage />,
+  },
+]);
 
 export default function App() {
-  const [health, setHealth] = useState('checking');
-
-  useEffect(() => {
-    fetch(`${API_BASE}/healthz`)
-      .then((response) => {
-        if (!response.ok) throw new Error('unhealthy');
-        setHealth('online');
-      })
-      .catch(() => setHealth('offline'));
-  }, []);
-
   return (
-    <main className="shell">
-      <section className="card" aria-labelledby="title">
-        <p className="eyebrow">ERP03 · CONTROL PLANE</p>
-        <h1 id="title">Enterprise Resource Planning</h1>
-        <p className="subtitle">Production-focused modular ERP foundation.</p>
-        <div className={`status ${health}`} role="status">
-          <span aria-hidden="true" /> API {health}
-        </div>
-      </section>
-    </main>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50">Loading…</div>}>
+      <RouterProvider router={router} />
+    </Suspense>
   );
 }

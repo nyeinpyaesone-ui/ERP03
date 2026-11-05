@@ -124,8 +124,8 @@ git tag v1.0.0 && git push origin v1.0.0
 ```
 
 This triggers the Container workflow which builds and pushes:
-- `docker.io/powerrangeranikg/erp03-backend`
-- `docker.io/powerrangeranikg/erp03-frontend`
+- `docker.io/nyeinpyaesone-ui/erp03-backend`
+- `docker.io/nyeinpyaesone-ui/erp03-frontend`
 
 ---
 
@@ -133,8 +133,8 @@ This triggers the Container workflow which builds and pushes:
 
 ```bash
 echo $DOCKERHUB_TOKEN | docker login docker.io -u $DOCKERHUB_USERNAME --password-stdin
-docker pull docker.io/powerrangeranikg/erp03-backend:latest
-docker pull docker.io/powerrangeranikg/erp03-frontend:latest
+docker pull docker.io/nyeinpyaesone-ui/erp03-backend:latest
+docker pull docker.io/nyeinpyaesone-ui/erp03-frontend:latest
 ```
 
 ---
@@ -166,7 +166,7 @@ gh run list --repo nyeinpyaesone-ui/ERP03 --limit 5
 gh api repos/nyeinpyaesone-ui/ERP03/packages/container/erp03-backend/versions
 
 # Pull and run
-docker run -p 8000:8000 docker.io/powerrangeranikg/erp03-backend:latest
+docker run -p 8000:8000 docker.io/nyeinpyaesone-ui/erp03-backend:latest
 curl http://localhost:8000/api/v1/healthz
 ```
 

@@ -4,13 +4,21 @@ Code owns the workflow; TypeSafe supplies programmable common sense:
 - Error classification drives retry-after headers (code decision, model annotation).
 - Transaction risk scoring gates high-risk sales (code decision, model annotation).
 - TypeSafe client lifecycle is bound to the app lifespan.
+
+Production hardening:
+- Redis circuit breaker: rate limiter fails open when Redis is unreachable.
+- Per-tenant rate limiting: rate limit key includes business_id from JWT.
+- Audit logging: business operations are recorded for tamper-evident traceability.
+- Security headers: HSTS, Permissions-Policy, server header removal.
 """
 
 import logging
 import time
 from contextlib import asynccontextmanager
+from typing import Any
 from uuid import uuid4
 
+import jwt as pyjwt
 import redis.asyncio as redis
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,6 +30,7 @@ from app.api.health import router as health_router
 from app.api.purchasing import router as purchasing_router
 from app.api.sales import router as sales_router
 from app.api.transactions import router as transactions_router
+from app.core.audit import AuditMiddleware
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.metrics import REQUEST_COUNT, REQUEST_LATENCY, metrics_app
@@ -35,11 +44,16 @@ logger = logging.getLogger("erp03")
 
 
 class RedisRateLimitMiddleware:
-    """Redis-backed sliding window rate limiter.
+    """Redis-backed sliding window rate limiter with circuit breaker.
 
     Uses Redis sorted sets for distributed rate limiting across workers.
     Honours ``X-Forwarded-For`` only when the immediate peer is in
     ``trusted_proxies`` (prevents spoofing).
+
+    Circuit breaker: if Redis is unavailable, the middleware fails open
+    (allows the request through) and logs the failure for alerting.
+    Per-tenant: rate limit key includes business_id from JWT claims when
+    available, falling back to client IP.
     """
 
     def __init__(
@@ -54,14 +68,35 @@ class RedisRateLimitMiddleware:
         self.requests_per_window = requests_per_window
         self.window_seconds = window_seconds
         self.trusted_proxies = trusted_proxies or set()
+        self._circuit_open = False
+        self._circuit_opened_at: float | None = None
+        self._secret_key = settings.secret_key.get_secret_value()
 
         # Handle fakeredis URL scheme for tests
+        self.redis: Any
         if redis_url.startswith("fakeredis://"):
             import fakeredis.aioredis
 
             self.redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
         else:
             self.redis = redis.from_url(redis_url, encoding="utf-8", decode_responses=True)
+
+    def _circuit_available(self) -> bool:
+        """Return True if the circuit allows Redis calls."""
+        if not self._circuit_open:
+            return True
+        # Attempt half-open after 30 seconds
+        if self._circuit_opened_at and time.time() - self._circuit_opened_at > 30:
+            self._circuit_open = False
+            self._circuit_opened_at = None
+            return True
+        return False
+
+    def _trip_circuit(self) -> None:
+        """Open the circuit breaker."""
+        self._circuit_open = True
+        self._circuit_opened_at = time.time()
+        logger.warning("Rate limiter circuit opened: Redis unavailable, failing open")
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
@@ -71,22 +106,49 @@ class RedisRateLimitMiddleware:
         # Get client IP, honouring X-Forwarded-For only from trusted peers.
         peer_ip = scope.get("client", ("unknown", 0))[0] or "unknown"
         client_ip = peer_ip
+        headers = dict(scope.get("headers", []))
         if peer_ip in self.trusted_proxies:
-            headers = dict(scope.get("headers", []))
             forwarded = headers.get(b"x-forwarded-for", b"").decode().strip()
             if forwarded:
                 client_ip = forwarded.split(",")[0].strip() or peer_ip
 
-        now = time.time()
-        key = f"ratelimit:{client_ip}"
+        # Extract business_id from JWT for per-tenant rate limiting
+        business_id = None
+        auth_header = headers.get(b"authorization", b"").decode()
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1]
+            try:
+                payload = pyjwt.decode(
+                    token,
+                    self._secret_key,
+                    algorithms=["HS256"],
+                    options={"verify_exp": False, "verify_signature": False},
+                )
+                business_id = payload.get("business_id")
+            except Exception:
+                pass
 
-        # Sliding window using Redis sorted set
-        pipe = self.redis.pipeline()
-        await pipe.zremrangebyscore(key, 0, now - self.window_seconds)
-        await pipe.zcard(key)
-        await pipe.zadd(key, {str(now): now})
-        await pipe.expire(key, self.window_seconds)
-        results = await pipe.execute()
+        # Per-tenant key: business_id if available, else client IP
+        key = f"ratelimit:{business_id or client_ip}"
+
+        now = time.time()
+
+        # Circuit breaker: if Redis is down, fail open
+        if not self._circuit_available():
+            await self.app(scope, receive, send)
+            return
+
+        try:
+            pipe = self.redis.pipeline()
+            await pipe.zremrangebyscore(key, 0, now - self.window_seconds)
+            await pipe.zcard(key)
+            await pipe.zadd(key, {str(now): now})
+            await pipe.expire(key, self.window_seconds)
+            results = await pipe.execute()
+        except Exception:
+            self._trip_circuit()
+            await self.app(scope, receive, send)
+            return
 
         current_count = results[1]
 
@@ -108,18 +170,32 @@ async def lifespan(app: FastAPI):
     """Bind TypeSafe client lifecycle to the app.
 
     ``close()`` is guaranteed to run on shutdown so the SDK's HTTP client
-    and any buffered judgments are flushed cleanly.
+    and any buffered judgments are flushed cleanly. Also closes Redis
+    connections and DB engine on shutdown.
     """
     yield
     if settings.typesafe_enabled:
         await typesafe.close()
+    from app.db.session import engine
+
+    await engine.dispose()
 
 
 app = FastAPI(
     title=settings.app_name,
+    description="ERP03 production ERP — modular foundation for multi-tenant retail operations.",
     version=settings.version,
     docs_url="/docs",
     redoc_url="/redoc",
+    contact={
+        "name": "ERP03 Support",
+        "url": "https://erp.example.com/support",
+        "email": "support@erp.example.com",
+    },
+    license_info={
+        "name": "Proprietary",
+        "url": "https://erp.example.com/license",
+    },
     lifespan=lifespan,
 )
 
@@ -205,6 +281,9 @@ if settings.rate_limit_enabled:
         trusted_proxies={ip.strip() for ip in settings.trusted_proxies.split(",") if ip.strip()},
     )
 
+# Audit logging middleware (captures business operations for traceability)
+app.add_middleware(AuditMiddleware)
+
 
 @app.middleware("http")
 async def request_context(request: Request, call_next):
@@ -236,6 +315,10 @@ async def request_context(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    # Remove server header to reduce information leakage
+    response.headers.__delitem__("server") if "server" in response.headers else None
     logger.info(
         "request method=%s path=%s status=%s duration_ms=%.2f request_id=%s",
         request.method,

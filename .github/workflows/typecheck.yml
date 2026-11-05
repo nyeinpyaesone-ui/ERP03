@@ -33,5 +33,4 @@ jobs:
       - name: Run mypy
         run: |
           cd ERP-BACKEND
-          python -m mypy app/ --ignore-missing-imports --no-error-summary 2>&1 | head -50 || true
-        continue-on-error: true
+          python -m mypy app/ --ignore-missing-imports --no-error-summary

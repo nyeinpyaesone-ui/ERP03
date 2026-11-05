@@ -38,7 +38,7 @@ async def _bootstrap(prefix: str):
 async def test_create_and_list_products_with_search_and_pagination():
     business, branch, _warehouse, _user = await _bootstrap("CAT")
     for index in range(3):
-        async with SessionFactory() as session:
+        async with SessionFactory() as session, session.begin():
             await create_product(
                 session,
                 business_id=business.id,

@@ -4,8 +4,8 @@ resources:
   - ../../base
 images:
   - name: erp03-backend
-    newName: docker.io/powerrangeranikg/erp03-backend
+    newName: docker.io/nyeinpyaesone-ui/erp03-backend
     newTag: "latest"
   - name: erp03-frontend
-    newName: docker.io/powerrangeranikg/erp03-frontend
+    newName: docker.io/nyeinpyaesone-ui/erp03-frontend
     newTag: "latest"

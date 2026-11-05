@@ -24,7 +24,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: frontend
-          image: docker.io/powerrangeranikg/erp03-frontend@sha256:REPLACE_WITH_REAL_DIGEST
+          image: docker.io/nyeinpyaesone-ui/erp03-frontend@sha256:REPLACE_WITH_REAL_DIGEST
           ports:
             - containerPort: 8080
               name: http
