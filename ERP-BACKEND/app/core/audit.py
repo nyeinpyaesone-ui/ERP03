@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 import jwt as pyjwt
@@ -61,7 +61,9 @@ def _extract_business_id(request: Request) -> UUID | None:
 
 
 class AuditMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         started = time.time()
         response = await call_next(request)
         duration_ms = int((time.time() - started) * 1000)

@@ -23,17 +23,14 @@ def _create_engine() -> Any:
     Development (SQLite): no size-based pooling (unsupported by aiosqlite).
     Pool settings auto-tuned from environment or sensible defaults.
     """
-    connect_args: dict[str, Any] = {}
     if not settings.database_url.startswith("sqlite"):
-        # Prepared-statement threshold reduces parse overhead on repeated queries.
-        connect_args["prepare_threshold"] = None  # type: ignore[dict-item]
+        # Use the driver's defaults; no non-portable connection flags are required.
         kwargs: dict[str, Any] = {
             "pool_pre_ping": True,
             "pool_timeout": settings.db_pool_timeout,
             "pool_recycle": settings.db_pool_recycle,
             "echo": settings.db_echo,
             "future": True,
-            "connect_args": connect_args,
             "pool_size": settings.db_pool_size,
             "max_overflow": settings.db_max_overflow,
         }

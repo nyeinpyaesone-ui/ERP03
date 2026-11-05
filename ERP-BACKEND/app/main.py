@@ -14,6 +14,7 @@ Production hardening:
 
 import logging
 import time
+from typing import Any
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
@@ -72,6 +73,7 @@ class RedisRateLimitMiddleware:
         self._secret_key = settings.secret_key.get_secret_value()
 
         # Handle fakeredis URL scheme for tests
+        self.redis: Any
         if redis_url.startswith("fakeredis://"):
             import fakeredis.aioredis
 
