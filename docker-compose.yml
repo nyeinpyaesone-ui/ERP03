@@ -45,8 +45,7 @@ services:
           memory: 128M
 
   migrate:
-    build: ./ERP-BACKEND
-    profiles: ["full"]
+    image: ${ERP03_BACKEND_IMAGE:-ghcr.io/nyeinpyaesone-ui/erp03-backend:${IMAGE_TAG:-latest}}
     environment:
       ENVIRONMENT: production
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
@@ -59,7 +58,7 @@ services:
     restart: "no"
 
   backend:
-    image: ${DOCKERHUB_IMAGE_BACKEND:-nyeinpyaesone-ui/erp03-backend}:${IMAGE_TAG:-latest}
+    image: ${ERP03_BACKEND_IMAGE:-ghcr.io/nyeinpyaesone-ui/erp03-backend:${IMAGE_TAG:-latest}}
     build: ./ERP-BACKEND
     ports:
       - "8000:8000"
@@ -74,19 +73,16 @@ services:
     volumes:
       - erp_data:/app/.local
     depends_on:
-      migrate:
-        condition: service_completed_successfully
-        required: true
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/healthz', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/readyz', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 30s
     restart: unless-stopped
     deploy:
       resources:
@@ -96,7 +92,7 @@ services:
           memory: 256M
 
   frontend:
-    image: ${DOCKERHUB_IMAGE_FRONTEND:-nyeinpyaesone-ui/erp03-frontend}:${IMAGE_TAG:-latest}
+    image: ${ERP03_FRONTEND_IMAGE:-ghcr.io/nyeinpyaesone-ui/erp03-frontend:${IMAGE_TAG:-latest}}
     build:
       context: ./frontend
       args:
@@ -106,6 +102,12 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
     deploy:
       resources:
