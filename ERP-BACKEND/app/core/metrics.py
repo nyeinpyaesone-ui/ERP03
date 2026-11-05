@@ -23,10 +23,10 @@ REQUEST_LATENCY = Histogram(
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10),
 )
 
-# Task 4.1: Database pool gauges
+# Database connection-pool gauges
 DB_POOL_ACTIVE = Gauge(
     "erp03_db_pool_active_connections",
-    "Number of actively used database connections in the pool",
+    "Number of checked-out database connections in the pool",
 )
 DB_POOL_IDLE = Gauge(
     "erp03_db_pool_idle_connections",
@@ -73,7 +73,7 @@ metrics_app = _metrics_auth_middleware(make_asgi_app())
 def update_pool_metrics(pool) -> None:
     """Update DB pool gauges from a SQLAlchemy pool object."""
     try:
-        DB_POOL_ACTIVE.set(pool.size() - pool.checkedin() if hasattr(pool, "size") else 0)
+        DB_POOL_ACTIVE.set(pool.checkedout() if hasattr(pool, "checkedout") else 0)
         DB_POOL_IDLE.set(pool.checkedin() if hasattr(pool, "checkedin") else 0)
         DB_POOL_OVERFLOW.set(pool.overflow() if hasattr(pool, "overflow") else 0)
     except Exception:

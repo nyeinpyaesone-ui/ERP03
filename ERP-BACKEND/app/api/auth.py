@@ -151,7 +151,7 @@ async def register(
 
         # Assign permissions to Owner role
         for code in perm_codes:
-            session.execute(
+            await session.execute(
                 role_permissions.insert().values(
                     role_id=owner_role.id,
                     permission_id=perm_by_code[code].id,
@@ -159,7 +159,7 @@ async def register(
             )
 
         # Assign Owner role to user
-        session.execute(
+        await session.execute(
             user_roles.insert().values(
                 user_id=user.id,
                 role_id=owner_role.id,

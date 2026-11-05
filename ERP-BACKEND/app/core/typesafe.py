@@ -123,11 +123,12 @@ class TypeSafeClient:
 
     def __init__(self) -> None:
         self._client: Any | None = None
+        api_key = settings.typesafe_api_key
         self._enabled = bool(
             settings.typesafe_enabled
             and _TYPESAFE_AVAILABLE
-            and settings.typesafe_api_key
-            and settings.typesafe_api_key.get_secret_value()
+            and api_key is not None
+            and api_key.get_secret_value()
         )
 
     async def _get_client(self) -> Any | None:
@@ -135,8 +136,11 @@ class TypeSafeClient:
             return None
         if self._client is None:
             assert AsyncTypeSafeClient is not None
+            api_key = settings.typesafe_api_key
+            if api_key is None:
+                return None
             self._client = AsyncTypeSafeClient(
-                api_key=settings.typesafe_api_key.get_secret_value(),
+                api_key=api_key.get_secret_value(),
             )
         return self._client
 
@@ -406,7 +410,7 @@ class TypeSafeClient:
         if error_code is not None and error_message is not None:
             result = results[idx]
             idx += 1
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 output["classification"] = None
             else:
                 output["classification"] = {
@@ -417,7 +421,7 @@ class TypeSafeClient:
                 }
         if business_id is not None and amount is not None and currency is not None:
             result = results[idx]
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 output["risk"] = None
             else:
                 output["risk"] = {

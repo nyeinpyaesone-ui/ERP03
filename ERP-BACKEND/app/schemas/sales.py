@@ -10,8 +10,8 @@ class SaleLineRequest(BaseModel):
     product_id: UUID
     quantity: Decimal = Field(gt=0)
     unit_price: Decimal | None = Field(default=None, ge=0)
-    discount: Decimal = Field(default=0, ge=0)
-    tax: Decimal = Field(default=0, ge=0)
+    discount: Decimal = Field(default=Decimal("0"), ge=0)
+    tax: Decimal = Field(default=Decimal("0"), ge=0)
 
 
 class SalePaymentRequest(BaseModel):

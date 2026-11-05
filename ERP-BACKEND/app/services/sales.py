@@ -83,7 +83,7 @@ def _sale_fingerprint(
                 }
                 for line in lines
             ],
-            key=lambda item: item["product_id"],
+            key=lambda item: str(item["product_id"]),
         ),
         "payments": sorted(
             [
@@ -95,7 +95,7 @@ def _sale_fingerprint(
                 }
                 for payment in payments
             ],
-            key=lambda item: item["method"],
+            key=lambda item: str(item["method"]),
         ),
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -174,7 +174,11 @@ async def create_pos_sale(
     # transaction so invalid requests never touch database resources.
     if all(line.unit_price is not None for line in lines):
         requested_total = sum(
-            (line.unit_price * line.quantity - line.discount + line.tax for line in lines),
+            (
+                line.unit_price * line.quantity - line.discount + line.tax
+                for line in lines
+                if line.unit_price is not None
+            ),
             Decimal("0"),
         )
         requested_paid = sum((payment.amount for payment in payments), Decimal("0"))

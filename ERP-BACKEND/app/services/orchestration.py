@@ -105,11 +105,6 @@ class OperationService:
             .with_for_update(skip_locked=skip_locked)
         )
 
-    def _for_update_kwargs(self) -> dict[str, bool]:
-        bind = self.session.get_bind()
-        dialect = bind.dialect.name if bind is not None else "sqlite"
-        return {"skip_locked": dialect != "sqlite"}
-
     async def claim_next(self) -> Operation | None:
         """Atomically claim the next claimable operation for this worker.
 
@@ -207,6 +202,8 @@ class OperationService:
         conditional-claim pattern.
         """
         cutoff = datetime.now(UTC) - timedelta(seconds=stale_after_seconds)
+        bind = self.session.get_bind()
+        dialect = bind.dialect.name if bind is not None else "sqlite"
         result = await self.session.execute(
             select(Operation.id)
             .where(
@@ -215,7 +212,7 @@ class OperationService:
             )
             .order_by(Operation.created_at.asc())
             .limit(50)
-            .with_for_update(**self._for_update_kwargs()),
+            .with_for_update(skip_locked=dialect != "sqlite"),
         )
         ids = [row[0] for row in result.all()]
         recovered: list[Operation] = []
