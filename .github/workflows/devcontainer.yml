@@ -72,23 +72,6 @@ jobs:
           provenance: mode=max
           sbom: true
 
-      - name: Verify frontend development manifest architectures
-        if: github.event_name != 'pull_request'
-        env:
-          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/erp03-frontend
-          DIGEST: ${{ steps.build-frontend-dev-image.outputs.digest }}
-        run: |
-          set -Eeuo pipefail
-          docker buildx imagetools inspect --raw "${IMAGE_REF}@${DIGEST}" |
-            jq -e '[.manifests[].platform | select(.os == "linux" and (.architecture == "amd64" or .architecture == "arm64"))] | map(.architecture) | unique | length == 2' >/dev/null
-          {
-            echo "## Frontend development image publication"
-            echo
-            echo "- Image: ${IMAGE_REF}"
-            echo "- Digest: ${DIGEST}"
-            echo "- Verified platforms: linux/amd64, linux/arm64"
-          } >> "$GITHUB_STEP_SUMMARY"
-
       - name: Verify devcontainer manifest architectures
         if: github.event_name != 'pull_request'
         env:
@@ -200,3 +183,21 @@ jobs:
           cache-to: type=gha,mode=max,scope=frontend-dev
           provenance: mode=max
           sbom: true
+      
+      - name: Verify frontend development manifest architectures
+        if: github.event_name != 'pull_request'
+        env:
+          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/erp03-frontend
+          DIGEST: ${{ steps.build-frontend-dev-image.outputs.digest }}
+        run: |
+          set -Eeuo pipefail
+          docker buildx imagetools inspect --raw "${IMAGE_REF}@${DIGEST}" |
+            jq -e '[.manifests[].platform | select(.os == "linux" and (.architecture == "amd64" or .architecture == "arm64"))] | map(.architecture) | unique | length == 2' >/dev/null
+          {
+            echo "## Frontend development image publication"
+            echo
+            echo "- Image: ${IMAGE_REF}"
+            echo "- Digest: ${DIGEST}"
+            echo "- Verified platforms: linux/amd64, linux/arm64"
+          } >> "$GITHUB_STEP_SUMMARY"
+
