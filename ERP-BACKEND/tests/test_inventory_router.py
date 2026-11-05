@@ -60,6 +60,7 @@ class TestProductCreateSchema:
         assert data.description is None
 
     def test_all_fields_populated(self):
+        """Preserve optional product attributes supplied at creation."""
         data = ProductCreate(
             sku="SKU-2",
             name="Gadget",
@@ -86,34 +87,42 @@ class TestProductCreateSchema:
 
     @pytest.mark.parametrize("status", ["active", "discontinued", "draft"])
     def test_valid_status_values_accepted(self, status):
+        """Accept each supported product status."""
         data = ProductCreate(sku="SKU-3", name="Item", unit_price=Decimal("1"), status=status)
         assert data.status == status
 
     def test_invalid_status_raises_validation_error(self):
+        """Reject unsupported product statuses during creation."""
         with pytest.raises(ValidationError):
             ProductCreate(sku="SKU-4", name="Item", unit_price=Decimal("1"), status="deleted")
 
     def test_negative_unit_price_raises(self):
+        """Reject a unit price below zero."""
         with pytest.raises(ValidationError):
             ProductCreate(sku="SKU-5", name="Item", unit_price=Decimal("-1"))
 
     def test_negative_cost_price_raises(self):
+        """Reject a cost price below zero."""
         with pytest.raises(ValidationError):
             ProductCreate(sku="SKU-6", name="Item", unit_price=Decimal("1"), cost_price=Decimal("-5"))
 
     def test_negative_quantity_in_stock_raises(self):
+        """Reject negative starting inventory."""
         with pytest.raises(ValidationError):
             ProductCreate(sku="SKU-7", name="Item", unit_price=Decimal("1"), quantity_in_stock=-1)
 
     def test_negative_reorder_level_raises(self):
+        """Reject a reorder threshold below zero."""
         with pytest.raises(ValidationError):
             ProductCreate(sku="SKU-7b", name="Item", unit_price=Decimal("1"), reorder_level=-5)
 
     def test_empty_sku_raises(self):
+        """Reject an empty product SKU."""
         with pytest.raises(ValidationError):
             ProductCreate(sku="", name="Item", unit_price=Decimal("1"))
 
     def test_empty_name_raises(self):
+        """Reject an empty product name."""
         with pytest.raises(ValidationError):
             ProductCreate(sku="SKU-8", name="", unit_price=Decimal("1"))
 
@@ -123,10 +132,12 @@ class TestProductCreateSchema:
             ProductCreate(sku="SKU-9", name="Item", unit_price=Decimal("1"), weight=0)
 
     def test_negative_weight_raises(self):
+        """Reject product weights below zero."""
         with pytest.raises(ValidationError):
             ProductCreate(sku="SKU-10", name="Item", unit_price=Decimal("1"), weight=-2.5)
 
     def test_missing_required_fields_raises(self):
+        """Reject product creation without a SKU and unit price."""
         with pytest.raises(ValidationError):
             ProductCreate(name="Item")
 
@@ -140,12 +151,14 @@ class TestProductUpdateSchema:
     """Tests for the ProductUpdate request schema."""
 
     def test_all_fields_optional(self):
+        """Allow an update payload with every field omitted."""
         data = ProductUpdate()
         assert data.sku is None
         assert data.name is None
         assert data.status is None
 
     def test_partial_update(self):
+        """Accept supplied update fields while leaving omitted fields unset."""
         data = ProductUpdate(name="New Name", unit_price=Decimal("50.00"))
         assert data.name == "New Name"
         assert data.unit_price == Decimal("50.00")
@@ -153,18 +166,22 @@ class TestProductUpdateSchema:
 
     @pytest.mark.parametrize("status", ["active", "discontinued", "draft"])
     def test_valid_status_values_accepted(self, status):
+        """Accept each supported product status."""
         data = ProductUpdate(status=status)
         assert data.status == status
 
     def test_invalid_status_raises(self):
+        """Reject an unsupported status in an update payload."""
         with pytest.raises(ValidationError):
             ProductUpdate(status="unknown")
 
     def test_none_status_short_circuits_validator(self):
+        """Allow an explicit None status in an update payload."""
         data = ProductUpdate(status=None)
         assert data.status is None
 
     def test_negative_unit_price_raises(self):
+        """Reject a unit price below zero."""
         with pytest.raises(ValidationError):
             ProductUpdate(unit_price=Decimal("-1"))
 
@@ -174,26 +191,32 @@ class TestMovementCreateSchema:
 
     @pytest.mark.parametrize("movement_type", ["in", "out", "adjustment", "transfer"])
     def test_valid_movement_types_accepted(self, movement_type):
+        """Accept in, out, adjustment, and transfer movement types."""
         data = MovementCreate(product_id=1, movement_type=movement_type, quantity=10)
         assert data.movement_type == movement_type
 
     def test_invalid_movement_type_raises(self):
+        """Reject a movement type outside the supported set."""
         with pytest.raises(ValidationError):
             MovementCreate(product_id=1, movement_type="scrap", quantity=10)
 
     def test_negative_quantity_raises(self):
+        """Reject negative movement quantities."""
         with pytest.raises(ValidationError):
             MovementCreate(product_id=1, movement_type="in", quantity=-5)
 
     def test_zero_quantity_allowed(self):
+        """Allow a movement quantity of zero."""
         data = MovementCreate(product_id=1, movement_type="in", quantity=0)
         assert data.quantity == 0
 
     def test_product_id_must_be_positive(self):
+        """Reject a movement with a product ID of zero."""
         with pytest.raises(ValidationError):
             MovementCreate(product_id=0, movement_type="in", quantity=10)
 
     def test_optional_fields_default_to_none(self):
+        """Default omitted movement cost, reference, and notes to None."""
         data = MovementCreate(product_id=1, movement_type="in", quantity=10)
         assert data.unit_cost is None
         assert data.reference is None
@@ -204,6 +227,7 @@ class TestProductResponseSchema:
     """Tests for the ProductResponse schema."""
 
     def _payload(self, **overrides):
+        """Build a complete product response payload with caller overrides."""
         payload = dict(
             id=1,
             sku="SKU-1",
@@ -228,12 +252,14 @@ class TestProductResponseSchema:
         return payload
 
     def test_construct_from_dict(self):
+        """Construct a response from a complete dictionary of field values."""
         resp = ProductResponse(**self._payload())
         assert resp.id == 1
         assert resp.unit_price == Decimal("9.99")
         assert resp.status == "active"
 
     def test_missing_required_field_raises(self):
+        """Reject a product response with its required SKU removed."""
         payload = self._payload()
         del payload["sku"]
         with pytest.raises(ValidationError):
@@ -244,6 +270,7 @@ class TestMovementResponseSchema:
     """Tests for the MovementResponse schema."""
 
     def test_construct_from_dict(self):
+        """Construct a response from a complete dictionary of field values."""
         resp = MovementResponse(
             id=1,
             product_id=2,
@@ -263,6 +290,7 @@ class TestDashboardResponseSchema:
     """Tests for the DashboardResponse schema."""
 
     def test_construct(self):
+        """Preserve dashboard totals and category statistics."""
         resp = DashboardResponse(
             total_products=10,
             total_stock_value=1000.0,
@@ -274,6 +302,7 @@ class TestDashboardResponseSchema:
         assert len(resp.categories) == 1
 
     def test_empty_categories_allowed(self):
+        """Allow dashboard statistics with no category entries."""
         resp = DashboardResponse(
             total_products=0,
             total_stock_value=0.0,
@@ -312,6 +341,7 @@ class TestGetInventoryServiceDependency:
     """Tests for the get_inventory_service dependency provider."""
 
     def test_returns_inventory_service_bound_to_db(self, mock_db):
+        """Bind the inventory service dependency to the supplied session."""
         service = get_inventory_service(db=mock_db)
 
         assert isinstance(service, InventoryService)
@@ -322,6 +352,7 @@ class TestCreateProductEndpoint:
     """Tests for POST /products."""
 
     def test_create_product_success(self, mock_db, mock_current_user, mock_service):
+        """Forward product fields and creator ID, then log successful creation."""
         mock_product = MagicMock(id=42)
         mock_service.create_product.return_value = mock_product
         data = ProductCreate(sku="SKU-100", name="New Product", unit_price=Decimal("10.00"))
@@ -359,6 +390,7 @@ class TestCreateProductEndpoint:
         )
 
     def test_create_product_value_error_raises_400(self, mock_db, mock_current_user, mock_service):
+        """Translate a product creation service ValueError into HTTP 400."""
         mock_service.create_product.side_effect = ValueError("Product with SKU 'SKU-1' already exists")
         data = ProductCreate(sku="SKU-1", name="Dup", unit_price=Decimal("10.00"))
 
@@ -369,6 +401,7 @@ class TestCreateProductEndpoint:
         assert "already exists" in exc_info.value.detail
 
     def test_create_product_does_not_log_on_failure(self, mock_db, mock_current_user, mock_service):
+        """Avoid activity logging when product creation fails."""
         mock_service.create_product.side_effect = ValueError("Unit price cannot be negative")
         data = ProductCreate(sku="SKU-2", name="Bad Product", unit_price=Decimal("0"))
 
@@ -383,6 +416,7 @@ class TestListProductsEndpoint:
     """Tests for GET /products."""
 
     def test_list_products_passes_filters_through(self, mock_db, mock_current_user, mock_service):
+        """Forward product filters and pagination to the inventory service."""
         mock_service.list_products.return_value = ["p1", "p2"]
 
         result = list_products(
@@ -408,6 +442,7 @@ class TestListProductsEndpoint:
         )
 
     def test_list_products_uses_defaults(self, mock_db, mock_current_user, mock_service):
+        """Forward default product filters and pagination unchanged."""
         mock_service.list_products.return_value = []
 
         list_products(
@@ -431,6 +466,7 @@ class TestGetProductEndpoint:
     """Tests for GET /products/{product_id}."""
 
     def test_get_product_found(self, mock_db, mock_current_user, mock_service):
+        """Return the product retrieved by the supplied ID."""
         mock_product = MagicMock(id=1)
         mock_service.get_product.return_value = mock_product
 
@@ -440,6 +476,7 @@ class TestGetProductEndpoint:
         mock_service.get_product.assert_called_once_with(1)
 
     def test_get_product_not_found_raises_404(self, mock_db, mock_current_user, mock_service):
+        """Report HTTP 404 when the requested product does not exist."""
         mock_service.get_product.return_value = None
 
         with pytest.raises(HTTPException) as exc_info:
@@ -453,6 +490,7 @@ class TestUpdateProductEndpoint:
     """Tests for PUT /products/{product_id}."""
 
     def test_update_product_no_fields_raises_400(self, mock_db, mock_current_user, mock_service):
+        """Reject empty updates with HTTP 400 before calling the service."""
         data = ProductUpdate()
 
         with pytest.raises(HTTPException) as exc_info:
@@ -465,6 +503,7 @@ class TestUpdateProductEndpoint:
         mock_service.update_product.assert_not_called()
 
     def test_update_product_success(self, mock_db, mock_current_user, mock_service):
+        """Forward changed fields and updater ID, then log the successful update."""
         mock_product = MagicMock(id=1)
         mock_service.update_product.return_value = mock_product
         data = ProductUpdate(name="Updated Name")
@@ -487,6 +526,7 @@ class TestUpdateProductEndpoint:
         )
 
     def test_update_product_filters_none_values(self, mock_db, mock_current_user, mock_service):
+        """Exclude None values from fields forwarded to the update service."""
         mock_product = MagicMock(id=1)
         mock_service.update_product.return_value = mock_product
         data = ProductUpdate(name="Only Name", category=None, unit_price=Decimal("25.00"))
@@ -501,6 +541,7 @@ class TestUpdateProductEndpoint:
         assert called_updates == {"name": "Only Name", "unit_price": Decimal("25.00")}
 
     def test_update_product_not_found_raises_404(self, mock_db, mock_current_user, mock_service):
+        """Report HTTP 404 when the update service finds no product."""
         mock_service.update_product.return_value = None
         data = ProductUpdate(name="Updated Name")
 
@@ -512,6 +553,7 @@ class TestUpdateProductEndpoint:
         assert exc_info.value.status_code == 404
 
     def test_update_product_value_error_raises_400(self, mock_db, mock_current_user, mock_service):
+        """Translate an invalid product update into HTTP 400."""
         mock_service.update_product.side_effect = ValueError("Product with SKU 'X' already exists")
         data = ProductUpdate(sku="X")
 
@@ -528,6 +570,7 @@ class TestDeleteProductEndpoint:
     """Tests for DELETE /products/{product_id}."""
 
     def test_delete_product_success(self, mock_db, mock_current_user, mock_service):
+        """Return deletion confirmation and log the deleted product ID."""
         mock_service.delete_product.return_value = True
 
         with patch("app.routers.inventory.log_activity") as mock_log:
@@ -545,6 +588,7 @@ class TestDeleteProductEndpoint:
         )
 
     def test_delete_product_not_found_raises_404(self, mock_db, mock_current_user, mock_service):
+        """Report HTTP 404 when the deletion service finds no product."""
         mock_service.delete_product.return_value = False
 
         with pytest.raises(HTTPException) as exc_info:
@@ -555,6 +599,7 @@ class TestDeleteProductEndpoint:
         assert exc_info.value.status_code == 404
 
     def test_delete_product_not_found_does_not_log(self, mock_db, mock_current_user, mock_service):
+        """Avoid recording deletion activity for a missing product."""
         mock_service.delete_product.return_value = False
 
         with patch("app.routers.inventory.log_activity") as mock_log:
@@ -570,6 +615,7 @@ class TestCreateMovementEndpoint:
     """Tests for POST /movements."""
 
     def test_create_movement_success(self, mock_db, mock_current_user, mock_service):
+        """Forward movement fields and creator ID, then log the created movement."""
         mock_movement = MagicMock(id=10)
         mock_service.create_stock_movement.return_value = mock_movement
         data = MovementCreate(product_id=1, movement_type="in", quantity=5)
@@ -598,6 +644,7 @@ class TestCreateMovementEndpoint:
         )
 
     def test_create_movement_value_error_raises_400(self, mock_db, mock_current_user, mock_service):
+        """Translate an invalid stock movement into HTTP 400."""
         mock_service.create_stock_movement.side_effect = ValueError("Insufficient stock")
         data = MovementCreate(product_id=1, movement_type="out", quantity=1000)
 
@@ -612,6 +659,7 @@ class TestListMovementsEndpoint:
     """Tests for GET /movements."""
 
     def test_list_movements_passes_filters_through(self, mock_db, mock_current_user, mock_service):
+        """Forward movement filters and pagination to the service."""
         mock_service.get_movements.return_value = ["m1"]
 
         result = list_movements(
@@ -630,6 +678,7 @@ class TestListMovementsEndpoint:
         )
 
     def test_list_movements_uses_defaults(self, mock_db, mock_current_user, mock_service):
+        """Forward default movement filters and pagination unchanged."""
         mock_service.get_movements.return_value = []
 
         list_movements(
@@ -651,6 +700,7 @@ class TestInventoryDashboardEndpoint:
     """Tests for GET /dashboard."""
 
     def test_dashboard_returns_service_stats(self, mock_db, mock_current_user, mock_service):
+        """Return dashboard statistics supplied by the inventory service."""
         stats = {
             "total_products": 5,
             "total_stock_value": 100.0,
@@ -670,6 +720,7 @@ class TestLowStockAlertsEndpoint:
     """Tests for GET /alerts/low-stock."""
 
     def test_low_stock_alerts_default_limit(self, mock_db, mock_current_user, mock_service):
+        """Request low-stock products with the default limit of fifty."""
         mock_service.get_low_stock_products.return_value = ["p1"]
 
         result = get_low_stock_alerts(
@@ -680,6 +731,7 @@ class TestLowStockAlertsEndpoint:
         mock_service.get_low_stock_products.assert_called_once_with(limit=50)
 
     def test_low_stock_alerts_custom_limit(self, mock_db, mock_current_user, mock_service):
+        """Forward a custom low-stock alert limit to the service."""
         mock_service.get_low_stock_products.return_value = []
 
         get_low_stock_alerts(limit=5, db=mock_db, current_user=mock_current_user, service=mock_service)
@@ -691,6 +743,7 @@ class TestOutOfStockAlertsEndpoint:
     """Tests for GET /alerts/out-of-stock."""
 
     def test_out_of_stock_alerts(self, mock_db, mock_current_user, mock_service):
+        """Return out-of-stock products supplied by the service."""
         mock_service.get_out_of_stock_products.return_value = ["p2"]
 
         result = get_out_of_stock_alerts(db=mock_db, current_user=mock_current_user, service=mock_service)

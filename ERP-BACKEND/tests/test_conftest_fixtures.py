@@ -29,11 +29,13 @@ class TestSetupJsonbMockFixture:
     """
 
     def test_app_models_package_has_no_jsonb_attribute(self):
+        """Document that the models package does not export JSONB."""
         import app.models
 
         assert not hasattr(app.models, "JSONB")
 
     def test_patching_jsonb_on_app_models_raises_attribute_error(self):
+        """Verify patching the absent JSONB attribute fails without create=True."""
         import sqlalchemy.types as types
         from unittest.mock import patch
         import app.models
@@ -68,16 +70,20 @@ class TestEngineFixture:
     """Tests for the `engine` fixture's echo=False configuration."""
 
     def test_engine_uses_static_pool(self, engine):
+        """Reuse in-memory SQLite connections through StaticPool."""
         assert engine.pool.__class__ is StaticPool
 
     def test_engine_echo_is_disabled(self, engine):
+        """Keep SQL statement echoing disabled on the test engine."""
         assert engine.echo is False
 
     def test_engine_is_in_memory_sqlite(self, engine):
+        """Use an in-memory SQLite database for fixture sessions."""
         assert engine.url.get_backend_name() == "sqlite"
         assert engine.url.database == ":memory:"
 
     def test_engine_connections_work(self, engine):
+        """Execute a scalar query through the fixture engine connection."""
         with engine.connect() as conn:
             from sqlalchemy import text
             result = conn.execute(text("SELECT 1")).scalar()
