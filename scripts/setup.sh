@@ -19,6 +19,10 @@
 #   --sync-secrets   Sync GitHub secrets availability (values not readable via API).
 #   --env-type       Target environment: development (default) | production.
 #   --force          Overwrite existing .env files when regenerating.
+#   --secret-key     Pre-configure SECRET_KEY value (non-interactive)
+#   --db-password    Pre-configure DB_PASSWORD value (non-interactive)
+#   --redis-password Pre-configure REDIS_PASSWORD value (non-interactive)
+#   --postgres-password Pre-configure POSTGRES_PASSWORD value (non-interactive)
 #   --help           Show this help.
 #
 set -Eeuo pipefail
@@ -34,6 +38,11 @@ SKIP_FRONTEND=false
 SYNC_SECRETS=false
 ENV_TYPE="development"
 FORCE=false
+PRE_CONFIGURED_SECRETS=false
+PRE_SECRET_KEY=""
+PRE_DB_PASSWORD=""
+PRE_REDIS_PASSWORD=""
+PRE_POSTGRES_PASSWORD=""
 
 log()  { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
@@ -51,6 +60,10 @@ while [[ $# -gt 0 ]]; do
     --sync-secrets) SYNC_SECRETS=true ;;
     --env-type) ENV_TYPE="${2:-}"; shift ;;
     --force) FORCE=true ;;
+    --secret-key) PRE_SECRET_KEY="${2:-}"; PRE_CONFIGURED_SECRETS=true; shift ;;
+    --db-password) PRE_DB_PASSWORD="${2:-}"; PRE_CONFIGURED_SECRETS=true; shift ;;
+    --redis-password) PRE_REDIS_PASSWORD="${2:-}"; PRE_CONFIGURED_SECRETS=true; shift ;;
+    --postgres-password) PRE_POSTGRES_PASSWORD="${2:-}"; PRE_CONFIGURED_SECRETS=true; shift ;;
     --help|-h) usage; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
@@ -230,6 +243,20 @@ auto_configure_all() {
     IFS='|' read -r desc generator required <<< "${SECRET_SPECS[$name]}"
     SECRETS[$name]="$(generate_secure_value "$generator")"
   done
+
+  # 2b. Apply pre-configured secret values (CLI flags or env vars)
+  if $PRE_CONFIGURED_SECRETS; then
+    log "Applying pre-configured secret values..."
+    [[ -n "$PRE_SECRET_KEY" ]] && SECRETS[SECRET_KEY]="$PRE_SECRET_KEY" && log "  ✓ SECRET_KEY pre-configured"
+    [[ -n "$PRE_DB_PASSWORD" ]] && SECRETS[DB_PASSWORD]="$PRE_DB_PASSWORD" && log "  ✓ DB_PASSWORD pre-configured"
+    [[ -n "$PRE_REDIS_PASSWORD" ]] && SECRETS[REDIS_PASSWORD]="$PRE_REDIS_PASSWORD" && log "  ✓ REDIS_PASSWORD pre-configured"
+    [[ -n "$PRE_POSTGRES_PASSWORD" ]] && SECRETS[POSTGRES_PASSWORD]="$PRE_POSTGRES_PASSWORD" && log "  ✓ POSTGRES_PASSWORD pre-configured"
+  fi
+  # Also honor environment variables for non-interactive CI/CD use
+  [[ -n "${ERP03_SECRET_KEY:-}" ]] && SECRETS[SECRET_KEY]="${ERP03_SECRET_KEY}" && log "  ✓ SECRET_KEY from ERP03_SECRET_KEY env"
+  [[ -n "${ERP03_DB_PASSWORD:-}" ]] && SECRETS[DB_PASSWORD]="${ERP03_DB_PASSWORD}" && log "  ✓ DB_PASSWORD from ERP03_DB_PASSWORD env"
+  [[ -n "${ERP03_REDIS_PASSWORD:-}" ]] && SECRETS[REDIS_PASSWORD]="${ERP03_REDIS_PASSWORD}" && log "  ✓ REDIS_PASSWORD from ERP03_REDIS_PASSWORD env"
+  [[ -n "${ERP03_POSTGRES_PASSWORD:-}" ]] && SECRETS[POSTGRES_PASSWORD]="${ERP03_POSTGRES_PASSWORD}" && log "  ✓ POSTGRES_PASSWORD from ERP03_POSTGRES_PASSWORD env"
 
   # 3. Try to pull values from GitHub secrets (for CI/production values)
   if $SYNC_SECRETS && check_gh_auth 2>/dev/null; then

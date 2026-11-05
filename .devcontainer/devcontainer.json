@@ -4,8 +4,6 @@
   "service": "app",
   "workspaceFolder": "/workspace",
   "features": {
-    "ghcr.io/devcontainers/features/python:1": {"version": "3.12"},
-    "ghcr.io/devcontainers/features/node:1": {"version": "22"},
     "ghcr.io/devcontainers/features/docker-in-docker:2": {}
   },
   "customizations": {
@@ -21,7 +19,7 @@
         "mtxr.sqltools-driver-pg"
       ],
       "settings": {
-        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.defaultInterpreterPath": "/opt/erp03-venv/bin/python",
         "editor.formatOnSave": true,
         "python.testing.pytestEnabled": true,
         "python.testing.pytestArgs": ["ERP-BACKEND/tests"]

@@ -100,13 +100,13 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
       class).** ✅ **RESOLVED**: Audited all models; only `operations.py` uses
       JSON columns, already using `JSONB().with_variant(JSON, "sqlite")`.
       No Text-mismatch found.
-- [ ] **OPS-2: Container build + Trivy evidence in Codespace (daemon needed).**
-      (BLOCKED: Docker daemon unavailable; Dockerfiles verified manually, .dockerignore added)
-- [ ] **OPS-3: Backup drill: restore dump into scratch PG + alembic_version
-      probe (agent finding 14); backup_verify.sh currently only checks gzip CRC.**
-      (BLOCKED: No PostgreSQL; backup.sh/restore.sh/verify-backup-restore.sh validated)
 - [ ] **ALERT-1: `promtool check rules` + load once in staging Prometheus;**
       (BLOCKED: promtool not installed; YAML rules validated with PyYAML)
+- [ ] **OPS-2: Container build + Trivy evidence in Codespace (daemon needed).**
+      (BLOCKED: Docker daemon unavailable; Dockerfiles verified manually, .dockerignore added)
+- [ ] **OPS-3: Backup drill: restore dump into scratch PG + alembic_version**
+      probe (agent finding 14); backup_verify.sh currently only checks gzip CRC.**
+      (BLOCKED: No PostgreSQL server available; pg_dump/psql client tools installed but no server)
 - [x] **DEP-2: Move pytest/pytest-asyncio/httpx out of prod requirements**
       (agent finding 18) — CI depends on them only because they ship in prod;
       correct ci.yml deps then trim requirements (agent finding 18)
@@ -150,3 +150,41 @@ Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1
 | Deep-dive SETP-1 (env integration): setup.sh emitted undeclared keys → `extra="forbid"` crash | corrected dev/prod backend `.env` heredocs in `setup.sh` to declared Settings fields only; corrected `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`/`JWT_EXPIRY_MINUTES`; verified `Settings()` loads clean | `6883b400` |
 | Code review follow-up (2026-10-30): P0-1 idempotency key overflow; P0-2 frontend privileged port; P1-1/P1-2 rate limiter hardening; P1-3 TransactionStore test isolation; P1-4 Vite dev proxy; P1-5 invoice_no parsing guard; P2 hygiene/docs/password policy | full gate green: ruff 0, format clean, compileall OK, alembic single head, 54 passed / 1 skipped | `28fce033` |
 | Follow-up L3: trusted-proxy XFF resolution + 429 threshold tests for RateLimitMiddleware | 3 new tests in tests/test_rate_limiter.py; all pass | `cc786a23` |
+| Task 1.3/3.4: Docker image owner powerrangeranikg → nyeinpyaesone-ui | All compose/K8s/workflow/docs references updated | `b11df29` |
+| Task 1.2: /auth/register endpoint | POST /auth/register creates business+user+Owner role; returns 201 | `9b9194f` |
+| Task 2.1: Redis circuit breaker | Rate limiter fails open when Redis down; half-open after 30s | `9b9194f` |
+| Task 2.2: Per-tenant rate limiting | Rate limit key includes business_id from JWT; IP fallback preserved | `9b9194f` |
+| Task 2.3: Audit logging | AuditLog model + AuditMiddleware + alembic 0008 migration | `9b9194f` |
+| Task 2.4: Security headers | HSTS, Permissions-Policy, server header removed | `9b9194f` |
+| Task 2.5: DB engine disposal | await engine.dispose() in lifespan | `9b9194f` |
+| Task 1.1: Frontend SPA | React 19 + Vite + Tailwind; dist/ built successfully | `f0872a3` |
+| Task 3.1: security.yml workflow | CodeQL + pip-audit + dependency-review created | `bb77746` |
+| Task 3.2: rotate-secrets permissions | secrets: write added | `b11df29` |
+| Task 3.3: mypy enforcement | continue-on-error and || true removed | `b11df29` |
+| Task 4.1: DB pool metrics | active/idle/overflow Prometheus gauges added | `bb77746` |
+| Task 4.2: K8s HPA | production hpa.yaml created + added to kustomization | `bb77746` |
+| Task 4.3: Backup automation | systemd service + timer + README created | `0b6139a` |
+| Task 4.4: DR runbook | docs/DISASTER_RECOVERY.md with RPO/RTO and restore procedures | `0b6139a` |
+| Task 4.5: Resource limits | All base deployments (backend, frontend, postgres, redis, ollama) have requests+limits | `0b6139a` |
+| Task 4.6: OpenAPI branding | description, contact, license_info added to FastAPI | `bb77746` |
+| Task 5.1: TypeScript API client | frontend/src/services/api-client.ts created | `0b6139a` |
+| Task 5.2: Postman collection | tests/postman/ERP03.postman_collection.json created | `0b6139a` |
+| Task 5.5: Docs drift | scripts/build-frontend.sh exists; docs reference resolved | `0b6139a` |
+| Phase 6 gate: ruff check | All checks passed (0 errors) | `0b6139a` |
+| Phase 6 gate: ruff format | All 58 files formatted | `0b6139a` |
+| Phase 6 gate: compileall | app + alembic compile cleanly | `0b6139a` |
+| Phase 6 gate: alembic | Single head (0008_audit_log); upgrade head applies | `0b6139a` |
+| Phase 6 gate: pytest | 57 passed, 1 skipped, 0 failed | `0b6139a` |
+| Phase 6 gate: frontend build | dist/ generated with no errors | `f0872a3` |
+| Task 5.5 (follow-up): postcss.config.js added | Tailwind CSS PostCSS config for explicit plugin declaration | `182cd4d` |
+| Setup: non-interactive secret pre-configuration | --secret-key, --db-password, --redis-password, --postgres-password flags + ERP03_* env vars | `182cd4d` |
+| Phase 6 gate re-verified | ruff check/format, compileall, alembic, pytest (57/1/0), frontend build all pass | `182cd4d` |
+| Perf: rate limiter + audit middleware | jwt import moved to module level, secret key cached, bounded semaphore for audit writes | `60fe60c` |
+| Perf: database session | pool metrics wired via SQLAlchemy events, pool_timeout config, connect_args for prepared statements | `60fe60c` |
+| Perf: invoice numbering index | 0009 migration: composite index on invoices(branch_id, invoice_no) | `84f1e14` |
+| Perf: frontend code splitting | React.lazy for pages, Vite manual chunk splitting (vendor/ui/utils), esbuild minify | `e726a00` |
+| Perf: nginx caching | gzip compression, 1-year cache for static assets, proxy timeouts | `e726a00` |
+| Fix: hardcoded secret fallbacks | docker-compose.dev.yml SECRET_KEY requires explicit value; .env.example placeholders aligned; PASSWORD_MIN_LENGTH=12 matches config.py | `55503ac` |
+| Upgrade: Python dependencies | SQLAlchemy 2.1.6→2.1.8, pytest-asyncio 1.4.1→1.4.1.post1 | `a574b56` |
+| Upgrade: Frontend dependencies | React Router 7.1.1→7.18.5, React Hook Form 7.54.2→7.91.0, Zod 3.24.2→4.6.7, Lucide React 0.475.0→1.68.0, Axios 1.8.4→1.21.0, Hook Form Resolvers 3.10.0→7.0.2, Tailwind Merge 2.6.0→3.7.0, Vite 6.4.5→5.4.11 (rolled back from 8.3.5 - CSS extraction broken), @vitejs/plugin-react 5.2.0→4.3.4 | `a574b56` |
+| Finding: Tailwind CSS v4 incompatible with Vite/Rolldown | Tailwind CSS v4 does not produce CSS output with Vite 6/8 + Rolldown. Rolled back to v3.4.17 with PostCSS. PostCSS config renamed to .cjs due to "type": "module" in package.json. | `a574b56` |

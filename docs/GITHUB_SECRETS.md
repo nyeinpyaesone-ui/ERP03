@@ -6,7 +6,7 @@ Configure these in GitHub: **Settings → Secrets and variables → Actions**
 
 | Secret Name | Description | Required For |
 |-------------|-------------|--------------|
-| `DOCKERHUB_USERNAME` | Docker Hub username (e.g., `powerrangeranikg`) | Container build & push to Docker Hub |
+| `DOCKERHUB_USERNAME` | Docker Hub username (e.g., `nyeinpyaesone-ui`) | Container build & push to Docker Hub |
 | `DOCKERHUB_TOKEN` | Docker Hub personal access token | Container push to Docker Hub |
 | `POSTGRES_PASSWORD` | PostgreSQL database password | docker-compose / CI services |
 | `SECRET_KEY` | Application secret key (min 32 chars in production) | Backend / docker-compose / production |
@@ -16,8 +16,8 @@ Configure these in GitHub: **Settings → Secrets and variables → Actions**
 
 ERP03 publishes container images to Docker Hub:
 
-- Backend: `powerrangeranikg/erp03-backend`
-- Frontend: `powerrangeranikg/erp03-frontend`
+- Backend: `nyeinpyaesone-ui/erp03-backend`
+- Frontend: `nyeinpyaesone-ui/erp03-frontend`
 
 ### Authentication
 
@@ -32,7 +32,7 @@ For local docker pushes to Docker Hub:
 echo $DOCKERHUB_TOKEN | docker login docker.io -u $DOCKERHUB_USERNAME --password-stdin
 
 # Push an image
-docker push powerrangeranikg/erp03-backend:latest
+docker push nyeinpyaesone-ui/erp03-backend:latest
 ```
 
 ### Required Permission Settings
