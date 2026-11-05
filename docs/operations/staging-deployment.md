@@ -20,7 +20,7 @@ The `staging` GitHub Environment must be configured with required reviewers and 
 
 ## Deployment behavior
 
-The workflow can run only from `main`. It validates the immutable image tag, checks that the staging checkout is clean, requires an existing backend/frontend release for rollback, fetches the matching source commit, and verifies that commit is reachable from `origin/main`.
+The workflow can run only from `main`. It validates the source commit SHA and both OCI digests, checks that the staging checkout is clean, requires an existing backend/frontend release for rollback, fetches the matching source commit, and verifies that commit is reachable from `origin/main`.
 
 It then pulls the backend and frontend by digest, runs the one-off migration service from the same backend image, starts the application services without building on the staging host, and waits for both Docker health checks to report `healthy`. The migration service is not an application dependency, so the image rollback path does not rerun migrations. The backend check calls `/api/v1/readyz`, which includes a database/schema readiness check. The frontend check requests the Nginx-served application root.
 
@@ -28,6 +28,6 @@ If application deployment or health validation fails, the workflow restores the 
 
 ## Rollback boundary
 
-The automated rollback restores application code and container images. It does not reverse database migrations or restore database data. Schema changes must use a backward-compatible expand/contract sequence. Any migration that cannot safely coexist with the prior application version requires a separately approved database backup and recovery plan before staging execution.
+The automated rollback restores the previous backend and frontend image references while retaining the current Compose deployment configuration. It does not roll back application source files, reverse database migrations, or restore database data. Schema changes must use a backward-compatible expand/contract sequence. Any migration that cannot safely coexist with the prior application version requires a separately approved database backup and recovery plan before staging execution.
 
 No staging deployment is automatic; this workflow is manually dispatched and gated by the GitHub Environment.
