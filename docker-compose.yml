@@ -46,7 +46,6 @@ services:
 
   migrate:
     image: ${ERP03_BACKEND_IMAGE:-ghcr.io/nyeinpyaesone-ui/erp03-backend:${IMAGE_TAG:-latest}}
-    profiles: ["full"]
     environment:
       ENVIRONMENT: production
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
