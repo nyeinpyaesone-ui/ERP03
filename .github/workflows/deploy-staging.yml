@@ -123,6 +123,8 @@ jobs:
 
           backend_image="ghcr.io/nyeinpyaesone-ui/erp03-backend@$backend_digest"
           frontend_image="ghcr.io/nyeinpyaesone-ui/erp03-frontend@$frontend_digest"
+          export ERP03_BACKEND_IMAGE="$backend_image"
+          export ERP03_FRONTEND_IMAGE="$frontend_image"
 
           previous_backend_id="$(docker compose ps -q backend | head -n 1)"
           previous_frontend_id="$(docker compose ps -q frontend | head -n 1)"
@@ -190,9 +192,7 @@ jobs:
           }
           git checkout --detach "$source_sha"
 
-          docker pull "$backend_image"
-          docker pull "$frontend_image"
-          docker compose --profile full run --rm migrate
+          docker compose pull backend frontend
           backend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$backend_image")"
           frontend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$frontend_image")"
           test "$backend_revision" = "$source_sha" || {
@@ -204,9 +204,7 @@ jobs:
             exit 1
           }
 
-          export ERP03_BACKEND_IMAGE="$backend_image"
-          export ERP03_FRONTEND_IMAGE="$frontend_image"
-          docker compose pull backend frontend
+          docker compose --profile full run --rm migrate
           docker compose --profile full up -d --no-build backend frontend
           wait_for_health
           docker compose ps
