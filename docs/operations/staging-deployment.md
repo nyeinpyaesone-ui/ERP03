@@ -22,9 +22,9 @@ The `staging` GitHub Environment must be configured with required reviewers and 
 
 The workflow can run only from `main`. It validates the immutable image tag, checks that the staging checkout is clean, requires an existing backend/frontend release for rollback, fetches the matching source commit, and verifies that commit is reachable from `origin/main`.
 
-It then pulls the backend and frontend images from GHCR, starts them without building on the staging host, and waits for both Docker health checks to report `healthy`. The backend check calls `/api/v1/readyz`, which includes a database/schema readiness check. The frontend check requests the Nginx-served application root.
+It then pulls the backend and frontend by digest, runs the one-off migration service from the same backend image, starts the application services without building on the staging host, and waits for both Docker health checks to report `healthy`. The migration service is not an application dependency, so the image rollback path does not rerun migrations. The backend check calls `/api/v1/readyz`, which includes a database/schema readiness check. The frontend check requests the Nginx-served application root.
 
-If application deployment or health validation fails, the workflow restores the previous source revision and previous image references, then waits for the previous containers to become healthy.
+If application deployment or health validation fails, the workflow restores the previous backend and frontend image references while keeping the Compose deployment configuration in place, then waits for the previous containers to become healthy. It does not attempt a database migration rollback.
 
 ## Rollback boundary
 
