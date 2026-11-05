@@ -124,7 +124,6 @@ jobs:
           backend_image="ghcr.io/nyeinpyaesone-ui/erp03-backend@$backend_digest"
           frontend_image="ghcr.io/nyeinpyaesone-ui/erp03-frontend@$frontend_digest"
 
-          previous_revision="$(git rev-parse HEAD)"
           previous_backend_id="$(docker compose ps -q backend | head -n 1)"
           previous_frontend_id="$(docker compose ps -q frontend | head -n 1)"
           test -n "$previous_backend_id" && test -n "$previous_frontend_id" || {
@@ -134,6 +133,8 @@ jobs:
           previous_backend_image="$(docker inspect --format '{{.Config.Image}}' "$previous_backend_id")"
           previous_frontend_image="$(docker inspect --format '{{.Config.Image}}' "$previous_frontend_id")"
           test -n "$previous_backend_image" && test -n "$previous_frontend_image"
+          docker image inspect "$previous_backend_image" >/dev/null
+          docker image inspect "$previous_frontend_image" >/dev/null
 
           deployment_started=0
 
@@ -165,9 +166,8 @@ jobs:
             result=$?
             trap - EXIT
             if [ "$result" -ne 0 ] && [ "$deployment_started" -eq 1 ]; then
-              echo "Deployment failed; restoring previous code and image references"
+              echo "Deployment failed; restoring the previous application images"
               set +e
-              git checkout --detach "$previous_revision"
               export ERP03_BACKEND_IMAGE="$previous_backend_image"
               export ERP03_FRONTEND_IMAGE="$previous_frontend_image"
               docker compose up -d --no-build backend frontend
@@ -192,6 +192,7 @@ jobs:
 
           docker pull "$backend_image"
           docker pull "$frontend_image"
+          docker compose run --rm migrate
           backend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$backend_image")"
           frontend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$frontend_image")"
           test "$backend_revision" = "$source_sha" || {
