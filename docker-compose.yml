@@ -45,7 +45,7 @@ services:
           memory: 128M
 
   migrate:
-    build: ./ERP-BACKEND
+    image: ${ERP03_BACKEND_IMAGE:-ghcr.io/nyeinpyaesone-ui/erp03-backend:${IMAGE_TAG:-latest}}
     profiles: ["full"]
     environment:
       ENVIRONMENT: production
@@ -74,9 +74,6 @@ services:
     volumes:
       - erp_data:/app/.local
     depends_on:
-      migrate:
-        condition: service_completed_successfully
-        required: true
       postgres:
         condition: service_healthy
       redis:
