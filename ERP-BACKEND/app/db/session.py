@@ -54,9 +54,7 @@ def _wire_pool_metrics(pool: Any) -> None:
         update_pool_metrics(pool)
 
     @event.listens_for(pool, "checkout")
-    def _on_checkout(
-        dbapi_connection: Any, connection_record: Any, connection_proxy: Any
-    ) -> None:
+    def _on_checkout(dbapi_connection: Any, connection_record: Any, connection_proxy: Any) -> None:
         update_pool_metrics(pool)
 
     @event.listens_for(pool, "checkin")
