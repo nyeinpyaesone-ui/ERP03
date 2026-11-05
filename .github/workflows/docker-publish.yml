@@ -70,6 +70,16 @@ jobs:
           provenance: mode=max
           sbom: true
 
+      - name: Verify published backend manifest architectures
+        if: github.event_name != 'pull_request'
+        env:
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+        run: |
+          set -Eeuo pipefail
+          docker buildx imagetools inspect --raw "${IMAGE_REF}@${DIGEST}" |
+            jq -e '[.manifests[].platform | select(.os == "linux" and (.architecture == "amd64" or .architecture == "arm64"))] | map(.architecture) | unique | length == 2' >/dev/null
+
       - name: Sign the published Docker image
         if: ${{ github.event_name != 'pull_request' }}
         env:
