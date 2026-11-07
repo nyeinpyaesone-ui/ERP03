@@ -8,6 +8,7 @@ on:
       - 'ERP-BACKEND/**'
       - 'frontend/**'
       - 'scripts/**'
+      - '.github/workflows/devcontainer.yml'
   pull_request:
     branches: [main]
     paths:
@@ -15,6 +16,7 @@ on:
       - 'ERP-BACKEND/**'
       - 'frontend/**'
       - 'scripts/**'
+      - '.github/workflows/devcontainer.yml'
   workflow_dispatch:
 
 permissions:
