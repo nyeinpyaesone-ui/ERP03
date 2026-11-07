@@ -1,0 +1,17 @@
+---
+description: Frontend engineering and UI rules
+alwaysApply: false
+globs:
+  - "frontend/**/*.{js,jsx,ts,tsx,css,json}"
+  - "frontend/Dockerfile"
+  - "frontend/vite.config.js"
+---
+
+# Frontend Rules
+
+- UI implementation in React/Vite; component architecture with accessibility.
+- `VITE_API_BASE_URL` is evaluated at build time; default to relative `/api` for nginx proxy compatibility.
+- Production nginx image serves on port 80; dev server runs on port 5173 (Vite HMR).
+- Reproducible builds: `COPY package.json package-lock.json ./` + `npm ci --no-audit --no-fund`.
+- Do not commit `node_modules/`, `dist/`, or `.vite/`.
+- Required checks: `npm ci`, `npm run build`.

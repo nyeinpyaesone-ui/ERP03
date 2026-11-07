@@ -1,0 +1,24 @@
+---
+description: Security rules
+alwaysApply: false
+globs:
+  - "ERP-BACKEND/app/core/security.py"
+  - "ERP-BACKEND/app/core/config.py"
+  - "ERP-BACKEND/app/core/typesafe.py"
+  - "ERP-BACKEND/app/api/auth.py"
+  - "ERP-BACKEND/app/api/transactions.py"
+  - ".env*"
+  - "docker-compose*.yml"
+---
+
+# Security Rules
+
+- Never commit secrets, tokens, or private keys. Use environment variables only.
+- `Settings` uses `extra="forbid"` — only declared fields may appear in `.env`.
+- `SECRET_KEY` must be >= 32 characters in production; not the development default.
+- Production `CORS_ORIGINS` must use HTTPS and no localhost/127.0.0.1 origins.
+- Production `DATABASE_URL` must be PostgreSQL; SQLite is rejected in production.
+- JWT expiry is configurable via `jwt_expiry_minutes`; do not hardcode.
+- `/metrics` requires bearer token authentication.
+- `current_claims` reads tenant identity only from the verified access token.
+- TypeSafe integration is optional and degrades gracefully when disabled/unavailable.

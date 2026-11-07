@@ -1,0 +1,23 @@
+# Code owners for required review protocols
+# These reviewers are required to approve changes to their respective areas.
+
+# Backend application code
+/ERP-BACKEND/app/ @nyeinpyaesone-ui
+
+# Backend database migrations
+/ERP-BACKEND/alembic/ @nyeinpyaesone-ui
+
+# Backend tests
+/ERP-BACKEND/tests/ @nyeinpyaesone-ui
+
+# CI/CD workflows
+/.github/workflows/ @nyeinpyaesone-ui
+
+# Frontend application code
+/frontend/src/ @nyeinpyaesone-ui
+
+# Documentation
+/docs/ @nyeinpyaesone-ui
+
+# Repository root files
+/ * @nyeinpyaesone-ui

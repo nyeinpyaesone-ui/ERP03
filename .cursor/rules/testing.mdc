@@ -1,0 +1,18 @@
+---
+description: Testing rules
+alwaysApply: false
+globs:
+  - "ERP-BACKEND/tests/**/*.py"
+  - "scripts/qualify.sh"
+  - "scripts/setup.sh"
+---
+
+# Testing Rules
+
+- Use the lowest-cost test that proves the behavior; add broader tests when risk requires.
+- Critical paths must have deterministic automated coverage.
+- Do not weaken or delete tests to make CI pass.
+- Run `pytest -q` from `ERP-BACKEND/` (expects 49 passed, 1 PG-only skip).
+- Alembic migrations: single head, `alembic upgrade head` applies cleanly on fresh DB.
+- Frontend build must succeed: `npm ci && npm run build`.
+- Qualification gate: `scripts/setup.sh --qualify` must pass.

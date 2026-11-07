@@ -1,0 +1,36 @@
+name: Type Check
+
+on:
+  push:
+    branches: ["main", "feat/**", "fix/**"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: typecheck-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mypy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ERP-BACKEND/requirements.txt
+          pip install -r ERP-BACKEND/dev-requirements.txt
+
+      - name: Run mypy
+        run: |
+          cd ERP-BACKEND
+          python -m mypy app/ --ignore-missing-imports --no-error-summary

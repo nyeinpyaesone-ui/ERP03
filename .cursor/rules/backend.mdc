@@ -1,0 +1,21 @@
+---
+description: Backend engineering and API rules
+alwaysApply: false
+globs:
+  - "ERP-BACKEND/app/**/*.py"
+  - "ERP-BACKEND/tests/**/*.py"
+  - "ERP-BACKEND/alembic/**/*.py"
+---
+
+# Backend Rules
+
+- Validate all external input at trust boundaries (Pydantic models, idempotency keys, JWT claims).
+- Keep business rules out of transport handlers; use `app/services/` for domain logic.
+- Use the repository's existing error model (`app/core/errors.py` typed `AppError` codes).
+- Use tenant-scoped queries: `business_id` must come from verified access token claims only.
+- Use idempotency keys with fingerprint verification; never sniff error-message text for codes.
+- Add or update tests for behavior changes.
+- Do not introduce a dependency without justification (pin in `requirements.txt` or `dev-requirements.txt`).
+- Settings uses `extra="forbid"` — only declared fields may appear in `.env`.
+- JWT expiry is configurable via `jwt_expiry_minutes`; do not hardcode 480 minutes.
+- `/metrics` requires bearer token authentication.

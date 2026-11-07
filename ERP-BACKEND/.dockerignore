@@ -1,23 +1,41 @@
-.git
-.gitignore
-__pycache__
+# Python
+__pycache__/
 *.py[cod]
-*.pyo
-.pytest_cache
-.mypy_cache
-.ruff_cache
-.venv
-venv
-env
+*$py.class
+*.pyd
+*.py~
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage/
+htmlcov/
+*.egg-info/
+
+# Environment
 .env
 .env.*
 !.env.example
-node_modules
-frontend
-mobile
-backend-v1.8
-backend-v2.1
-.github
-*.log
-uploads/*
-static/*
+
+# Local databases
+.local/
+*.db
+*.sqlite
+*.sqlite3
+
+# Tests
+tests/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docs
+*.md
+docs/

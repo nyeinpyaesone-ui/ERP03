@@ -1,0 +1,29 @@
+groups:
+  - name: erp03-alerts
+    rules:
+      - alert: HighErrorRate
+        expr: rate(erp03_requests_total{code=~"5.."}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate on erp03-backend"
+          description: "Error rate is {{ $value }} over the last 5 minutes"
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(erp03_request_duration_ms_bucket[5m])) > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 latency on erp03-backend"
+          description: "p95 latency is {{ $value }}ms over the last 5 minutes"
+
+      - alert: ServiceDown
+        expr: up{job="erp03-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "erp03-backend is down"
+          description: "erp03-backend has been down for more than 1 minute"

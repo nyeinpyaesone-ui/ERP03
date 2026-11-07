@@ -1,0 +1,19 @@
+---
+description: Architecture and system design rules
+alwaysApply: false
+globs:
+  - "ERP-BACKEND/app/**/*.py"
+  - "ERP-BACKEND/app/models/**/*.py"
+  - "ERP-BACKEND/app/services/**/*.py"
+  - "ERP-BACKEND/alembic/**/*.py"
+---
+
+# Architecture Rules
+
+- Modular monolith: business capabilities behind explicit app/domain boundaries, not premature service splits.
+- Target capability sequence: authentication → business profile → capability registry → policy/context → runtime/workflow → approvals/audit → control tower → AI agent integration → E2E qualification.
+- Code owns the workflow; TypeSafe System One only annotates (confidence thresholds: act >= 0.70, escalate < 0.40).
+- TypeSafe client closes in FastAPI `lifespan` shutdown.
+- Alembic single head (`0007_operation_orchestration`); migrations are reversible where possible.
+- Idempotency: fingerprint-verified; legacy rows without fingerprint → `IDEMPOTENCY_KEY_REUSED` conflict.
+- Cross-module orchestration: 6-state lifecycle (PENDING/PROCESSING/COMMITTED/FAILED/RECONCILIATION_REQUIRED/CANCELLED).

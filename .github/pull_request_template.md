@@ -1,14 +1,22 @@
-## Summary
+## Change
 
-- Describe the change and why it is needed.
+- [ ] Scope is limited to the stated objective.
+- [ ] Tests added/updated where behavior changed.
+- [ ] Migration added for schema changes.
+- [ ] Security impact reviewed.
+- [ ] Operational/runbook impact reviewed.
 
-## Validation
+## Evidence
 
-- [ ] Tests/builds completed or reason documented
-- [ ] Security impact reviewed
-- [ ] No credentials or secrets committed
+- [ ] CI
+- [ ] Quality
+- [ ] Security
+- [ ] Container
+- [ ] IaC/Kubernetes
+- [ ] ERP03 Qualification
 
-## Deployment
+## Production gate
 
-- [ ] No migration required
-- [ ] Migration/release notes included if required
+- [ ] Staging validation completed.
+- [ ] Rollback path verified.
+- [ ] No claim of production qualification without live evidence.

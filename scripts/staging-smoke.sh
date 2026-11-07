@@ -26,7 +26,7 @@ check() {
   echo "PASS: $name"
 }
 
-check "API health" "$API_BASE_URL/health"
-check "Prometheus metrics" "$API_BASE_URL/metrics"
+check "API health" "$API_BASE_URL/api/v1/healthz"
+check "API readiness" "$API_BASE_URL/api/v1/readyz"
 
 echo "PASS: staging smoke test completed"

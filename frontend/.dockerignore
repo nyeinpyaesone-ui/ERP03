@@ -1,15 +1,26 @@
-.git
-.gitignore
-node_modules
-dist
-coverage
-.vite
+# Node
+node_modules/
+npm-debug.log*
+dist/
+.vite/
+
+# Environment
 .env
 .env.*
-!.env.example
-*.log
-backend
-mobile
-backend-v1.8
-backend-v2.1
-.github
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Tests
+*.test.js
+*.spec.js
+
+# Docs
+*.md

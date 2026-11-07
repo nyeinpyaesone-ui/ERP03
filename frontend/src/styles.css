@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans antialiased text-gray-900;
+  }
+}
+
+@layer components {
+  .shell {
+    @apply min-h-screen bg-gray-50;
+  }
+  .card {
+    @apply bg-white p-6 rounded-lg border border-gray-200 shadow-sm;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold tracking-wider text-blue-600 uppercase;
+  }
+  .subtitle {
+    @apply text-gray-500 text-sm mt-1;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
