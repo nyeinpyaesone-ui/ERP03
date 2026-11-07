@@ -76,6 +76,11 @@ class WSMessage:
         sender_id: Optional[str] = None,
         correlation_id: Optional[str] = None
     ) -> 'WSMessage':
+        """Create an envelope with a UUID and a naive UTC ISO timestamp.
+
+        The payload is retained by reference; correlation_id links replies to
+        the originating request when supplied.
+        """
         return cls(
             message_id=str(uuid.uuid4()),
             message_type=message_type,
@@ -86,10 +91,19 @@ class WSMessage:
         )
     
     def to_json(self) -> str:
+        """Serialize the envelope; unsupported payload values raise TypeError.
+
+        Circular container references raise RecursionError during conversion.
+        """
         return json.dumps(asdict(self))
     
     @classmethod
     def from_json(cls, json_str: str) -> 'WSMessage':
+        """Build an envelope from a JSON object without validating field types.
+
+        Invalid JSON raises JSONDecodeError; a non-object or missing/unknown
+        constructor fields raise TypeError.
+        """
         data = json.loads(json_str)
         return cls(**data)
 
@@ -119,6 +133,7 @@ class ConnectionManager:
     """
     
     def __init__(self, redis_url: str = "redis://localhost:6379"):
+        """Initialize local registries and the Redis URL without opening connections."""
         self.connections: Dict[str, Dict[str, ClientConnection]] = {}  # user_id -> {conn_id -> connection}
         self.channel_subscribers: Dict[str, Set[str]] = {}  # channel -> set of user_ids
         self.redis_url = redis_url
@@ -129,7 +144,9 @@ class ConnectionManager:
         self._heartbeat_timeout = 90  # seconds
     
     async def connect(self) -> None:
-        """Establish Redis connection for pub/sub."""
+        """Connect to Redis and start its listener, falling back to local delivery
+        if client creation or the initial ping fails.
+        """
         try:
             self._redis = redis.from_url(
                 self.redis_url,
@@ -146,7 +163,11 @@ class ConnectionManager:
             self._redis = None
     
     async def disconnect(self) -> None:
-        """Close all connections and Redis."""
+        """Stop the listener, close Redis and sockets, and clear local registries.
+
+        Socket close errors are ignored. Listener and Redis cleanup errors
+        propagate and can prevent the remaining cleanup.
+        """
         if self._listen_task:
             self._listen_task.cancel()
             try:
@@ -178,7 +199,10 @@ class ConnectionManager:
         user_id: str,
         username: str
     ) -> str:
-        """Accept and register a new WebSocket connection."""
+        """Register a socket under the user and return its generated connection ID.
+
+        This does not perform the WebSocket accept handshake.
+        """
         conn_id = str(uuid.uuid4())
         connection = ClientConnection(
             websocket=websocket,
@@ -195,7 +219,10 @@ class ConnectionManager:
         return conn_id
     
     def remove_connection(self, user_id: str, conn_id: str) -> None:
-        """Remove a connection and clean up subscriptions."""
+        """Remove a local connection, doing nothing for an unknown ID.
+
+        Channel subscriptions remain because unsubscribe_channel is not awaited.
+        """
         if user_id in self.connections and conn_id in self.connections[user_id]:
             connection = self.connections[user_id][conn_id]
             
@@ -211,7 +238,11 @@ class ConnectionManager:
             logger.info(f"Client disconnected: user={user_id}, conn={conn_id}")
     
     async def subscribe_channel(self, channel: str, user_id: str) -> bool:
-        """Subscribe a user to a channel."""
+        """Add a local user subscription and publish a Redis notice if configured.
+
+        Return True on completion, including repeat subscriptions. Redis publish
+        errors propagate after the local subscription has been added.
+        """
         if channel not in self.channel_subscribers:
             self.channel_subscribers[channel] = set()
         
@@ -230,7 +261,11 @@ class ConnectionManager:
         return True
     
     async def unsubscribe_channel(self, channel: str, user_id: str) -> bool:
-        """Unsubscribe a user from a channel."""
+        """Discard a local user subscription and publish a notice for known channels.
+
+        Return True even if the channel or user was absent. Redis publish errors
+        propagate after the local subscription has been removed.
+        """
         if channel in self.channel_subscribers:
             self.channel_subscribers[channel].discard(user_id)
             
@@ -255,7 +290,12 @@ class ConnectionManager:
         message: WSMessage,
         exclude_conn: Optional[str] = None
     ) -> int:
-        """Send a message to all connections of a user."""
+        """Send to the user's local sockets, skipping the exclude_conn ID.
+
+        Return the successful socket send count, or zero for an unknown user.
+        Serialization and send errors remove the affected connection; removal
+        during iteration can propagate RuntimeError.
+        """
         sent_count = 0
         
         if user_id in self.connections:
@@ -279,7 +319,12 @@ class ConnectionManager:
         message: WSMessage,
         exclude_user: Optional[str] = None
     ) -> int:
-        """Broadcast a message to all subscribers of a channel."""
+        """Send to local subscribers and publish the envelope to Redis if configured.
+
+        Return the successful local socket send count. exclude_user skips only
+        local delivery to that user; the Redis publication is unchanged. Local
+        delivery, serialization, and Redis publish errors propagate.
+        """
         sent_count = 0
         
         if channel in self.channel_subscribers:
@@ -297,7 +342,11 @@ class ConnectionManager:
         return sent_count
     
     async def _redis_listen_loop(self) -> None:
-        """Listen to Redis pub/sub for cross-instance messaging."""
+        """Listen for channel publications until canceled or a listening error occurs.
+
+        Return immediately without Redis. Initial subscription errors propagate;
+        cancellation and errors during listening are caught.
+        """
         if not self._redis:
             return
         
@@ -317,7 +366,11 @@ class ConnectionManager:
             logger.error(f"Redis listen error: {e}")
     
     async def _handle_redis_message(self, channel: str, data: str) -> None:
-        """Handle incoming message from Redis."""
+        """Ignore subscription notices and rebroadcast other Redis messages.
+
+        Rebroadcasting also republishes to Redis when configured. Parsing and
+        delivery errors are caught and the message is dropped.
+        """
         try:
             message_data = json.loads(data)
             
@@ -343,7 +396,10 @@ class ConnectionManager:
             logger.error(f"Failed to handle Redis message: {e}")
     
     async def check_heartbeats(self) -> None:
-        """Check and cleanup stale connections."""
+        """Close and remove connections with heartbeats strictly older than 90 seconds.
+
+        Socket close failures are ignored; closures use protocol error code 1002.
+        """
         now = datetime.utcnow()
         timeout_threshold = now - timedelta(seconds=self._heartbeat_timeout)
         
@@ -360,7 +416,10 @@ class ConnectionManager:
                     self.remove_connection(user_id, conn_id)
     
     def get_stats(self) -> Dict[str, Any]:
-        """Get connection statistics."""
+        """Return local socket, user, and subscribed-channel counts plus Redis status.
+
+        redis_connected indicates a configured client, not a live health check.
+        """
         total_connections = sum(len(conns) for conns in self.connections.values())
         return {
             "total_connections": total_connections,
@@ -378,7 +437,12 @@ async def verify_websocket_auth(
     websocket: WebSocket,
     credentials: Optional[HTTPAuthorizationCredentials] = None
 ) -> tuple[str, User]:
-    """Verify WebSocket authentication using JWT token."""
+    """Return the JWT subject and a lightweight user derived from token claims.
+
+    No database lookup is performed. Missing credentials, invalid tokens, and
+    missing subjects close the socket with code 1008 and raise
+    WebSocketDisconnect. Errors from closing the socket propagate.
+    """
     if not credentials:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         raise WebSocketDisconnect(code=status.WS_1008_POLICY_VIOLATION)
@@ -395,6 +459,7 @@ async def verify_websocket_auth(
         # In production, you might want to validate against DB
         class SimpleUser:
             def __init__(self, id: str, username: str):
+                """Store the token-derived identity without database validation."""
                 self.id = id
                 self.username = username
         
@@ -411,15 +476,17 @@ async def websocket_endpoint(
     websocket: WebSocket,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ):
-    """
-    Main WebSocket endpoint with authentication and full lifecycle management.
-    
-    Connection flow:
-    1. Authenticate user via JWT token in query param or subprotocol
-    2. Accept connection and register with connection manager
-    3. Handle incoming messages (ping, subscribe, send)
-    4. Send acknowledgments and responses
-    5. Cleanup on disconnect
+    """Authenticate bearer credentials and process JSON text messages.
+
+    Incoming ``type`` selects ping, subscribe, unsubscribe, or message handling;
+    absent types default to message. Message channels default to general, with
+    local delivery excluding the sender. Replies use WSMessage envelopes.
+    Idle receives trigger pings after 30 seconds; received text refreshes the
+    heartbeat. Processing errors attempt an error reply.
+
+    Authentication failures raise WebSocketDisconnect. Registration and welcome
+    send errors propagate before the receive loop; receive-loop errors are
+    caught and the local connection is removed when that loop exits.
     """
     # Authenticate
     user_id, user = await verify_websocket_auth(websocket, credentials)
@@ -604,7 +671,11 @@ async def broadcast_message(
     payload: dict,
     message_type: str = MessageType.MESSAGE.value
 ):
-    """Broadcast a message to a channel via REST API."""
+    """Broadcast a system-sender envelope and return its ID, channel, and status.
+
+    recipients counts successful local socket sends, not distinct users or
+    remote deliveries. Delivery, serialization, and Redis errors propagate.
+    """
     message = WSMessage.create(
         message_type=message_type,
         channel=channel,
@@ -624,7 +695,7 @@ async def broadcast_message(
 
 @router.on_event("startup")
 async def startup_event():
-    """Initialize connection manager on startup."""
+    """Initialize Redis delivery and start the background heartbeat checker."""
     await manager.connect()
     
     # Start heartbeat checker
@@ -638,7 +709,7 @@ async def shutdown_event():
 
 
 async def periodic_heartbeat_check():
-    """Periodically check and cleanup stale connections."""
+    """Check stale connections every 60 seconds until canceled, continuing on errors."""
     while True:
         await asyncio.sleep(60)  # Check every minute
         try:

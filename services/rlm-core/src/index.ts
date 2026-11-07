@@ -14,6 +14,7 @@ const GROUP_NAME = 'rlm-worker-group';
 const CONSUMER_NAME = `worker-${process.pid}`;
 
 // Initialize Stream & Consumer Group
+/** Create the stream consumer group from its beginning; Redis errors are caught. */
 async function initStreams() {
   try {
     await (redis as any).xgroup('CREATE', STREAM_KEY, GROUP_NAME, '0', 'MKSTREAM');
@@ -26,6 +27,12 @@ async function initStreams() {
 app.use(bodyParser.json({ verify: (req: any, res, buffer) => { (req as any).rawBody = buffer; } }));
 
 // Middleware: Security & Idempotency Check
+/**
+ * Reject missing delivery IDs (400), missing signatures (401), and mismatches (403).
+ * Cached deliveries return 200 before signature verification; accepted requests call next.
+ * Redis lookup errors reject the returned promise.
+ * Unequal byte lengths can reject the promise during comparison.
+ */
 const verifySignature = async (req: Request, res: Response, next: any) => {
   const sig = req.headers['x-hub-signature-256'] as string;
   const deliveryId = req.headers['x-github-delivery'] as string;
@@ -75,6 +82,11 @@ app.post('/webhook/github', verifySignature, async (req: Request, res: Response)
 });
 
 // Background Worker: Process & Forward
+/**
+ * Continuously read new group entries and attempt ERP forwarding with a five-second timeout.
+ * Acknowledge only successful forwards; failed entries remain pending without retries here.
+ * Per-entry failures are caught; read failures delay the next attempt by two seconds.
+ */
 async function processStream() {
   console.log(`🚀 Worker ${CONSUMER_NAME} started...`);
   

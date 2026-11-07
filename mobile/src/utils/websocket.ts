@@ -49,6 +49,7 @@ const WS_CONFIG = {
 };
 
 // Get base URL based on environment and platform
+/** Return the production URL or a platform development URL, falling back to web. */
 const getBaseUrl = (): string => {
   const isProduction = __DEV__ === false;
   
@@ -131,6 +132,7 @@ export class WebSocketService {
   private authToken: string | null = null;
   private appState: AppStateStatus = 'active';
 
+  /** Select the server URL and register an app state listener. */
   constructor() {
     this.baseUrl = getBaseUrl();
     
@@ -145,7 +147,8 @@ export class WebSocketService {
   /**
    * Connect to the WebSocket server with authentication
    * @param authToken - JWT token for authentication
-   * @returns Promise that resolves when connected
+   * @returns Resolves on socket open, or immediately if connected or connecting.
+   * Rejects on socket construction or error events; a close alone does not settle it.
    */
   async connect(authToken: string): Promise<void> {
     if (this.isConnected || this.isConnecting) {
@@ -240,7 +243,8 @@ export class WebSocketService {
   // ============================================================================
 
   /**
-   * Subscribe to a channel
+   * Request a subscription and register its optional listener without waiting for an ACK.
+   * Does nothing while disconnected.
    * @param channel - Channel name to subscribe to
    * @param onMessage - Optional callback for messages on this channel
    */
@@ -267,7 +271,8 @@ export class WebSocketService {
   }
 
   /**
-   * Unsubscribe from a channel
+   * Request unsubscription and remove all channel listeners without waiting for an ACK.
+   * Does nothing while disconnected.
    * @param channel - Channel name to unsubscribe from
    */
   unsubscribe(channel: string): void {
@@ -336,7 +341,8 @@ export class WebSocketService {
   }
 
   /**
-   * Send a message (with queuing if disconnected)
+   * Send an envelope or queue it when disconnected, not open, or sending fails.
+   * Serialization errors are caught and also cause queuing.
    */
   private send(message: WSMessage): void {
     if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
@@ -352,7 +358,7 @@ export class WebSocketService {
   }
 
   /**
-   * Queue a message for later delivery
+   * Queue a message for later delivery, dropping the oldest when 100 are queued.
    */
   private queueMessage(message: WSMessage): void {
     if (this.messageQueue.length >= WS_CONFIG.maxQueueSize) {
@@ -364,7 +370,8 @@ export class WebSocketService {
   }
 
   /**
-   * Flush queued messages after reconnection
+   * Flush queued messages after reconnection when enabled.
+   * A serialization or send failure retains the failed message and stops the flush.
    */
   private flushMessageQueue(): void {
     if (!WS_CONFIG.flushOnReconnect) {
@@ -449,7 +456,9 @@ export class WebSocketService {
   // ============================================================================
 
   /**
-   * Handle incoming messages
+   * Consume pongs and connection ACKs; dispatch other envelopes by type and channel.
+   * Generic message listeners are also called, possibly twice for message envelopes.
+   * Listener exceptions are caught.
    */
   private handleMessage(message: WSMessage): void {
     // Update last heartbeat on pong
@@ -507,7 +516,8 @@ export class WebSocketService {
   // ============================================================================
 
   /**
-   * Start heartbeat timer
+   * Ping every 25 seconds while connected and close with code 4000 if no pong
+   * clears the five-second timeout.
    */
   private startHeartbeat(): void {
     this.stopHeartbeat();
@@ -615,7 +625,7 @@ export class WebSocketService {
   // ============================================================================
 
   /**
-   * Generate a unique message ID
+   * Generate a message ID from the current time and a random suffix.
    */
   private generateMessageId(): string {
     return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -648,7 +658,8 @@ export class WebSocketService {
   }
 
   /**
-   * Get current connection statistics
+   * Return local connection and queue state; messageCount is always zero and
+   * lastHeartbeat is undefined. Connection and user IDs may remain after disconnect.
    */
   getStats(): ConnectionStats {
     return {

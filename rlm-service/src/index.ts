@@ -110,6 +110,11 @@ app.get('/metrics', async (req: Request, res: Response) => {
 });
 
 // Security middleware: HMAC-SHA256 signature verification
+/**
+ * Validate repository scope and the HMAC over the raw request body before calling next.
+ * Respond with 403 for a different repository or signature mismatch, or 401 if unsigned.
+ * Unequal signature byte lengths throw; accepted requests receive GitHub metadata in locals.
+ */
 const verifyGitHubSignature = (req: Request, res: Response, next: NextFunction) => {
   const signature = req.headers['x-hub-signature-256'] as string;
   const event = req.headers['x-github-event'] as string;
@@ -225,6 +230,12 @@ app.post('/webhook/github', verifyGitHubSignature, async (req: Request, res: Res
 });
 
 // Background queue processor
+/**
+ * Pop and forward at most one queued event, returning immediately unless Redis is ready.
+ * Forwarding failures move the event to the dead-letter list rather than retrying it.
+ * Redis operation and JSON parsing errors reject the promise; forwarding times out after
+ * five seconds and is caught before dead-letter storage is attempted.
+ */
 async function processQueue() {
   if (redis.status !== 'ready') {
     logger.warn('Cannot process queue: Redis not ready');
