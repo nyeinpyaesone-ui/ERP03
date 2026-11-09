@@ -50,3 +50,27 @@ jobs:
         run: |
           set -euo pipefail
           conftest test --policy infra/kubernetes/policies infra/kubernetes/base infra/kubernetes/overlays
+
+      - name: Verify policy rejects non-compliant manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$(mktemp)"
+          trap 'rm -f "$fixture"' EXIT
+          cat > "$fixture" <<'YAML'
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: erp03-backend
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: backend
+                    image: example/backend:test
+          YAML
+          if conftest test --policy infra/kubernetes/policies "$fixture"; then
+            echo "::error::Policy accepted a deliberately non-compliant Deployment"
+            exit 1
+          fi
+          echo "Negative policy test passed: non-compliant Deployment was rejected."
