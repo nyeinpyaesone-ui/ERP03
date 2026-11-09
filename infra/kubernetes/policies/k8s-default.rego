@@ -1,28 +1,31 @@
 package kubernetes
 
-# Default deny-all policy set used by the Policy Enforcement workflow when the
-# external erp03/policies repository is unavailable.
-
 deny[msg] {
-  msg := "Deployment containers must define resource settings"
-  # Block deployments without resource limits
   input.kind == "Deployment"
   container := input.spec.template.spec.containers[_]
-  not container.resources
+  not input.spec.template.spec.securityContext.runAsNonRoot == true
+  not container.securityContext.runAsNonRoot == true
+  msg := sprintf("Deployment %q container %q must enforce runAsNonRoot", [input.metadata.name, container.name])
 }
 
 deny[msg] {
-  msg := "Deployment containers must not run as root"
-  # Block containers running as root
   input.kind == "Deployment"
   container := input.spec.template.spec.containers[_]
-  container.securityContext.runAsUser == 0
+  not container.resources.limits.cpu
+  msg := sprintf("Deployment %q container %q must define a CPU limit", [input.metadata.name, container.name])
 }
 
 deny[msg] {
-  msg := "erp03-backend must define a readiness probe"
-  # Block missing readiness probes on backend
+  input.kind == "Deployment"
+  container := input.spec.template.spec.containers[_]
+  not container.resources.limits.memory
+  msg := sprintf("Deployment %q container %q must define a memory limit", [input.metadata.name, container.name])
+}
+
+deny[msg] {
   input.kind == "Deployment"
   input.metadata.name == "erp03-backend"
-  not input.spec.template.spec.containers[0].readinessProbe
+  container := input.spec.template.spec.containers[_]
+  not container.readinessProbe
+  msg := sprintf("Backend container %q must define a readiness probe", [container.name])
 }
