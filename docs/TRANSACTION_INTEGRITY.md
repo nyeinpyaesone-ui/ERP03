@@ -5,8 +5,9 @@
 - Durable SQLite transaction journal with WAL mode.
 - Unique idempotency-key constraint.
 - Atomic \`BEGIN IMMEDIATE\` transaction boundary.
-- Same-key replay returns the original transaction identifier.
-- Concurrent same-key requests are serialized and commit exactly once.
+- Same-key replay returns the original journal record and transaction identifier.
+- Concurrent same-key requests are serialized and persist exactly one journal record.
+- Journal records use `accepted`; they are not marked `committed` by the journal endpoint.
 - Authenticated transaction create and lookup endpoints.
 - Tenant isolation derived from the verified access-token claims.
 - Explicit \`business_id\` storage and indexed transaction lookup.
@@ -38,7 +39,7 @@ The idempotency key is the caller's stable operation identifier. The API scopes 
 
 ## Important transaction boundary
 
-The SQLite endpoint records a durable journal entry; it does **not** execute the operation named in the \`operation\` field. A journal row alone must not be treated as proof that an invoice, payment, or inventory mutation has occurred. Each real business operation must update its domain records within the domain database transaction and define how journal status is reconciled with that result.
+The SQLite endpoint records a durable journal entry with status `accepted`; it does **not** execute the operation named in the \`operation\` field. A journal row alone must not be treated as proof that an invoice, payment, or inventory mutation has occurred. Older journal rows previously labelled `committed` are normalized to `accepted` at store initialization because that endpoint never performed the domain mutation. Each real business operation must update its domain records within the domain database transaction and define how journal status is reconciled with that result.
 
 POS sale idempotency remains enforced at the PostgreSQL invoice boundary, where the sale, payments, and stock effects are coordinated.
 
