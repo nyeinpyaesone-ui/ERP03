@@ -63,8 +63,7 @@ class OperationService:
             existing.operation_type == operation_type
             and existing.business_id == business_id
             and existing.branch_id == branch_id
-            and OperationService._canonical_payload(existing.payload_json)
-            == canonical_payload
+            and OperationService._canonical_payload(existing.payload_json) == canonical_payload
         )
         if not same_command:
             raise ConflictError("Operation ID was already used for a different command")
