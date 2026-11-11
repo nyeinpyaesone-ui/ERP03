@@ -46,8 +46,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Install conftest
+      - name: Install Conftest
+        env:
+          CONFTEST_VERSION: "0.45.0"
         run: |
-          curl -L https://github.com/open-policy-agent/conftest/releases/download/v0.45.0/conftest_0.45.0_Linux_x86_64.tar.gz \
-            | tar xz -C /usr/local/bin
-      - run: conftest test --policy infra/kubernetes/policies infra/kubernetes/
+          set -euo pipefail
+          archive="$(mktemp)"
+          trap 'rm -f "$archive"' EXIT
+          url="https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz"
+          curl --fail --show-error --location --retry 3 --retry-all-errors --output "$archive" "$url"
+          tar -tzf "$archive" >/dev/null
+          tar -xzf "$archive" -C /tmp conftest
+          sudo install -m 0755 /tmp/conftest /usr/local/bin/conftest
+          conftest --version
+      - name: Enforce local Kubernetes policies
+        run: |
+          set -euo pipefail
+          conftest test --policy infra/kubernetes/policies infra/kubernetes/
