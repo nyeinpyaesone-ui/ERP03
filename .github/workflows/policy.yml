@@ -5,23 +5,72 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   opa-check:
+    name: opa-check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Install conftest
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install Conftest
+        env:
+          CONFTEST_VERSION: "0.45.0"
         run: |
-          curl -L https://github.com/open-policy-agent/conftest/releases/download/v0.45.0/conftest_0.45.0_Linux_x86_64.tar.gz \
-            | tar xz -C /usr/local/bin
-      - name: Fetch OPA policies
+          set -euo pipefail
+          archive="/tmp/conftest.tar.gz"
+          url="https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz"
+          curl --fail --show-error --location --retry 3 --retry-all-errors --output "$archive" "$url"
+          tar -xzf "$archive" -C /tmp conftest
+          sudo install -m 0755 /tmp/conftest /usr/local/bin/conftest
+          conftest --version
+
+      - name: Validate Dockerfile runtime users
+        shell: bash
         run: |
-          # Try to fetch external policies, continue if unavailable
-          git clone https://github.com/erp03/policies.git /tmp/policies 2>/dev/null || echo "External policies repo unavailable, using local only"
-      - name: Scan Dockerfiles
+          set -euo pipefail
+          for file in ERP-BACKEND/Dockerfile frontend/Dockerfile; do
+            if [[ ! -f "$file" ]]; then
+              echo "::error file=$file::Required Dockerfile is missing"
+              exit 1
+            fi
+            if ! awk 'toupper($1) == "USER" { user = $2 } END { exit (user == "" || user == "root" || user == "0") }' "$file"; then
+              echo "::error file=$file::Final image must declare a non-root USER"
+              exit 1
+            fi
+          done
+
+      - name: Enforce local Kubernetes policies
         run: |
-          conftest test --policy /tmp/policies Dockerfile ERP-BACKEND/Dockerfile frontend/Dockerfile 2>/dev/null || echo "Policy scan completed (external policies may be unavailable)"
-      - name: Scan Kubernetes manifests
+          set -euo pipefail
+          conftest test --policy infra/kubernetes/policies infra/kubernetes/base infra/kubernetes/overlays
+
+      - name: Verify policy rejects non-compliant manifests
+        shell: bash
         run: |
-          conftest test --policy /tmp/policies infra/kubernetes/ 2>/dev/null || echo "Policy scan completed (external policies may be unavailable)"
+          set -euo pipefail
+          fixture="$(mktemp)"
+          trap 'rm -f "$fixture"' EXIT
+          cat > "$fixture" <<'YAML'
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: erp03-backend
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: backend
+                    image: example/backend:test
+          YAML
+          if conftest test --policy infra/kubernetes/policies "$fixture"; then
+            echo "::error::Policy accepted a deliberately non-compliant Deployment"
+            exit 1
+          fi
+          echo "Negative policy test passed: non-compliant Deployment was rejected."
