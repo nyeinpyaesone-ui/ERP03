@@ -44,10 +44,35 @@ jobs:
 
   opa:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Install conftest
+        shell: bash
         run: |
-          curl -L https://github.com/open-policy-agent/conftest/releases/download/v0.45.0/conftest_0.45.0_Linux_x86_64.tar.gz \
-            | tar xz -C /usr/local/bin
-      - run: conftest test --policy infra/kubernetes/policies infra/kubernetes/
+          set -Eeuo pipefail
+
+          case "$(uname -m)" in
+            x86_64) asset_arch="Linux_x86_64" ;;
+            *)
+              echo "::error::Unsupported runner architecture: $(uname -m)"
+              exit 1
+              ;;
+          esac
+
+          version="0.45.0"
+          archive="conftest_${version}_${asset_arch}.tar.gz"
+          url="https://github.com/open-policy-agent/conftest/releases/download/v${version}/${archive}"
+          workdir="$(mktemp -d)"
+          trap 'rm -rf "$workdir"' EXIT
+
+          curl             --fail             --location             --silent             --show-error             --retry 3             --retry-all-errors             --retry-delay 2             --connect-timeout 15             --max-time 120             --output "$workdir/$archive"             "$url"
+
+          test -s "$workdir/$archive"
+          tar -tzf "$workdir/$archive" >/dev/null
+          tar -xzf "$workdir/$archive" -C "$workdir" conftest
+          test -s "$workdir/conftest"
+          install -m 0755 "$workdir/conftest" /usr/local/bin/conftest
+          conftest --version
+      - name: Validate Kubernetes policies
+        run: conftest test --policy infra/kubernetes/policies infra/kubernetes/
