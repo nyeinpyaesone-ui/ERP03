@@ -13,11 +13,13 @@ write transaction), so two workers never process the same operation.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError
@@ -36,6 +38,36 @@ class OperationService:
 
     # ------------------------------------------------------------------ create
 
+    @staticmethod
+    def _canonical_payload(payload: dict[str, Any]) -> str:
+        """Serialize a command deterministically for idempotency comparison."""
+        return json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+
+    @staticmethod
+    def _verify_replay(
+        existing: Operation,
+        *,
+        operation_type: str,
+        business_id: UUID,
+        branch_id: UUID | None,
+        canonical_payload: str,
+    ) -> None:
+        """Reject an operation ID reused across tenants or for another command."""
+        same_command = (
+            existing.operation_type == operation_type
+            and existing.business_id == business_id
+            and existing.branch_id == branch_id
+            and OperationService._canonical_payload(existing.payload_json) == canonical_payload
+        )
+        if not same_command:
+            raise ConflictError("Operation ID was already used for a different command")
+
     async def create_operation(
         self,
         *,
@@ -46,13 +78,22 @@ class OperationService:
         branch_id: UUID | None = None,
         max_retries: int = 5,
     ) -> Operation:
-        """Create a pending operation, idempotent by ``operation_id``.
+        """Create a pending operation with command- and tenant-safe replay.
 
-        If an operation with the same ``operation_id`` already exists it is
-        returned unchanged (same-key/same-command replays the prior result).
+        Reusing an operation ID is idempotent only when tenant, branch, type,
+        and canonical payload all match. A uniqueness race is resolved by
+        re-reading the winner inside the caller's still-active transaction.
         """
+        canonical_payload = self._canonical_payload(payload)
         existing = await self.get_operation(operation_id)
         if existing is not None:
+            self._verify_replay(
+                existing,
+                operation_type=operation_type,
+                business_id=business_id,
+                branch_id=branch_id,
+                canonical_payload=canonical_payload,
+            )
             return existing
 
         operation = Operation(
@@ -64,8 +105,24 @@ class OperationService:
             payload_json=payload,
             max_retries=max_retries,
         )
-        self.session.add(operation)
-        await self.session.flush()
+        try:
+            # Savepoint keeps the outer business transaction usable if another
+            # replica inserts this unique operation_id concurrently.
+            async with self.session.begin_nested():
+                self.session.add(operation)
+                await self.session.flush()
+        except IntegrityError:
+            existing = await self.get_operation(operation_id)
+            if existing is None:
+                raise
+            self._verify_replay(
+                existing,
+                operation_type=operation_type,
+                business_id=business_id,
+                branch_id=branch_id,
+                canonical_payload=canonical_payload,
+            )
+            return existing
         return operation
 
     # ------------------------------------------------------------------ read
@@ -159,6 +216,7 @@ class OperationService:
         operation.result_json = result
         operation.committed_at = datetime.now(UTC)
         operation.updated_at = datetime.now(UTC)
+        operation.claimed_at = None
         operation.claimed_by = None
         await self.session.flush()
 
@@ -175,6 +233,8 @@ class OperationService:
         operation.retry_count += 1
         operation.error_code = error_code
         operation.error_message = error_message
+        operation.claimed_at = None
+        operation.claimed_by = None
         operation.updated_at = datetime.now(UTC)
 
         if operation.retry_count >= operation.max_retries:
@@ -187,8 +247,14 @@ class OperationService:
         await self.session.flush()
 
     async def cancel_operation(self, operation: Operation) -> None:
-        """Terminal manual-abort transition."""
+        """Cancel a non-terminal operation for controlled manual recovery."""
+        if not operation.can_transition_to(OperationState.CANCELLED):
+            raise ConflictError(
+                f"Operation {operation.operation_id} cannot transition to cancelled"
+            )
         operation.state = OperationState.CANCELLED
+        operation.claimed_at = None
+        operation.claimed_by = None
         operation.updated_at = datetime.now(UTC)
         await self.session.flush()
 
