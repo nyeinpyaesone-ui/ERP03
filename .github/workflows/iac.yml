@@ -11,6 +11,7 @@ on:
     paths:
       - "infra/**"
       - ".github/workflows/iac.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -79,5 +80,22 @@ jobs:
           sudo install -m 0755 "$workdir/conftest" /usr/local/bin/conftest
           conftest --version
 
-      - name: Validate Kubernetes policies
-        run: conftest test --policy infra/kubernetes/policies infra/kubernetes/
+      - name: Set up Kustomize
+        uses: imranismail/setup-kustomize@2ba527d4d055ab63514ba50a99456fc35684947f
+
+      - name: Validate rendered Kubernetes policies
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rendered_dir="$(mktemp -d)"
+          trap 'rm -rf "$rendered_dir"' EXIT
+
+          for environment in dev staging production; do
+            overlay="infra/kubernetes/overlays/$environment"
+            rendered="$rendered_dir/$environment.yaml"
+
+            test -f "$overlay/kustomization.yaml"
+            kustomize build "$overlay" > "$rendered"
+            test -s "$rendered"
+            conftest test --policy infra/kubernetes/policies "$rendered"
+          done
