@@ -68,7 +68,9 @@ jobs:
               }
               END {
                 user = tolower(final_user)
-                if (!has_stage || user == "" || user ~ /\\$/ || user ~ /^(root|0)(:|$)/) {
+                split(user, identity, ":")
+                uid = identity[1]
+                if (!has_stage || uid == "" || uid == "root" || uid == "0" || index(uid, "$") > 0) {
                   exit 1
                 }
               }
@@ -89,7 +91,6 @@ jobs:
           fixture="$(mktemp)"
           trap 'rm -f "$fixture"' EXIT
 
-          # A USER in an earlier build stage must not satisfy the runtime-stage check.
           cat > "$fixture" <<'DOCKERFILE'
           FROM scratch AS builder
           USER app
@@ -100,10 +101,18 @@ jobs:
             exit 1
           fi
 
-          # A numeric non-root UID in the final stage is valid.
+          for root_user in "root:root" "0:0"; do
+            cat > "$fixture" <<DOCKERFILE
+          FROM scratch AS runtime
+          USER $root_user
+          DOCKERFILE
+            if final_stage_has_non_root_user "$fixture"; then
+              echo "::error::Accepted root runtime user $root_user"
+              exit 1
+            fi
+          done
+
           cat > "$fixture" <<'DOCKERFILE'
-          FROM scratch AS builder
-          USER root
           FROM scratch AS runtime
           USER 1000:1000
           DOCKERFILE
@@ -127,7 +136,7 @@ jobs:
             test -s "$rendered"
 
             echo "::group::Conftest: $environment"
-            conftest test --policy infra/kubernetes/policies "$rendered"
+            conftest test --all-namespaces --parser yaml --policy infra/kubernetes/policies "$rendered"
             echo "::endgroup::"
           done
 
@@ -135,8 +144,10 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          fixture="$(mktemp)"
-          trap 'rm -f "$fixture"' EXIT
+          fixture="$(mktemp --suffix=.yaml)"
+          negative="$(mktemp --suffix=.yaml)"
+          report="$(mktemp)"
+          trap 'rm -f "$fixture" "$negative" "$report"' EXIT
 
           cat > "$fixture" <<'YAML'
           apiVersion: apps/v1
@@ -158,21 +169,41 @@ jobs:
                     readinessProbe: { httpGet: { path: /healthz, port: 8000 } }
           YAML
 
-          conftest test --policy infra/kubernetes/policies "$fixture"
+          conftest test --all-namespaces --parser yaml --policy infra/kubernetes/policies "$fixture"
 
           assert_rejected() {
             local label="$1"
             local expression="$2"
-            cp "$fixture" "$RUNNER_TEMP/policy-negative.yaml"
-            sed -i "$expression" "$RUNNER_TEMP/policy-negative.yaml"
-            if conftest test --policy infra/kubernetes/policies "$RUNNER_TEMP/policy-negative.yaml"; then
-              echo "::error::Policy failed to reject the $label violation"
+            local expected="$3"
+            cp "$fixture" "$negative"
+            sed -i "$expression" "$negative"
+            if conftest test --all-namespaces --parser yaml --policy infra/kubernetes/policies "$negative" >"$report" 2>&1; then
+              echo "::error::Policy accepted the $label violation"
+              cat "$report"
+              exit 1
+            fi
+            if ! grep -Fq "$expected" "$report"; then
+              echo "::error::Conftest failed without reporting the expected $label policy violation"
+              cat "$report"
               exit 1
             fi
             echo "Negative policy test passed: $label"
           }
 
-          assert_rejected "non-root execution" '/runAsNonRoot:/d'
-          assert_rejected "CPU limit" '/cpu: "500m"/d'
-          assert_rejected "memory limit" '/memory: "512Mi"/d'
-          assert_rejected "backend readiness probe" '/readinessProbe:/d'
+          assert_rejected "non-root execution" '/runAsNonRoot:/d' 'must enforce runAsNonRoot'
+          assert_rejected "CPU limit" '/cpu: "500m"/d' 'must define a CPU limit'
+          assert_rejected "memory limit" '/memory: "512Mi"/d' 'must define a memory limit'
+          assert_rejected "backend readiness probe" '/readinessProbe:/d' 'must define a readiness probe'
+
+          cp "$fixture" "$negative"
+          sed -i '/image: example\/backend:test/a\                    securityContext:\n                      runAsNonRoot: false' "$negative"
+          if conftest test --all-namespaces --parser yaml --policy infra/kubernetes/policies "$negative" >"$report" 2>&1; then
+            echo "::error::Policy accepted container-level runAsNonRoot: false"
+            exit 1
+          fi
+          if ! grep -Fq 'must not set runAsNonRoot to false' "$report"; then
+            echo "::error::Conftest failed without reporting the container-level runAsNonRoot violation"
+            cat "$report"
+            exit 1
+          fi
+          echo "Negative policy test passed: container-level runAsNonRoot false"

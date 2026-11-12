@@ -3,8 +3,15 @@ package kubernetes
 deny[msg] {
   input.kind == "Deployment"
   container := input.spec.template.spec.containers[_]
-  not input.spec.template.spec.securityContext.runAsNonRoot == true
+  container.securityContext.runAsNonRoot == false
+  msg := sprintf("Deployment %q container %q must not set runAsNonRoot to false", [input.metadata.name, container.name])
+}
+
+deny[msg] {
+  input.kind == "Deployment"
+  container := input.spec.template.spec.containers[_]
   not container.securityContext.runAsNonRoot == true
+  not input.spec.template.spec.securityContext.runAsNonRoot == true
   msg := sprintf("Deployment %q container %q must enforce runAsNonRoot", [input.metadata.name, container.name])
 }
 
