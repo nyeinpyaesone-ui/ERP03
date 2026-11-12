@@ -96,7 +96,7 @@ def create_transaction(
     claims: dict[str, Any] = Depends(current_claims),
     x_idempotency_key: str | None = Header(default=None),
 ) -> TransactionResponse:
-    """Record a journal entry or return the original entry for a repeated key."""
+    """Accept a journal entry or replay it; this endpoint does not run the domain operation."""
     idempotency_key = validate_idempotency_key(x_idempotency_key)
 
     try:

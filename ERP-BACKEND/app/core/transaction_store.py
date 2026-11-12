@@ -34,7 +34,7 @@ class TransactionResult:
 
 
 class TransactionStore:
-    """Durable transaction journal with atomic idempotency and tenant isolation."""
+    """Durable, tenant-scoped journal; journal persistence is not domain commit."""
 
     def __init__(self, database_path: str) -> None:
         self.database_path = database_path
@@ -90,6 +90,12 @@ class TransactionStore:
                 WHERE business_id = '' AND instr(idempotency_key, ':') > 0
                 """
             )
+            # This store records intent only. Earlier versions incorrectly labelled
+            # journal inserts "committed" even though no PostgreSQL domain mutation
+            # ran here. Correct those persisted labels without deleting journal data.
+            connection.execute(
+                "UPDATE transactions SET status = 'accepted' WHERE status = 'committed'"
+            )
             connection.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_transactions_business_transaction
@@ -136,11 +142,12 @@ class TransactionStore:
         currency: str,
         metadata: dict[str, Any],
     ) -> TransactionResult:
-        """Atomically persist a journal entry or replay an identical command.
+        """Atomically accept a journal entry or replay an identical command.
 
         This records a journal entry; it does not execute the named domain
-        operation. Legacy records without a fingerprint are replayed unchanged
-        for compatibility, but cannot be checked for payload equality.
+        operation. Its status therefore remains ``accepted`` until a separate
+        domain transaction records its own authoritative outcome. Legacy
+        records without a fingerprint cannot be checked for payload equality.
         """
         fingerprint = self._fingerprint(operation, amount, currency, metadata)
         with self._lock:
@@ -179,7 +186,7 @@ class TransactionStore:
                     INSERT INTO transactions
                     (transaction_id, idempotency_key, business_id, operation, amount,
                      currency, metadata_json, request_fingerprint, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'committed', ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'accepted', ?)
                     """,
                     (
                         transaction_id,
