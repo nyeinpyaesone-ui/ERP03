@@ -63,11 +63,13 @@ def test_transaction_is_idempotent():
     assert first.status_code == 201
     assert second.status_code == 201
     assert first.json()["transaction_id"] == second.json()["transaction_id"]
+    assert first.json()["status"] == "accepted"
+    assert second.json()["status"] == "accepted"
     assert first.json()["idempotent_replay"] is False
     assert second.json()["idempotent_replay"] is True
 
 
-def test_concurrent_same_key_commits_once():
+def test_concurrent_same_key_records_once():
     payload = {
         "operation": "stock.reserve",
         "amount": "1.00",
@@ -97,6 +99,7 @@ def test_concurrent_same_key_commits_once():
     assert all(response.status_code == 201 for response in responses)
     transaction_ids = {response.json()["transaction_id"] for response in responses}
     assert len(transaction_ids) == 1
+    assert {response.json()["status"] for response in responses} == {"accepted"}
     assert sum(response.json()["idempotent_replay"] for response in responses) == 7
 
 
@@ -252,6 +255,7 @@ def test_existing_journal_is_migrated_and_legacy_tenant_is_recovered(tmp_path):
     foreign = migrated_store.get("legacy-transaction-001", business_id="other-business")
 
     assert owned is not None
+    assert owned.status == "accepted"  # old journal-only "committed" label is corrected
     assert owned.metadata == {"invoice": "LEGACY-001"}
     assert foreign is None
 

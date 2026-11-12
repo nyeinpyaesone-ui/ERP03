@@ -161,6 +161,8 @@ async def test_commit_operation_transitions_to_committed():
     assert op.state == OperationState.COMMITTED
     assert op.result_json == {"invoice_id": invoice_id}
     assert op.committed_at is not None
+    assert op.claimed_at is None
+    assert op.claimed_by is None
 
 
 @pytest.mark.asyncio
@@ -191,6 +193,8 @@ async def test_fail_operation_retries_with_backoff():
     assert op.state == OperationState.FAILED
     assert op.retry_count == 1
     assert op.error_code == "PAYMENT_ERROR"
+    assert op.claimed_at is None
+    assert op.claimed_by is None
     assert op.backoff_until is not None
     backoff = op.backoff_until
     if backoff.tzinfo is None:
@@ -317,6 +321,8 @@ async def test_cannot_transition_from_terminal_state():
         op = await session.get(Operation, op.id)
         with pytest.raises(ConflictError):
             await service.fail_operation(op, error_code="BOOM", error_message="too late")
+        with pytest.raises(ConflictError):
+            await service.cancel_operation(op)
         await session.rollback()
 
 
@@ -327,3 +333,60 @@ async def test_get_operation_returns_none_for_unknown_id():
         service = OperationService(session)
         result = await service.get_operation("does-not-exist")
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_reusing_operation_id_with_different_payload_conflicts():
+    """An idempotency key cannot silently replay a different business command."""
+    business, branch, _warehouse, _user = await _bootstrap("ORCHPAY")
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        await service.create_operation(
+            operation_id="orch-payload-conflict",
+            operation_type="pos.sale",
+            business_id=business.id,
+            branch_id=branch.id,
+            payload={"product": "widget", "qty": 1},
+        )
+        await session.commit()
+
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        with pytest.raises(ConflictError, match="different command"):
+            await service.create_operation(
+                operation_id="orch-payload-conflict",
+                operation_type="pos.sale",
+                business_id=business.id,
+                branch_id=branch.id,
+                payload={"product": "widget", "qty": 2},
+            )
+        await session.rollback()
+
+
+@pytest.mark.asyncio
+async def test_operation_id_cannot_replay_across_businesses():
+    """A global operation ID collision must not disclose/replay another tenant's work."""
+    business_a, branch_a, _warehouse_a, _user_a = await _bootstrap("ORCHTENANTA")
+    business_b, branch_b, _warehouse_b, _user_b = await _bootstrap("ORCHTENANTB")
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        await service.create_operation(
+            operation_id="orch-cross-tenant-conflict",
+            operation_type="pos.sale",
+            business_id=business_a.id,
+            branch_id=branch_a.id,
+            payload={"product": "widget", "qty": 1},
+        )
+        await session.commit()
+
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        with pytest.raises(ConflictError, match="different command"):
+            await service.create_operation(
+                operation_id="orch-cross-tenant-conflict",
+                operation_type="pos.sale",
+                business_id=business_b.id,
+                branch_id=branch_b.id,
+                payload={"product": "widget", "qty": 1},
+            )
+        await session.rollback()
