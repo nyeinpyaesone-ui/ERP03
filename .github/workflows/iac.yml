@@ -97,5 +97,5 @@ jobs:
             test -f "$overlay/kustomization.yaml"
             kustomize build "$overlay" > "$rendered"
             test -s "$rendered"
-            conftest test --all-namespaces --policy infra/kubernetes/policies "$rendered"
+            conftest test --all-namespaces --parser yaml --policy infra/kubernetes/policies "$rendered"
           done

@@ -195,10 +195,30 @@ jobs:
           assert_rejected "memory limit" '/memory: "512Mi"/d' 'must define a memory limit'
           assert_rejected "backend readiness probe" '/readinessProbe:/d' 'must define a readiness probe'
 
-          cp "$fixture" "$negative"
-          sed -i '/image: example\/backend:test/a\                    securityContext:\n                      runAsNonRoot: false' "$negative"
+          cat > "$negative" <<'YAML'
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: erp03-backend
+          spec:
+            template:
+              spec:
+                securityContext:
+                  runAsNonRoot: true
+                containers:
+                  - name: backend
+                    image: example/backend:test
+                    securityContext:
+                      runAsNonRoot: false
+                    resources:
+                      limits:
+                        cpu: "500m"
+                        memory: "512Mi"
+                    readinessProbe: { httpGet: { path: /healthz, port: 8000 } }
+          YAML
           if conftest test --all-namespaces --parser yaml --policy infra/kubernetes/policies "$negative" >"$report" 2>&1; then
             echo "::error::Policy accepted container-level runAsNonRoot: false"
+            cat "$report"
             exit 1
           fi
           if ! grep -Fq 'must not set runAsNonRoot to false' "$report"; then
