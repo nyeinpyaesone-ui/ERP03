@@ -14,19 +14,24 @@ jobs:
   opa-check:
     name: opa-check
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
+      - name: Set up Kustomize
+        uses: imranismail/setup-kustomize@2ba527d4d055ab63514ba50a99456fc35684947f
+
       - name: Install Conftest
         env:
           CONFTEST_VERSION: "0.45.0"
+        shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           archive="/tmp/conftest.tar.gz"
           url="https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz"
-          curl --fail --show-error --location --retry 3 --retry-all-errors --output "$archive" "$url"
+          curl --fail --show-error --location --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 --output "$archive" "$url"
+          tar -tzf "$archive" | grep -qx 'conftest'
           tar -xzf "$archive" -C /tmp conftest
           sudo install -m 0755 /tmp/conftest /usr/local/bin/conftest
           conftest --version
@@ -34,7 +39,7 @@ jobs:
       - name: Validate Dockerfile runtime users
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           for file in ERP-BACKEND/Dockerfile frontend/Dockerfile; do
             if [[ ! -f "$file" ]]; then
               echo "::error file=$file::Required Dockerfile is missing"
@@ -46,15 +51,30 @@ jobs:
             fi
           done
 
-      - name: Enforce local Kubernetes policies
+      - name: Validate rendered Kubernetes overlays
+        shell: bash
         run: |
-          set -euo pipefail
-          conftest test --policy infra/kubernetes/policies infra/kubernetes/base infra/kubernetes/overlays
+          set -Eeuo pipefail
+          rendered_dir="$(mktemp -d)"
+          trap 'rm -rf "$rendered_dir"' EXIT
+
+          for environment in dev staging production; do
+            overlay="infra/kubernetes/overlays/$environment"
+            rendered="$rendered_dir/$environment.yaml"
+
+            test -f "$overlay/kustomization.yaml"
+            kustomize build "$overlay" > "$rendered"
+            test -s "$rendered"
+
+            echo "::group::Conftest: $environment"
+            conftest test --policy infra/kubernetes/policies "$rendered"
+            echo "::endgroup::"
+          done
 
       - name: Verify policy rejects non-compliant manifests
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           fixture="$(mktemp)"
           trap 'rm -f "$fixture"' EXIT
           cat > "$fixture" <<'YAML'
