@@ -11,7 +11,6 @@ on:
     paths:
       - "infra/**"
       - ".github/workflows/iac.yml"
-  workflow_dispatch:
 
 permissions:
   contents: read
