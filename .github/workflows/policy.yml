@@ -28,12 +28,27 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          archive="/tmp/conftest.tar.gz"
-          url="https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz"
-          curl --fail --show-error --location --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 --output "$archive" "$url"
-          tar -tzf "$archive" | grep -qx 'conftest'
-          tar -xzf "$archive" -C /tmp conftest
-          sudo install -m 0755 /tmp/conftest /usr/local/bin/conftest
+          case "$(uname -m)" in
+            x86_64|amd64) asset_arch="Linux_x86_64" ;;
+            aarch64|arm64) asset_arch="Linux_arm64" ;;
+            *)
+              echo "::error::Unsupported runner architecture: $(uname -m)"
+              exit 1
+              ;;
+          esac
+
+          workdir="$(mktemp -d)"
+          trap 'rm -rf "$workdir"' EXIT
+          archive="conftest_${CONFTEST_VERSION}_${asset_arch}.tar.gz"
+          url="https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/${archive}"
+          curl --fail --show-error --location --retry 3 --retry-all-errors \
+            --retry-delay 2 --connect-timeout 15 --max-time 120 \
+            --output "$workdir/$archive" "$url"
+          test -s "$workdir/$archive"
+          tar -tzf "$workdir/$archive" | grep -qx 'conftest'
+          tar -xzf "$workdir/$archive" -C "$workdir" conftest
+          test -s "$workdir/conftest"
+          sudo install -m 0755 "$workdir/conftest" /usr/local/bin/conftest
           conftest --version
 
       - name: Validate Dockerfile runtime users
