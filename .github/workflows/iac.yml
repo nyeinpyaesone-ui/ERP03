@@ -44,22 +44,40 @@ jobs:
 
   opa:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Install Conftest
+        shell: bash
         env:
           CONFTEST_VERSION: "0.45.0"
         run: |
-          set -euo pipefail
-          archive="$(mktemp)"
-          trap 'rm -f "$archive"' EXIT
-          url="https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz"
-          curl --fail --show-error --location --retry 3 --retry-all-errors --output "$archive" "$url"
-          tar -tzf "$archive" >/dev/null
-          tar -xzf "$archive" -C /tmp conftest
-          sudo install -m 0755 /tmp/conftest /usr/local/bin/conftest
+          set -Eeuo pipefail
+
+          case "$(uname -m)" in
+            x86_64|amd64) asset_arch="Linux_x86_64" ;;
+            aarch64|arm64) asset_arch="Linux_arm64" ;;
+            *)
+              echo "::error::Unsupported runner architecture: $(uname -m)"
+              exit 1
+              ;;
+          esac
+
+          archive="conftest_${CONFTEST_VERSION}_${asset_arch}.tar.gz"
+          workdir="$(mktemp -d)"
+          trap 'rm -rf "$workdir"' EXIT
+          url="https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/${archive}"
+
+          curl --fail --show-error --location --retry 3 --retry-all-errors \
+            --retry-delay 2 --connect-timeout 15 --max-time 120 \
+            --output "$workdir/$archive" "$url"
+
+          test -s "$workdir/$archive"
+          tar -tzf "$workdir/$archive" | grep -qx 'conftest'
+          tar -xzf "$workdir/$archive" -C "$workdir" conftest
+          test -s "$workdir/conftest"
+          sudo install -m 0755 "$workdir/conftest" /usr/local/bin/conftest
           conftest --version
-      - name: Enforce local Kubernetes policies
-        run: |
-          set -euo pipefail
-          conftest test --policy infra/kubernetes/policies infra/kubernetes/
+
+      - name: Validate Kubernetes policies
+        run: conftest test --policy infra/kubernetes/policies infra/kubernetes/
