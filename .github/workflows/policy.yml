@@ -5,23 +5,225 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   opa-check:
+    name: opa-check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Install conftest
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up Kustomize
+        uses: imranismail/setup-kustomize@2ba527d4d055ab63514ba50a99456fc35684947f
+
+      - name: Install Conftest
+        env:
+          CONFTEST_VERSION: "0.45.0"
+        shell: bash
         run: |
-          curl -L https://github.com/open-policy-agent/conftest/releases/download/v0.45.0/conftest_0.45.0_Linux_x86_64.tar.gz \
-            | tar xz -C /usr/local/bin
-      - name: Fetch OPA policies
+          set -Eeuo pipefail
+          case "$(uname -m)" in
+            x86_64|amd64) asset_arch="Linux_x86_64" ;;
+            aarch64|arm64) asset_arch="Linux_arm64" ;;
+            *)
+              echo "::error::Unsupported runner architecture: $(uname -m)"
+              exit 1
+              ;;
+          esac
+
+          workdir="$(mktemp -d)"
+          trap 'rm -rf "$workdir"' EXIT
+          archive="conftest_${CONFTEST_VERSION}_${asset_arch}.tar.gz"
+          url="https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/${archive}"
+          curl --fail --show-error --location --retry 3 --retry-all-errors \
+            --retry-delay 2 --connect-timeout 15 --max-time 120 \
+            --output "$workdir/$archive" "$url"
+          test -s "$workdir/$archive"
+          tar -tzf "$workdir/$archive" | grep -qx 'conftest'
+          tar -xzf "$workdir/$archive" -C "$workdir" conftest
+          test -s "$workdir/conftest"
+          sudo install -m 0755 "$workdir/conftest" /usr/local/bin/conftest
+          conftest --version
+
+      - name: Validate Dockerfile runtime users
+        shell: bash
         run: |
-          # Try to fetch external policies, continue if unavailable
-          git clone https://github.com/erp03/policies.git /tmp/policies 2>/dev/null || echo "External policies repo unavailable, using local only"
-      - name: Scan Dockerfiles
+          set -Eeuo pipefail
+
+          final_stage_has_non_root_user() {
+            awk '
+              toupper($1) == "FROM" {
+                final_user = ""
+                has_stage = 1
+                next
+              }
+              toupper($1) == "USER" {
+                final_user = $2
+              }
+              END {
+                user = tolower(final_user)
+                split(user, identity, ":")
+                uid = identity[1]
+                if (!has_stage || uid == "" || uid == "root" || uid == "0" || index(uid, "$") > 0) {
+                  exit 1
+                }
+              }
+            ' "$1"
+          }
+
+          for file in ERP-BACKEND/Dockerfile frontend/Dockerfile; do
+            if [[ ! -f "$file" ]]; then
+              echo "::error file=$file::Required Dockerfile is missing"
+              exit 1
+            fi
+            if ! final_stage_has_non_root_user "$file"; then
+              echo "::error file=$file::Final image stage must declare a static non-root USER"
+              exit 1
+            fi
+          done
+
+          fixture="$(mktemp)"
+          trap 'rm -f "$fixture"' EXIT
+
+          cat > "$fixture" <<'DOCKERFILE'
+          FROM scratch AS builder
+          USER app
+          FROM scratch AS runtime
+          DOCKERFILE
+          if final_stage_has_non_root_user "$fixture"; then
+            echo "::error::Accepted a final image stage without a USER directive"
+            exit 1
+          fi
+
+          for root_user in "root:root" "0:0"; do
+            cat > "$fixture" <<DOCKERFILE
+          FROM scratch AS runtime
+          USER $root_user
+          DOCKERFILE
+            if final_stage_has_non_root_user "$fixture"; then
+              echo "::error::Accepted root runtime user $root_user"
+              exit 1
+            fi
+          done
+
+          cat > "$fixture" <<'DOCKERFILE'
+          FROM scratch AS runtime
+          USER 1000:1000
+          DOCKERFILE
+          if ! final_stage_has_non_root_user "$fixture"; then
+            echo "::error::Rejected a final image stage with a non-root UID"
+            exit 1
+          fi
+      - name: Validate rendered Kubernetes overlays
+        shell: bash
         run: |
-          conftest test --policy /tmp/policies Dockerfile ERP-BACKEND/Dockerfile frontend/Dockerfile 2>/dev/null || echo "Policy scan completed (external policies may be unavailable)"
-      - name: Scan Kubernetes manifests
+          set -Eeuo pipefail
+          rendered_dir="$(mktemp -d)"
+          trap 'rm -rf "$rendered_dir"' EXIT
+
+          for environment in dev staging production; do
+            overlay="infra/kubernetes/overlays/$environment"
+            rendered="$rendered_dir/$environment.yaml"
+
+            test -f "$overlay/kustomization.yaml"
+            kustomize build "$overlay" > "$rendered"
+            test -s "$rendered"
+
+            echo "::group::Conftest: $environment"
+            conftest test --all-namespaces --parser yaml --policy infra/kubernetes/policies "$rendered"
+            echo "::endgroup::"
+          done
+
+      - name: Verify each Kubernetes policy rule rejects violations
+        shell: bash
         run: |
-          conftest test --policy /tmp/policies infra/kubernetes/ 2>/dev/null || echo "Policy scan completed (external policies may be unavailable)"
+          set -Eeuo pipefail
+          fixture="$(mktemp --suffix=.yaml)"
+          negative="$(mktemp --suffix=.yaml)"
+          report="$(mktemp)"
+          trap 'rm -f "$fixture" "$negative" "$report"' EXIT
+
+          cat > "$fixture" <<'YAML'
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: erp03-backend
+          spec:
+            template:
+              spec:
+                securityContext:
+                  runAsNonRoot: true
+                containers:
+                  - name: backend
+                    image: example/backend:test
+                    resources:
+                      limits:
+                        cpu: "500m"
+                        memory: "512Mi"
+                    readinessProbe: { httpGet: { path: /healthz, port: 8000 } }
+          YAML
+
+          conftest test --all-namespaces --parser yaml --policy infra/kubernetes/policies "$fixture"
+
+          assert_rejected() {
+            local label="$1"
+            local expression="$2"
+            local expected="$3"
+            cp "$fixture" "$negative"
+            sed -i "$expression" "$negative"
+            if conftest test --all-namespaces --parser yaml --policy infra/kubernetes/policies "$negative" >"$report" 2>&1; then
+              echo "::error::Policy accepted the $label violation"
+              cat "$report"
+              exit 1
+            fi
+            if ! grep -Fq "$expected" "$report"; then
+              echo "::error::Conftest failed without reporting the expected $label policy violation"
+              cat "$report"
+              exit 1
+            fi
+            echo "Negative policy test passed: $label"
+          }
+
+          assert_rejected "non-root execution" '/runAsNonRoot:/d' 'must enforce runAsNonRoot'
+          assert_rejected "CPU limit" '/cpu: "500m"/d' 'must define a CPU limit'
+          assert_rejected "memory limit" '/memory: "512Mi"/d' 'must define a memory limit'
+          assert_rejected "backend readiness probe" '/readinessProbe:/d' 'must define a readiness probe'
+
+          cat > "$negative" <<'YAML'
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: erp03-backend
+          spec:
+            template:
+              spec:
+                securityContext:
+                  runAsNonRoot: true
+                containers:
+                  - name: backend
+                    image: example/backend:test
+                    securityContext:
+                      runAsNonRoot: false
+                    resources:
+                      limits:
+                        cpu: "500m"
+                        memory: "512Mi"
+                    readinessProbe: { httpGet: { path: /healthz, port: 8000 } }
+          YAML
+          if conftest test --all-namespaces --parser yaml --policy infra/kubernetes/policies "$negative" >"$report" 2>&1; then
+            echo "::error::Policy accepted container-level runAsNonRoot: false"
+            cat "$report"
+            exit 1
+          fi
+          if ! grep -Fq 'must not set runAsNonRoot to false' "$report"; then
+            echo "::error::Conftest failed without reporting the container-level runAsNonRoot violation"
+            cat "$report"
+            exit 1
+          fi
+          echo "Negative policy test passed: container-level runAsNonRoot false"
