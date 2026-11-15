@@ -8,11 +8,11 @@ set -Eeuo pipefail
 #   ./scripts/rollback.sh backend --image ghcr.io/nyeinpyaesone-ui/erp03-backend@sha256:<64-hex>
 # Environment: KUBECONFIG, NAMESPACE
 
-NAMESPACE="\${NAMESPACE:-erp03}"
-export KUBECONFIG="\${KUBECONFIG:-$HOME/.kube/config}"
-DEPLOYMENT="\${1:-}"
-MODE="\${2:-}"
-VALUE="\${3:-}"
+NAMESPACE="${NAMESPACE:-erp03}"
+export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+DEPLOYMENT="${1:-}"
+MODE="${2:-}"
+VALUE="${3:-}"
 
 case "$DEPLOYMENT" in
   backend|frontend) ;;
@@ -49,7 +49,7 @@ case "$MODE" in
       echo "ERROR: image must use the matching GHCR repository: $EXPECTED_IMAGE" >&2
       exit 2
     }
-    DIGEST="\${VALUE##*@sha256:}"
+    DIGEST="${VALUE##*@sha256:}"
     [[ "$DIGEST" =~ ^[a-f0-9]{64}$ ]] || {
       echo "ERROR: image must be pinned by a 64-character sha256 digest" >&2
       exit 2
