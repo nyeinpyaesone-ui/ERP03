@@ -64,7 +64,7 @@ IMAGE_TAG=latest
 
 For local backend development without Compose, copy `ERP-BACKEND/.env.example` to `ERP-BACKEND/.env` and set the fields declared in `ERP-BACKEND/app/core/config.py`. Settings use `extra="forbid"`; do not add undeclared environment variables to that file.
 
-For production, use HTTPS-only `CORS_ORIGINS`, PostgreSQL (never SQLite as the primary domain database), a unique signing key and distinct database/cache passwords.
+For production, use HTTPS-only `CORS_ORIGINS`, PostgreSQL (never SQLite as the primary domain database), a unique signing key and distinct database/cache passwords. The Redis client reads `REDIS_MAX_CONNECTIONS` (default 50 per process), uses 2-second connect/operation timeouts and a 30-second connection health check, and closes its pool during graceful shutdown. The Kubernetes ConfigMap sets the 50-connection default explicitly. At the backend HPA maximum of ten pods, that permits up to 500 Redis connections if there is one Uvicorn process per pod; lower the setting if the actual Redis service's connection budget is smaller.
 
 ## 4. Kubernetes runtime secrets
 
