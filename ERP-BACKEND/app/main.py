@@ -79,7 +79,21 @@ class RedisRateLimitMiddleware:
 
             self.redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
         else:
-            self.redis = redis.from_url(redis_url, encoding="utf-8", decode_responses=True)
+            self.redis = redis.from_url(
+                redis_url,
+                encoding="utf-8",
+                decode_responses=True,
+                max_connections=settings.redis_max_connections,
+                socket_connect_timeout=2.0,
+                socket_timeout=2.0,
+                health_check_interval=30,
+            )
+
+    async def close(self) -> None:
+        """Close the Redis connection pool during graceful application shutdown."""
+        close = getattr(self.redis, "aclose", None)
+        if close is not None:
+            await close()
 
     def _circuit_available(self) -> bool:
         """Return True if the circuit allows Redis calls."""
@@ -173,12 +187,28 @@ async def lifespan(app: FastAPI):
     and any buffered judgments are flushed cleanly. Also closes Redis
     connections and DB engine on shutdown.
     """
-    yield
-    if settings.typesafe_enabled:
-        await typesafe.close()
-    from app.db.session import engine
+    try:
+        yield
+    finally:
+        try:
+            if settings.typesafe_enabled:
+                await typesafe.close()
+        finally:
+            try:
+                # Starlette builds the middleware stack before entering lifespan.
+                # Walk it once to close the single Redis pool owned by the middleware.
+                middleware = app.middleware_stack
+                while middleware is not None:
+                    if isinstance(middleware, RedisRateLimitMiddleware):
+                        await middleware.close()
+                        break
+                    middleware = getattr(middleware, "app", None)
+            except Exception:
+                logger.exception("Failed to close Redis rate-limiter connection pool")
+            finally:
+                from app.db.session import engine
 
-    await engine.dispose()
+                await engine.dispose()
 
 
 app = FastAPI(
