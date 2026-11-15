@@ -107,7 +107,7 @@ The application remains a modular monolith. Add queues or independently deployed
 
 Redis is intentionally not part of the readiness probe while its current rate-limiter integration can fail open. Redis degradation must be monitored and alerted separately.
 
-## CI and container publishing
+## CI, container publishing and staging deployment
 
 - Backend image: `ghcr.io/nyeinpyaesone-ui/erp03-backend`
 - Frontend image: `ghcr.io/nyeinpyaesone-ui/erp03-frontend`
@@ -115,7 +115,9 @@ Redis is intentionally not part of the readiness probe while its current rate-li
 - GitHub Actions uses scoped `GITHUB_TOKEN` package permissions; no Docker Hub token is required by the current GHCR publishing workflows.
 - Production Kubernetes images must be pinned by real build digests, not mutable `latest` tags.
 
-The checked-in Docker workflows publish images; they do not, by themselves, prove a Kubernetes deployment was completed.
+The manual `.github/workflows/deploy-staging.yml` workflow accepts a source commit and both image digests, connects over SSH, deploys to a Docker Compose staging host, runs migrations, checks container health and attempts image rollback on failure. This is a single-host staging flow; it is not a Kubernetes deployment and does not provide a multi-replica zero-downtime guarantee.
+
+The production shell deployment script is not yet qualified: its digest verification and endpoint smoke-test steps are placeholders, and the production manifests still require real image digests. Do not use it for a production cutover until those issues and the stateful-data blockers are resolved.
 
 ## Kubernetes
 
@@ -127,7 +129,7 @@ kubectl kustomize infra/kubernetes/overlays/staging
 kubectl kustomize infra/kubernetes/overlays/production
 ```
 
-Provision runtime secrets outside Git before applying any environment. The placeholder template is intentionally excluded from the Kustomize resource list.
+Provision runtime secrets outside Git before applying any environment. The placeholder template is intentionally excluded from the Kustomize resource list. PostgreSQL, Redis and Ollama image digest placeholders also require real, verified digests before applying the Kubernetes manifests.
 
 **Production is not yet zero-downtime qualified.** The current SQLite journal uses a ReadWriteOnce volume while the backend scales to multiple replicas; PostgreSQL and Redis manifests are also single-instance. See the deployment runbook before applying production resources.
 
