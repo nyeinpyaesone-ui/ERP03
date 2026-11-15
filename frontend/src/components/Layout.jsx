@@ -1,9 +1,8 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Layout() {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
 
   const navItems = [
     { name: 'ပင်မစာမျက်နှာ', href: '/', icon: 'layout-dashboard' },
