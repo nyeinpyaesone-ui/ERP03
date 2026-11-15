@@ -46,14 +46,20 @@ spec:
               memory: 256Mi
           livenessProbe:
             exec:
-              command: ["redis-cli", "-a", "$(REDIS_PASSWORD)", "ping"]
+              command:
+                - /bin/sh
+                - -ec
+                - REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping | grep -qx PONG
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
           readinessProbe:
             exec:
-              command: ["redis-cli", "-a", "$(REDIS_PASSWORD)", "ping"]
+              command:
+                - /bin/sh
+                - -ec
+                - REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping | grep -qx PONG
             initialDelaySeconds: 5
             periodSeconds: 5
             timeoutSeconds: 3
