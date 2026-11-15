@@ -1,98 +1,78 @@
 # ERP03 Environment Configuration
 
-## Quick Start
+This document describes the current repository layout. For production rollout details, use [docs/ZERO_DOWNTIME_DEPLOYMENT_2026-11.md](ZERO_DOWNTIME_DEPLOYMENT_2026-11.md).
 
-### 1. Copy the environment template
+## Local setup
+
+### Backend-only development
 
 ```bash
 cd ERP-BACKEND
-cp ERP-BACKEND/.env.example ERP-BACKEND/.env
+cp .env.example .env
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt -r dev-requirements.txt
+alembic upgrade head
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-### 2. Generate a secure SECRET_KEY
+Only use keys declared in `ERP-BACKEND/app/core/config.py`; unknown keys are rejected by settings validation.
 
-```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(48))"
-```
+### Full Docker Compose stack
 
-### 3. Edit `.env` with your values
+Compose variable substitution reads the repository-root `.env`. Create that file locally (never commit it) with:
 
 ```ini
-ENVIRONMENT=development
-SECRET_KEY=<your-generated-secret-key>
 POSTGRES_DB=erp03
 POSTGRES_USER=erp03
-POSTGRES_PASSWORD=<your-secure-password>
-DATABASE_URL=postgresql+asyncpg://erp03:<your-secure-password>@postgres:5432/erp03
-DATABASE_PATH=./.local/erp03.sqlite3
+POSTGRES_PASSWORD=<local-password>
+SECRET_KEY=<random-secret-at-least-32-characters>
+DATABASE_URL=postgresql+asyncpg://erp03:<url-encoded-password>@postgres:5432/erp03
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
-
-# Docker Hub (optional, for container publishing)
-DOCKERHUB_REGISTRY=docker.io
-DOCKERHUB_USERNAME=<your-dockerhub-username>
-DOCKERHUB_TOKEN=<your-github-pat-with-write-packages>
-DOCKERHUB_IMAGE_BACKEND=docker.io/<your-dockerhub-username>/erp03-backend
-DOCKERHUB_IMAGE_FRONTEND=docker.io/<your-dockerhub-username>/erp03-frontend
-IMAGE_TAG=latest
+REDIS_PASSWORD=<local-redis-password>
 ```
 
-### 4. Bootstrap the project
+Then start the full profile:
 
 ```bash
-cd /home/ubuntu/ERP03
-chmod +x scripts/setup.sh
-./scripts/setup.sh
+docker compose --profile full up --build
 ```
 
-### 5. Start with Docker Compose
+## Container registry
 
-Minimal (SQLite journal):
+The current workflows publish to GHCR:
+- `ghcr.io/nyeinpyaesone-ui/erp03-backend`
+- `ghcr.io/nyeinpyaesone-ui/erp03-frontend`
+
+They use the scoped GitHub Actions `GITHUB_TOKEN`, not `DOCKERHUB_TOKEN`. The backend and frontend images are built for AMD64 and ARM64. Production Kubernetes overlays must use verified image digests.
+
+## Runtime secret management
+
+Kubernetes namespaces require an externally provisioned `erp03-secrets` Secret with `SECRET_KEY`, `POSTGRES_PASSWORD` and `REDIS_PASSWORD`. The example manifest is not part of the applied Kustomize resources. Use a cluster secret manager or the controlled process in the zero-downtime runbook.
+
+## Health endpoints
+
+- `GET /api/v1/healthz` — process liveness.
+- `GET /api/v1/readyz` — PostgreSQL and migration readiness.
+- `GET /` — frontend Nginx health.
+
+Redis is not part of `readyz` because the current rate limiter has a fail-open circuit breaker. Monitor Redis degradation separately.
+
+## Local qualification
 
 ```bash
-docker compose up -d
+cd ERP-BACKEND
+ruff check app tests alembic
+ruff format --check app tests alembic
+python -m compileall -q app alembic
+alembic upgrade head
+pytest -q
+
+cd ../frontend
+npm ci
+npm run build
 ```
 
-Full (PostgreSQL):
+## Important production limitation
 
-```bash
-POSTGRES_PASSWORD=<secure-password> \
-SECRET_KEY=<secret-key> \
-CORS_ORIGINS=https://your-domain.com \
-docker compose --profile full up -d
-```
-
-## Production Deployment Checklist
-
-- [ ] `SECRET_KEY` is set to a 32+ character random value
-- [ ] `CORS_ORIGINS` contains only HTTPS origins (no `http://localhost`)
-- [ ] `DATABASE_URL` points to production PostgreSQL
-- [ ] `ENVIRONMENT=production`
-- [ ] Docker Hub images are built and tagged
-- [ ] Branch protection rules are configured (see PROTOCOLS.md)
-- [ ] Required status checks pass on `main`
-
-## GitHub Actions Secrets
-
-Add these in **Settings → Secrets and variables → Actions**:
-
-| Secret | Value Source |
-|--------|--------------|
-| `GITHUB_TOKEN` | Auto-provided by GitHub Actions |
-| `DOCKERHUB_TOKEN` | Docker Hub access token (write:packages scope) |
-| `POSTGRES_PASSWORD` | Your chosen PostgreSQL password |
-| `SECRET_KEY` | Your generated secret key |
-| `DATABASE_URL` | Production database URL |
-
-## Verification
-
-```bash
-# Backend health
-curl http://localhost:8000/api/v1/healthz
-
-# Frontend
-curl http://localhost:3000
-
-# Docker Hub images
-docker pull docker.io/nyeinpyaesone-ui/erp03-backend:latest
-docker pull docker.io/nyeinpyaesone-ui/erp03-frontend:latest
-```
+The backend journal still uses SQLite on a ReadWriteOnce PVC, while the production overlay uses multiple backend replicas and an HPA. The checked-in PostgreSQL and Redis Kubernetes resources are single-instance. These are unresolved availability constraints; rolling application settings alone do not make the whole ERP zero-downtime.
