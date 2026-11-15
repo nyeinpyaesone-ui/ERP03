@@ -61,7 +61,7 @@ jobs:
 
       - name: Build and push devcontainer
         id: build-devcontainer-image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
         with:
           context: .
           file: .devcontainer/Dockerfile
@@ -118,7 +118,7 @@ jobs:
 
       - name: Build and push backend development image
         id: build-backend-dev-image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
         with:
           context: ./ERP-BACKEND
           file: ./ERP-BACKEND/Dockerfile
@@ -176,7 +176,7 @@ jobs:
 
       - name: Build and push frontend development image
         id: build-frontend-dev-image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
