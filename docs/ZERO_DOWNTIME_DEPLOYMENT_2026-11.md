@@ -172,7 +172,7 @@ PR #274 adds JWT signature/expiry verification before tenant-specific rate-limit
 
 The current `scripts/deploy-production.sh` accepts one image digest but does not inject it into the backend and frontend references. Its image-existence and external health-check steps are placeholders; the checked-in manifests still include digest placeholders for the application and infrastructure images. Do not run this script for a production cutover until it accepts and validates both application digests, renders a complete manifest with no placeholders, verifies image signatures/architecture as applicable, executes actual endpoint smoke tests, and records the known-good release.
 
-The current `scripts/rollback.sh` uses an outdated Docker Hub namespace; it must be kept aligned with the GHCR publisher and preferably use immutable previous digests rather than mutable tags.
+The rollback helper now targets one Deployment at a time and accepts a recorded Deployment revision or a repository-matched immutable GHCR digest. Keep the selected digest tied to the exact known-good release record.
 
 ## 9. Database migration policy
 
@@ -188,16 +188,38 @@ Do not run destructive migrations as an implicit side effect of starting every r
 
 ## 10. Rollback
 
-For a Kubernetes application rollback:
+Rollback only the Deployment that requires restoration. Backend and frontend revisions are independent; do not automatically undo both.
+
+Inspect the recorded rollout revisions:
 
 ```bash
-kubectl -n erp03 rollout undo deployment/erp03-backend
-kubectl -n erp03 rollout undo deployment/erp03-frontend
-kubectl -n erp03 rollout status deployment/erp03-backend --timeout=10m
-kubectl -n erp03 rollout status deployment/erp03-frontend --timeout=10m
+kubectl -n erp03 rollout history deployment/erp03-backend
+kubectl -n erp03 rollout history deployment/erp03-frontend
 ```
 
+Restore only the backend to its immediately previous revision:
+
+```bash
+./scripts/rollback.sh backend
+```
+
+Restore one Deployment to a specific known-good revision:
+
+```bash
+./scripts/rollback.sh backend --revision 12
+```
+
+Or use the exact known-good immutable digest for only that Deployment:
+
+```bash
+./scripts/rollback.sh backend --image ghcr.io/nyeinpyaesone-ui/erp03-backend@sha256:<64-hex-digest>
+```
+
+Use `frontend` and the frontend GHCR repository when only the frontend needs restoration. The script validates the selected Deployment and image repository, records the rollout history, and waits only for the selected Deployment to become available.
+
 Rollback is safe only while the database schema remains backward compatible. Do not automatically reverse a migration or restore a database backup as part of an application rollback. Database restoration is a separately approved recovery operation with a defined RPO/RTO and reconciliation plan.
+
+
 
 ## 11. Qualification evidence required
 
