@@ -10,8 +10,8 @@ This document describes the current repository layout. For production rollout de
 cd ERP-BACKEND
 cp .env.example .env
 mkdir -p .local
-# Set DATABASE_URL in .env to this host-writable SQLite file before migrating:
-# DATABASE_URL=sqlite+aiosqlite:///./.local/erp03.sqlite3
+# Point Alembic at the writable local SQLite file before migrating:
+sed -i 's|^DATABASE_URL=.*|DATABASE_URL=sqlite+aiosqlite:///./.local/erp03.sqlite3|' .env
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt -r dev-requirements.txt
