@@ -100,19 +100,37 @@ Confirm real endpoint health, 5xx rate, p95/p99 latency, database connections, R
 
 ## 6. Rollback
 
-For a Kubernetes application-only rollback:
+Rollback only the application Deployment that requires restoration. Record the known-good revision or immutable image digest for backend and frontend independently; do not automatically roll both back together.
+
+Inspect history before choosing a target:
 
 ```bash
-./scripts/rollback.sh
+kubectl -n erp03 rollout history deployment/erp03-backend
+kubectl -n erp03 rollout history deployment/erp03-frontend
 ```
 
-With a previous immutable release tag:
+Restore only the backend to its immediately previous revision:
 
 ```bash
-./scripts/rollback.sh <previous-release-tag>
+./scripts/rollback.sh backend
 ```
 
-The script records diagnostics, restores both images and waits for readiness. It exits non-zero after a successful rollback so a deployment pipeline can remain failed. Rollback is safe only while the database schema remains compatible; do not automatically reverse schema migrations or restore the database as part of an application rollback.
+Restore one Deployment to a specific recorded revision:
+
+```bash
+./scripts/rollback.sh backend --revision 12
+```
+
+Or restore only that Deployment to its exact previously verified GHCR digest:
+
+```bash
+./scripts/rollback.sh backend --image ghcr.io/nyeinpyaesone-ui/erp03-backend@sha256:<64-hex-digest>
+```
+
+Use `frontend` and the frontend image repository when only the frontend needs rollback. The script validates the selected Deployment/image pairing, captures that Deployment's rollout history, and waits for only the selected Deployment. It does not alter the other application Deployment or database schema.
+
+Rollback is safe only while the database schema remains backward compatible. Do not automatically reverse schema migrations or restore the database as part of an application rollback.
+
 
 ## 7. Outstanding release blockers
 
