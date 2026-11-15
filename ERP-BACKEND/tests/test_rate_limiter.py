@@ -32,9 +32,7 @@ async def test_close_releases_redis_connection_pool():
         redis_client = AsyncMock()
         mock_redis.return_value = redis_client
 
-        middleware = RedisRateLimitMiddleware(
-            _noop_app, redis_url="redis://localhost:6379/0"
-        )
+        middleware = RedisRateLimitMiddleware(_noop_app, redis_url="redis://localhost:6379/0")
         await middleware.close()
 
         redis_client.aclose.assert_awaited_once()
