@@ -118,11 +118,14 @@ class RedisRateLimitMiddleware:
         if auth_header.startswith("Bearer "):
             token = auth_header.split(" ", 1)[1]
             try:
+                # Only verified, unexpired access tokens may select a tenant bucket.
+                # Invalid or expired tokens fall back to the client-IP bucket; the
+                # authentication dependency remains responsible for rejecting them.
                 payload = pyjwt.decode(
                     token,
                     self._secret_key,
                     algorithms=["HS256"],
-                    options={"verify_exp": False, "verify_signature": False},
+                    options={"require": ["exp", "business_id"]},
                 )
                 business_id = payload.get("business_id")
             except Exception:
