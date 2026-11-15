@@ -52,7 +52,8 @@ class DockerPublishWorkflowTests(unittest.TestCase):
         self.assertEqual(events["push"]["tags"], ["v*.*.*"])
         self.assertEqual(events["pull_request"]["branches"], ["main"])
         self.assertIn("schedule", events)
-        self.assertEqual(events["workflow_dispatch"], "")
+        self.assertEqual(set(events), {"schedule", "push", "pull_request"})
+        self.assertNotIn("workflow_dispatch", events)
 
     def test_only_canonical_ghcr_backend_image_is_configured(self):
         self.assertEqual(self.workflow["env"]["REGISTRY"], "ghcr.io")
