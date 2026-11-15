@@ -1,92 +1,127 @@
-# ERP03 Deploy Runbook
+# ERP03 Deployment Runbook — Current State
 
-**Target:** production-ready `main` at `origin/main`
-**Current HEAD:** `b639c2d6` — lint/format/compile/migrations/tests green (48 passed / 1 PG-skip)
+**Repository baseline inspected:** `main` at `716f305f` (2026-11-12)  
+**Purpose:** describe the real build, staging and production delivery paths.  
+**Production status:** not zero-downtime qualified.
 
-## Phase 0 — Pre-flight (local verification)
+This replaces the historical runbook steps tied to old commit `b639c2d6`, old PR numbers and old release assumptions. Do not run the old merge/issue-close command sequence.
 
-Run once before touching GitHub:
+## 1. Actual delivery components
 
-```bash
-cd /home/ubuntu/ERP03
-git status --short                       # must be empty
-git log --oneline -1                     # b639c2d6
-cd ERP-BACKEND
-.venv/bin/ruff check app tests alembic   # 0 findings
-.venv/bin/ruff format --check app tests alembic
-.venv/bin/python -m compileall -q app alembic
-.venv/bin/python -m pytest -q            # 48 passed, 1 PG-only skip
-cd ../frontend
-npm ci && npm run build                  # dist/ emitted
-```
-
-If any step fails, fix and push first — do not proceed.
-
-## Phase 1 — CI evidence (GitHub Actions)
-
-Open Actions for commit `b639c2d6` and confirm **all** green:
-
-| Workflow | What it proves |
+| Component | Current implementation |
 |---|---|
-| CI | backend build + test + frontend build |
-| Quality | ruff lint/format + compileall |
-| Security | pip-audit + CodeQL |
-| Container | image build + Trivy scan |
-| IaC | terraform fmt/validate/plan + artifact |
+| Backend image publish | `.github/workflows/docker-publish.yml` → GHCR |
+| Frontend image publish | `.github/workflows/container.yml` → GHCR |
+| Staging delivery | Manual `.github/workflows/deploy-staging.yml` → SSH → single-host Docker Compose |
+| Kubernetes config | `infra/kubernetes/base` and dev/staging/production overlays |
+| Production deploy script | `scripts/deploy-production.sh`; currently not qualified for a release |
+| Rollback script | `scripts/rollback.sh`; GHCR image namespace is aligned in this branch |
 
-**Entry gate:** no workflow red, no `startup_failure`, no build errors.
+Images:
+- `ghcr.io/nyeinpyaesone-ui/erp03-backend`
+- `ghcr.io/nyeinpyaesone-ui/erp03-frontend`
 
-## Phase 2 — Issue closure
+The image workflows build AMD64 and ARM64 images. Backend publish also performs keyless Cosign signing/verification. Use the immutable digest reported by the exact successful workflow run.
 
-Once Phase 1 is green:
+## 2. Before staging
 
-```bash
-gh issue close 224 --repo nyeinpyaesone-ui/ERP03 --comment "CI runners on ubuntu-latest, path filters added, runs green."
-gh issue close 226 --repo nyeinpyaesone-ui/ERP03 --comment "CI reliability verified on ubuntu-latest."
-gh issue close 223 --repo nyeinpyaesone-ui/ERP03 --comment "Idempotency payload mismatch vs reuse distinguished (typed error codes, tests updated)."
-```
+1. Refresh `main` and record the release commit SHA.
+2. Review all PRs that affect transaction integrity, authentication, database pool sizing, migrations or manifests.
+3. Require CI, Quality, Security, Container, Docker, Type Check, Coverage and Agent Parity checks to pass for the exact commit.
+4. Require Policy Enforcement to complete successfully with an actual job. `startup_failure` with no jobs is not a pass.
+5. Verify backend and frontend image digests and architecture manifests.
+6. Confirm the staging host has the expected Compose file, Docker Engine and Compose plugin, clean checkout, secrets and a healthy previous release.
 
-## Phase 3 — PR merge queue (order matters)
-
-```bash
-gh pr merge 170 --repo nyeinpyaesone-ui/ERP03 --squash          # env credential rotation (security-first)
-gh pr merge 191 --repo nyeinpyaesone-ui/ERP03 --squash          # Dependabot
-gh pr merge 192 --repo nyeinpyaesone-ui/ERP03 --squash
-gh pr merge 193 --repo nyeinpyaesone-ui/ERP03 --squash
-gh pr merge 194 --repo nyeinpyaesone-ui/ERP03 --squash
-gh pr merge 195 --repo nyeinpyaesone-ui/ERP03 --squash
-gh pr merge 196 --repo nyeinpyaesone-ui/ERP03 --squash
-gh pr merge 229 --repo nyeinpyaesone-ui/ERP03 --squash          # after CI green
-gh pr merge 228 --repo nyeinpyaesone-ui/ERP03 --squash
-```
-
-Rule: do not merge any PR unless the CI run for its head commit is green.
-
-## Phase 3b — Staging deploy
-
-In Codespace (Docker-in-Docker):
+Local qualification:
 
 ```bash
-make dev                              # docker compose -f docker-compose.dev.yml up --build
-make lint && make test && make build-all
+./scripts/qualify.sh
+cd ERP-BACKEND
+ruff check app tests alembic
+ruff format --check app tests alembic
+python -m compileall -q app alembic
+alembic upgrade head
+pytest -q
+cd ../frontend
+npm ci
+npm run build
 ```
 
-Verify backend healthz, frontend loads, and Trivy scan shows no NEW critical/high vs baseline.
+Use the repository's actual scripts and requirements; do not rely on historical test counts in older deployment notes.
 
-## Phase 4 — Production readiness
+## 3. Staging deployment
 
-After Phase 3 merges land on `main`:
+Configure the `staging` GitHub Environment as documented in [Configuration & Credentials](../CONFIGURATION_SETUP.md):
+- `STAGING_SSH_PRIVATE_KEY`
+- `STAGING_SSH_KNOWN_HOSTS`
+- `STAGING_SSH_HOST`
+- `STAGING_SSH_USER`
+- `STAGING_SSH_PORT` (optional)
+- `STAGING_GHCR_USERNAME`
+- `STAGING_GHCR_READ_TOKEN` with `read:packages`
+- `STAGING_DEPLOY_PATH` Environment variable
 
-1. `git fetch origin && git checkout main && git pull --ff-only`
-2. Update `docs/PRODUCTION_READINESS_MATRIX.md`:
-   - Code Quality → PASS (link CI run)
-   - CI/CD → PASS (link CI run)
-   - Testing → PASS (link pytest output)
-   - Final production readiness → QUALIFIED (link staging smoke output)
-3. Commit + push the matrix update.
-4. Tag release: `git tag v1.0.0 && git push origin v1.0.0`
-5. Create GitHub release from tag via workflow_dispatch on `release.yml`.
+Manually dispatch `.github/workflows/deploy-staging.yml` from `main` with:
+- full `source_sha`;
+- exact backend `sha256:` digest;
+- exact frontend `sha256:` digest.
 
-## Rollback
+The workflow verifies inputs and image revision labels, runs the migration service, deploys application containers, checks Docker health and attempts to restore previous images on failure. It requires a healthy previous backend and frontend.
 
-If staging smoke fails: revert the last merged PR, re-run Phase 1–3, do not tag.
+**Important:** staging is a single-host Docker Compose deployment. It is suitable for release validation, not a proof of multi-replica zero downtime.
+
+## 4. Production deployment gate
+
+Do not run `scripts/deploy-production.sh` for a production cutover yet. On the inspected baseline:
+- it accepts one image digest rather than distinct backend/frontend digests;
+- its image existence check is only a placeholder;
+- the supplied digest is not wired into the rendered deployment images;
+- the external endpoint smoke test is only a placeholder;
+- application and infrastructure manifests still contain digest placeholders;
+- the connected Railway project is a separate ERPNext/MariaDB environment, not ERP03.
+
+Before a production release, resolve the blockers in [the Zero-Downtime Deployment Runbook](ZERO_DOWNTIME_DEPLOYMENT_2026-11.md), including PostgreSQL HA, SQLite journal migration, connection-pool caps and actual staging failover/rollback evidence. Production runtime secrets must be provisioned outside Git.
+
+## 5. Kubernetes rollout verification
+
+After the production script and all stateful dependencies are qualified, deploy only with explicit production approval:
+
+```bash
+kubectl config current-context
+kubectl kustomize infra/kubernetes/overlays/production >/tmp/erp03-production.yaml
+# Inspect the rendered result locally; confirm no image/secret placeholders.
+kubectl apply -k infra/kubernetes/overlays/production/
+kubectl -n erp03 rollout status deployment/erp03-frontend --timeout=10m
+kubectl -n erp03 rollout status deployment/erp03-backend --timeout=10m
+kubectl -n erp03 get pods,services,endpoints,hpa,pdb
+```
+
+Confirm real endpoint health, 5xx rate, p95/p99 latency, database connections, Redis errors, migration state and audit logging. Keep the previous release available until acceptance.
+
+## 6. Rollback
+
+For a Kubernetes application-only rollback:
+
+```bash
+./scripts/rollback.sh
+```
+
+With a previous immutable release tag:
+
+```bash
+./scripts/rollback.sh <previous-release-tag>
+```
+
+The script records diagnostics, restores both images and waits for readiness. It exits non-zero after a successful rollback so a deployment pipeline can remain failed. Rollback is safe only while the database schema remains compatible; do not automatically reverse schema migrations or restore the database as part of an application rollback.
+
+## 7. Outstanding release blockers
+
+- Move the SQLite transaction journal from the single ReadWriteOnce volume to a transactional shared store (prefer PostgreSQL) using a compatibility/backfill/reconciliation migration.
+- Use HA PostgreSQL or a managed HA PostgreSQL service with tested restore and failover.
+- Define Redis availability/security requirements and alert on fail-open throttling.
+- Validate and merge the open database-pool and JWT rate-limit fixes (#275 and #274) after review and successful required checks.
+- Replace every Kubernetes image digest placeholder with a verified exact digest.
+- Repair and test the production deployment script before use.
+- Prove rolling deployment and rollback in a staging environment that matches production topology.
+
+A green image build is not a database recovery test or a zero-downtime proof.
