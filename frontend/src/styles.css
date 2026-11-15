@@ -1,27 +1,68 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: light;
+    font-family: Inter, "Noto Sans Myanmar", "Myanmar Text", sans-serif;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    background: #F5F7F8;
+    color: #172B2A;
+  }
+
+  html {
+    min-width: 320px;
+    background: #F5F7F8;
+  }
+
   body {
-    @apply font-sans antialiased text-gray-900;
+    @apply min-h-screen antialiased;
+    margin: 0;
+    font-family: Inter, "Noto Sans Myanmar", "Myanmar Text", sans-serif;
+    font-size: 1rem;
+    line-height: 1.65;
+    color: #172B2A;
+    background: #F5F7F8;
+  }
+
+  button, input, select, textarea {
+    font: inherit;
+  }
+
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid #087F78;
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    color: #FFFFFF;
+    background: #087F78;
   }
 }
 
 @layer components {
   .shell {
-    @apply min-h-screen bg-gray-50;
+    @apply min-h-screen;
+    background: #F5F7F8;
   }
+
   .card {
-    @apply bg-white p-6 rounded-lg border border-gray-200 shadow-sm;
+    @apply rounded-lg border bg-white p-6;
+    border-color: #D5E0DF;
+    box-shadow: 0 1px 2px rgba(23, 43, 42, 0.06);
   }
+
   .eyebrow {
-    @apply text-xs font-semibold tracking-wider text-blue-600 uppercase;
+    @apply text-xs font-semibold uppercase;
+    letter-spacing: 0.06em;
+    color: #087F78;
   }
+
   .subtitle {
-    @apply text-gray-500 text-sm mt-1;
+    @apply mt-1 text-sm;
+    color: #526766;
   }
 }
 
