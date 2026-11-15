@@ -118,9 +118,7 @@ def _rate_limiter_with_mock_redis():
     mock_pipeline.expire = AsyncMock()
     mock_pipeline.execute = AsyncMock(return_value=[None, 0])
     mock_redis_instance.pipeline = MagicMock(return_value=mock_pipeline)
-    middleware = RedisRateLimitMiddleware(
-        _noop_app, redis_url="redis://localhost:6379/0"
-    )
+    middleware = RedisRateLimitMiddleware(_noop_app, redis_url="redis://localhost:6379/0")
     middleware.redis = mock_redis_instance
     return middleware, mock_pipeline
 
