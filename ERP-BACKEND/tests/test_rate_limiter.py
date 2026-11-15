@@ -3,11 +3,41 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from app.core.config import settings
 from app.main import RedisRateLimitMiddleware
 
 
 async def _noop_app(scope, receive, send):
     return None
+
+
+def test_redis_client_uses_bounded_pool_and_fail_fast_timeouts():
+    with patch("redis.asyncio.from_url") as mock_redis:
+        RedisRateLimitMiddleware(_noop_app, redis_url="redis://localhost:6379/0")
+
+        mock_redis.assert_called_once_with(
+            "redis://localhost:6379/0",
+            encoding="utf-8",
+            decode_responses=True,
+            max_connections=settings.redis_max_connections,
+            socket_connect_timeout=2.0,
+            socket_timeout=2.0,
+            health_check_interval=30,
+        )
+
+
+@pytest.mark.asyncio
+async def test_close_releases_redis_connection_pool():
+    with patch("redis.asyncio.from_url") as mock_redis:
+        redis_client = AsyncMock()
+        mock_redis.return_value = redis_client
+
+        middleware = RedisRateLimitMiddleware(
+            _noop_app, redis_url="redis://localhost:6379/0"
+        )
+        await middleware.close()
+
+        redis_client.aclose.assert_awaited_once()
 
 
 @pytest.mark.asyncio
