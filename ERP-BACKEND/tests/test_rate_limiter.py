@@ -107,3 +107,93 @@ async def test_rate_limit_returns_429_after_threshold():
         statuses.clear()
         await mw(scope, None, capture_send)
         assert 429 in statuses
+
+
+def _rate_limiter_with_mock_redis():
+    mock_redis_instance = AsyncMock()
+    mock_pipeline = MagicMock()
+    mock_pipeline.zremrangebyscore = AsyncMock()
+    mock_pipeline.zcard = AsyncMock()
+    mock_pipeline.zadd = AsyncMock()
+    mock_pipeline.expire = AsyncMock()
+    mock_pipeline.execute = AsyncMock(return_value=[None, 0])
+    mock_redis_instance.pipeline = MagicMock(return_value=mock_pipeline)
+    middleware = RedisRateLimitMiddleware(
+        _noop_app, redis_url="redis://localhost:6379/0"
+    )
+    middleware.redis = mock_redis_instance
+    return middleware, mock_pipeline
+
+
+@pytest.mark.asyncio
+async def test_verified_jwt_uses_tenant_rate_limit_bucket():
+    import time
+
+    import jwt
+    from app.core.config import settings
+
+    middleware, pipeline = _rate_limiter_with_mock_redis()
+    token = jwt.encode(
+        {"business_id": "tenant-a", "exp": int(time.time()) + 300},
+        settings.secret_key.get_secret_value(),
+        algorithm="HS256",
+    )
+    scope = {
+        "type": "http",
+        "client": ("1.2.3.4", 0),
+        "headers": [(b"authorization", f"Bearer {token}".encode())],
+    }
+
+    await middleware(scope, None, None)
+
+    key = pipeline.zadd.call_args.args[0]
+    assert key == "ratelimit:tenant-a"
+
+
+@pytest.mark.asyncio
+async def test_unverified_jwt_cannot_select_tenant_rate_limit_bucket():
+    import time
+
+    import jwt
+
+    middleware, pipeline = _rate_limiter_with_mock_redis()
+    forged_token = jwt.encode(
+        {"business_id": "victim-tenant", "exp": int(time.time()) + 300},
+        "attacker-controlled-key",
+        algorithm="HS256",
+    )
+    scope = {
+        "type": "http",
+        "client": ("1.2.3.4", 0),
+        "headers": [(b"authorization", f"Bearer {forged_token}".encode())],
+    }
+
+    await middleware(scope, None, None)
+
+    key = pipeline.zadd.call_args.args[0]
+    assert key == "ratelimit:1.2.3.4"
+
+
+@pytest.mark.asyncio
+async def test_expired_jwt_cannot_select_tenant_rate_limit_bucket():
+    import time
+
+    import jwt
+    from app.core.config import settings
+
+    middleware, pipeline = _rate_limiter_with_mock_redis()
+    expired_token = jwt.encode(
+        {"business_id": "tenant-a", "exp": int(time.time()) - 60},
+        settings.secret_key.get_secret_value(),
+        algorithm="HS256",
+    )
+    scope = {
+        "type": "http",
+        "client": ("1.2.3.4", 0),
+        "headers": [(b"authorization", f"Bearer {expired_token}".encode())],
+    }
+
+    await middleware(scope, None, None)
+
+    key = pipeline.zadd.call_args.args[0]
+    assert key == "ratelimit:1.2.3.4"
