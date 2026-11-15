@@ -85,6 +85,8 @@ Both build Linux AMD64 and ARM64 images. Backend publishing includes SBOM/proven
 | Redis | Distributed sliding-window rate limiting | Current Kubernetes base is one Redis pod/PVC; rate-limiter circuit breaker fails open when Redis is unavailable |
 | SQLite journal | Durable transaction-intent / idempotency journal | Mounted through one ReadWriteOnce PVC on the backend Deployment; this is not safe evidence for multi-node multi-replica operation |
 
+The rate-limiter Redis client now uses the configured per-process connection cap (`REDIS_MAX_CONNECTIONS`, default 50), 2-second connect/operation timeouts, a 30-second health check and graceful pool cleanup. With ten backend pods and one Uvicorn process per pod, the configured upper bound is 500 Redis connections; size this against the actual Redis service plan and lower it when necessary.
+
 The SQLite journal is particularly important: `TransactionStore` uses SQLite WAL mode and per-process thread locking. The production overlay runs three backend replicas and the HPA can scale to ten. A single ReadWriteOnce PVC does not establish safe cross-node access or high availability. Do not claim that increasing backend replicas makes the journal highly available.
 
 ## 5. Deployment topology currently checked in
