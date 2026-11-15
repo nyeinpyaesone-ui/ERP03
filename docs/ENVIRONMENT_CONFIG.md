@@ -58,7 +58,7 @@ Kubernetes namespaces require an externally provisioned `erp03-secrets` Secret w
 - `GET /api/v1/readyz` — PostgreSQL and migration readiness.
 - `GET /` — frontend Nginx health.
 
-Redis is not part of `readyz` because the current rate limiter has a fail-open circuit breaker. Monitor Redis degradation separately.
+Redis is not part of `readyz` because the current rate limiter has a fail-open circuit breaker. The Redis client uses the configured `REDIS_MAX_CONNECTIONS` (default 50 per process), 2-second connection/operation timeouts and a 30-second health check; it closes its pool on graceful shutdown. Monitor Redis degradation and connection-pool exhaustion separately.
 
 ## Local qualification
 
