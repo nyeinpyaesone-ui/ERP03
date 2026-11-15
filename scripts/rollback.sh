@@ -1,65 +1,92 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
-# ERP03 Production Rollback Script
-# Usage: ./scripts/rollback.sh [previous-image-tag]
+# Roll back exactly one ERP03 Kubernetes Deployment.
+# Usage:
+#   ./scripts/rollback.sh backend
+#   ./scripts/rollback.sh frontend --revision 12
+#   ./scripts/rollback.sh backend --image ghcr.io/nyeinpyaesone-ui/erp03-backend@sha256:<64-hex>
 # Environment: KUBECONFIG, NAMESPACE
 
-NAMESPACE="${NAMESPACE:-erp03}"
-KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
-PREVIOUS_TAG="${1:-}"
+NAMESPACE="\${NAMESPACE:-erp03}"
+export KUBECONFIG="\${KUBECONFIG:-$HOME/.kube/config}"
+DEPLOYMENT="\${1:-}"
+MODE="\${2:-}"
+VALUE="\${3:-}"
 
-if [[ -n "$PREVIOUS_TAG" && ! "$PREVIOUS_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
-    echo "ERROR: Invalid previous image tag"
+case "$DEPLOYMENT" in
+  backend|frontend) ;;
+  *)
+    echo "ERROR: choose exactly one Deployment: backend or frontend" >&2
     exit 2
+    ;;
+esac
+
+RESOURCE="deployment/erp03-$DEPLOYMENT"
+CONTAINER="$DEPLOYMENT"
+EXPECTED_IMAGE="ghcr.io/nyeinpyaesone-ui/erp03-$DEPLOYMENT"
+
+if [[ $# -gt 3 ]]; then
+  echo "ERROR: too many arguments" >&2
+  exit 2
 fi
+
+case "$MODE" in
+  "")
+    if [[ $# -gt 1 ]]; then
+      echo "ERROR: provide --revision N or --image IMAGE@sha256:DIGEST" >&2
+      exit 2
+    fi
+    ;;
+  --revision)
+    [[ "$VALUE" =~ ^[1-9][0-9]*$ ]] || {
+      echo "ERROR: revision must be a positive integer" >&2
+      exit 2
+    }
+    ;;
+  --image)
+    [[ "$VALUE" == "$EXPECTED_IMAGE@sha256:"* ]] || {
+      echo "ERROR: image must use the matching GHCR repository: $EXPECTED_IMAGE" >&2
+      exit 2
+    }
+    DIGEST="\${VALUE##*@sha256:}"
+    [[ "$DIGEST" =~ ^[a-f0-9]{64}$ ]] || {
+      echo "ERROR: image must be pinned by a 64-character sha256 digest" >&2
+      exit 2
+    }
+    ;;
+  *)
+    echo "ERROR: supported modes are --revision and --image" >&2
+    exit 2
+    ;;
+esac
 
 command -v kubectl >/dev/null 2>&1 || {
-    echo "ERROR: kubectl is required for rollback"
-    exit 2
+  echo "ERROR: kubectl is required" >&2
+  exit 2
 }
-kubectl cluster-info --request-timeout=10s >/dev/null || {
-    echo "ERROR: Kubernetes cluster is not reachable"
-    exit 2
-}
+kubectl cluster-info --request-timeout=10s >/dev/null
+kubectl get "$RESOURCE" -n "$NAMESPACE" >/dev/null
 
-echo "==> Production Rollback"
+echo "==> ERP03 application rollback"
 echo "    Namespace: $NAMESPACE"
+echo "    Target:    $RESOURCE"
+echo "==> Current rollout history"
+kubectl rollout history "$RESOURCE" -n "$NAMESPACE"
 
-# 1. Capture diagnostics
-echo "==> [1/6] Capturing diagnostics"
-kubectl get pods -n "$NAMESPACE" -o wide > /tmp/rollback-pods.log 2>&1 || true
-kubectl describe deployment/erp03-backend -n "$NAMESPACE" > /tmp/rollback-backend.log 2>&1 || true
-kubectl logs deployment/erp03-backend -n "$NAMESPACE" --tail=100 > /tmp/rollback-logs.log 2>&1 || true
-echo "   Diagnostics saved to /tmp/rollback-*.log"
-
-# 2. Stop promotion
-echo "==> [2/6] Stopping promotion"
-echo "   Promotion halted"
-
-# 3. Rollback
-echo "==> [3/6] Executing rollback"
-if [[ -n "$PREVIOUS_TAG" ]]; then
-    kubectl set image deployment/erp03-backend backend="ghcr.io/nyeinpyaesone-ui/erp03-backend:$PREVIOUS_TAG" -n "$NAMESPACE"
-    kubectl set image deployment/erp03-frontend frontend="ghcr.io/nyeinpyaesone-ui/erp03-frontend:$PREVIOUS_TAG" -n "$NAMESPACE"
+if [[ "$MODE" == "--image" ]]; then
+  echo "==> Restoring the explicitly supplied immutable image digest"
+  kubectl set image "$RESOURCE" "$CONTAINER=$VALUE" -n "$NAMESPACE"
+elif [[ "$MODE" == "--revision" ]]; then
+  echo "==> Restoring recorded Deployment revision $VALUE"
+  kubectl rollout undo "$RESOURCE" --to-revision="$VALUE" -n "$NAMESPACE"
 else
-    kubectl rollout undo deployment/erp03-backend -n "$NAMESPACE"
-    kubectl rollout undo deployment/erp03-frontend -n "$NAMESPACE"
+  echo "==> Restoring the immediately previous Deployment revision"
+  kubectl rollout undo "$RESOURCE" -n "$NAMESPACE"
 fi
 
-# 4. Wait for rollback completion
-echo "==> [4/6] Waiting for rollback completion"
-kubectl rollout status deployment/erp03-backend -n "$NAMESPACE" --timeout=300s
-kubectl rollout status deployment/erp03-frontend -n "$NAMESPACE" --timeout=300s
+echo "==> Waiting for only $RESOURCE to become available"
+kubectl rollout status "$RESOURCE" -n "$NAMESPACE" --timeout=300s
 
-# 5. Validate restored health
-echo "==> [5/6] Validating restored health"
-kubectl wait --for=condition=ready pod -l app=erp03-backend -n "$NAMESPACE" --timeout=120s
-kubectl wait --for=condition=ready pod -l app=erp03-frontend -n "$NAMESPACE" --timeout=120s
-echo "   Kubernetes readiness validation: OK"
-
-# 6. Fail the deployment job
-echo "==> [6/6] Rollback complete"
-echo "   Previous application release restored"
-echo "   Returning non-zero so the failed deployment pipeline remains failed"
-exit 1
+echo "==> Rollback completed for $RESOURCE"
+echo "    Other application Deployments were not changed."
