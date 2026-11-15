@@ -1,190 +1,37 @@
 # ERP03 Remediation Tracker
 
-**Updated:** 2026-10-20 · **Source:** live verification session + full-repo re-audit
-**Supersedes the task lists in** `REMAINING_TASKS.md` (kept for history).
+**Updated:** 2026-11-15 · **Source:** live GitHub PR/workflow inspection + connected Supabase security review.
+**Method:** branch from current main, reproduce with evidence, make one minimal change per PR, run mandatory tests, record commit SHA and output. Never equate a green source-level check with production qualification.
 
-## How to work this list (methodology)
+Severity: **P0** startup/contract or critical security · **P1** transaction correctness/security · **P2** documentation, operational evidence and UX.
 
-Every item follows the same loop — no exceptions:
+## P0 — open
 
-1. **Branch** from latest `origin/main` (`fix/<topic>` or `chore/<topic>`).
-2. **Reproduce / evidence** the problem first (command + output recorded).
-3. **Fix minimally** — one logical change per commit, conventional-commit message.
-4. **Verify with the mandatory gate:**
+- [ ] **CI-STARTUP-1: Policy Enforcement startup failure.** PR head `1de6b8c90354e9f9f6a0c35fb35181733613341b` run `43711026050` ended `startup_failure`; zero jobs and no job logs. Obtain run/check-suite admission diagnostics; do not weaken policies.
+- [ ] **IAC-STARTUP-1: Infrastructure Validation startup failure.** Main issue #268 documents run `43303393662` and check suite `117266055628`, zero jobs. Confirm whether GitHub Actions registration/admission or repository configuration is responsible, then run and verify.
+- [ ] **DEPLOY-REGISTRY-1: Kubernetes registry mismatch.** Backend/frontend publishing uses GHCR, but production/staging Kustomize overlays still target Docker Hub; production digest fields are placeholders. Align source image names after verifying actual GHCR publication, then pin the immutable published digests. Never deploy placeholder digests.
 
-   ```bash
-   cd ERP-BACKEND
-   .venv/bin/ruff check app tests alembic
-   .venv/bin/ruff format --check app tests alembic
-   .venv/bin/python -m compileall -q app alembic
-   .venv/bin/alembic heads                     # exactly one head
-   .venv/bin/alembic upgrade head              # fresh-DB apply
-   .venv/bin/python -m pytest -q               # 0 failed; PG-only skips allowed
-   ```
+## P1 — open
 
-5. **Record evidence** (commit SHA + output summary) below.
-6. **Move item to "Done & verified"** with its SHA.
+- [ ] **TX-1: Durable cross-module transaction integrity (issue #222).** Implement the operation state machine and domain-level idempotency in the same PostgreSQL transaction as invoice/payment/stock writes. Add leases/claims, bounded retries, reconciliation/manual-review states, duplicate delivery and crash-window tests, structured observability and a recovery runbook. A journal acceptance record is not evidence of a committed business mutation.
+- [ ] **DB-BOUNDARY-1: Supabase runtime integration decision.** Connected project `erp03` (ref `gtnhalgelambuzajwuqi`) is healthy but has zero public application tables and no migration history. Do not dual-write or create parallel ERP tables until the production PostgreSQL authority and intended Supabase role (if any) are explicitly documented.
+- [ ] **FRONTEND-DEPS-1: Reconcile manifest/lockfile/docs.** Checked `frontend/package.json` declares Vite 8.3.6 and `@vitejs/plugin-react` 6.2.1, while historical docs/tracker refer to older Vite lines. Verify package-lock consistency and actual successful build before changing any version.
+- [ ] **FRONTEND-UI-1: Implement Myanmar-aware design tokens in the real frontend.** Current Themely preview is a design artifact only; no source integration or accessibility test has been committed.
 
-Severity: **P0** = blocks startup/CI or breaks a client-visible contract · **P1** = correctness/security with workaround · **P2** = hygiene/docs/warnings.
+## P2 — staging / production evidence
 
----
+- [ ] Validate Prometheus rules with `promtool check rules` and load them in staging Prometheus.
+- [ ] Run trusted multi-architecture container builds and Trivy scanning; collect build digests and SBOM/provenance artifacts. PR-event container runs skip registry login and publication, so they do not prove published images.
+- [ ] Execute PostgreSQL backup and restore into a scratch database; verify Alembic head and application-level integrity.
+- [ ] Complete staging smoke/E2E tests, payment/inventory reconciliation, rollback verification, secret rotation, TLS and monitoring alert tests.
+- [ ] Replace outdated production qualification assertions with exact run URLs, commit SHAs, image digests, test evidence and environment references.
 
-## P0 — block startup/CI/contract
+## Verified work — 2026-11-15
 
-*(none open — both P0 items below were found and repaired in this round)*
+- Supabase migration `20261115125601` / `restrict_rls_auto_enable_rpc_execution` applied. Revoked `EXECUTE` on `public.rls_auto_enable()` from `anon`, `authenticated`, and `PUBLIC`; retained `service_role`. Verified the `ensure_rls` event trigger remains enabled and attached. Security advisor returned no lints. This change does not create ERP schema or modify business data.
+- PR #271 current head `1de6b8c90354e9f9f6a0c35fb35181733613341b`: CI run #745, Quality #401, Security #565 and Container #283 completed successfully; Policy Enforcement #236 failed before job creation. No PR reviews or review threads were recorded. Merge remains gated.
+- PR #270 remains unsuitable: 51,884 changed files, 5,204,634 additions, and currently non-mergeable. Do not merge; reconstruct only intended source changes from current main.
 
-## P1 — correctness / security
+## Completion evidence format
 
-- [x] **FE-1: `VITE_API_BASE_URL` as runtime env is a no-op (agent finding 6).**
-     _URL is evaluated at build time (`frontend/vite.config.js`, `App.jsx`);
-      prebuilt Docker Hub images bake `http://localhost:8000/api/v1` in, breaking any
-      real host deployment. Fix: default to relative base and rely on the
-      existing nginx `/api/` proxy (`frontend/nginx.conf:9-10`), or accept the
-      URL as a Docker build ARG. *Acceptance: built image serves API calls
-      without runtime env.*
-- [x] **TS-2: Legacy fingerprint-less replay semantics (agent finding 9).**
-      Legacy rows without `request_fingerprint` replay silently on any payload;
-      `IDEMPOTENCY_KEY_REUSED` is currently unreachable via data. Decide
-      semantics (recommend: mismatch-on-fingerprint-less → `IDEMPOTENCY_KEY_REUSED`)
-      and add a test that seeds a legacy row.
-- [x] **METRICS-1: `/metrics` unauthenticated (agent finding 10).** Gate with
-      auth claims or bind to an internal-only port/target. ✅ **VERIFIED** +
-      **REGRESSION-TESTED**: `app/core/metrics.py` ASGI auth middleware (Bearer
-      JWT via `decode_access_token`); no-auth → 401, invalid-token → 401,
-      valid-token → 200. Added `test_metrics_requires_authentication`,
-      `test_metrics_rejects_invalid_token`, `test_metrics_accepts_valid_token`
-      in `tests/test_api.py`.
-- [x] **AUTH-1: JWT TTL hardcoded 480 min, claims never re-validated against
-      User/branch state (agent finding 11).** Add a Settings knob, re-check
-      `User.active` on privileged endpoints or shorten TTL; consider login
-      rate-limiting. ✅ **VERIFIED**: Settings knob exists
-      (`jwt_expiry_minutes`, default 480, ge=1/le=44640); `create_access_token`
-      consumes it; `require_permission` re-checks `User.active`/`Business.active`
-      + permission joins. ✅ **RATE LIMITING IMPLEMENTED (Redis-backed)**:
-      `RedisRateLimitMiddleware` in `app/main.py` with config via
-      `rate_limit_enabled`, `rate_limit_requests`, `rate_limit_window`,
-      `trusted_proxies`; default 100 req/min per IP; returns 429 + `Retry-After`
-      header. Uses Redis ZSET sliding window for distributed rate limiting.
-      Tests: `tests/test_rate_limiter.py` (3 tests, all pass).
-- [x] **SETP-1: setup.sh emits container-absolute SQLite path for host use
-      (agent finding 12).** Point `database_url`/`database_path` at the same
-      venv-local absolute file. ✅ **FIXED**: `setup.sh` now uses `$ROOT_DIR/ERP-BACKEND/.local/erp03.sqlite3` consistently in both dev/prod configs; `DATABASE_PATH` empty in prod (PostgreSQL); verified Settings loads clean.
-- [x] **QUAL-1: qualify.sh assumes a pre-provisioned PG with fixed creds and
-      no precondition probe (agent finding 13).** Probe first, print
-      actionable hint, hermetic fallback.
-      ✅ **VERIFIED**: `scripts/qualify.sh` now contains `probe_postgres()` +
-      `USE_PG` fallback to hermetic SQLite (`/tmp/erp03-qualify.sqlite3`).
-- [x] **CI-1: Frontend installs ignore the lockfile (agent finding 8).**
-      `frontend/Dockerfile`, `ci.yml:75-81`, `qualify.sh:47` — switch to
-      `npm ci` and lock the Express and `cache-dependency-path` to
-      `package-lock.json`.
-      ✅ **VERIFIED+FIXED**: `frontend/Dockerfile` uses `npm ci`; `ci.yml:71` uses
-      `npm ci` + `cache-dependency-path: frontend/package-lock.json`; `quality.yml`
-      fixed this round (`npm install`→`npm ci`, `cache-dependency-path`→
-      `frontend/package-lock.json`); `scripts/qualify.sh` fixed this round
-      (`npm install`→`npm ci`). YAML validated.
-- [x] **OPS-1: CI green evidence on `ubuntu-latest` (agent finding 4
-      residue).** Confirm the run for current HEAD is green across
-      CI/Quality/Security/Container/IaC. ✅ **VERIFIED**: CI pipeline passes on `ubuntu-latest` with PostgreSQL + Redis service containers, all tests pass (52/1).
-- [ ] **PR-1: Merge queue.** After OPS-1: #170, Dependabot #191-196, then
-      #229/#228/#220.
-
-## P2 — hygiene / docs / staging evidence
-
-- [x] **DOC-1: matrix vs REMAINING_TASKS contradiction (agent finding 15).**
-      ✅ **RESOLVED**: Matrix updated to reflect actual implementation state.
-      Kubernetes upgraded PARTIAL→PASS, Observability upgraded PARTIAL→PASS.
-- [x] **MIG-1: matrix migration both DROP? no — only after: re-run check:
-      confirm 0006/0007 types match models (agent finding 5 fixed for
-      `operations`; audit other JSON columns for the same Text-mismatch
-      class).** ✅ **RESOLVED**: Audited all models; only `operations.py` uses
-      JSON columns, already using `JSONB().with_variant(JSON, "sqlite")`.
-      No Text-mismatch found.
-- [ ] **ALERT-1: `promtool check rules` + load once in staging Prometheus;**
-      (BLOCKED: promtool not installed; YAML rules validated with PyYAML)
-- [ ] **OPS-2: Container build + Trivy evidence in Codespace (daemon needed).**
-      (BLOCKED: Docker daemon unavailable; Dockerfiles verified manually, .dockerignore added)
-- [ ] **OPS-3: Backup drill: restore dump into scratch PG + alembic_version**
-      probe (agent finding 14); backup_verify.sh currently only checks gzip CRC.**
-      (BLOCKED: No PostgreSQL server available; pg_dump/psql client tools installed but no server)
-- [x] **DEP-2: Move pytest/pytest-asyncio/httpx out of prod requirements**
-      (agent finding 18) — CI depends on them only because they ship in prod;
-      correct ci.yml deps then trim requirements (agent finding 18)
-      and ci.yml: install dev-requirements for the test job. ✅ **VERIFIED**:
-      Already separated — `requirements.txt` has only prod deps;
-      `dev-requirements.txt` has pytest/pytest-asyncio/httpx/ruff/typesafe;
-      `ci.yml` installs both for test job; `quality.yml` installs only prod + ruff.
-- [x] **DEP-2b: delete stray root `package-lock.json`** (agent finding 17).
-      ✅ **VERIFIED**: No stray root `package-lock.json` exists.
-- [x] **DEVOPS-1: `migrate` advisory depends_on lets API boot with no tables
-      (agent finding 16) — set `required: true`.** ✅ **FIXED**: `docker-compose.yml`
-      backend `depends_on.migrate.required: true` added in commit `860dfcaf`.
-- [x] **T-1: 36 pytest library-deprecation warnings — track, don't suppress.**
-      ✅ **DONE**: Added `filterwarnings = default::DeprecationWarning` and
-      `default::PendingDeprecationWarning` to `ERP-BACKEND/pytest.ini`
-      to track all deprecation warnings without suppressing them.
-
----
-
-## Done & verified
-
-| Item | Evidence | Commit |
-|---|---|---|
-| P0 ENV-1: prod compose defaulted SQLite+production (validator-crash); no `.env.example` | compose interpolation OK; Settings prod+PG OK, prod+SQLite rejected | `73ecc902` |
-| P0 Dockerfile: pip --user to root-only /root/.local, no --chown, stray `$PYTHONPATH` in PATH → runtime image broken | deps now to shared `/opt/appdeps`, `--chown` at copy, PATH corrected; runtime env compileall/pytest green | `f6f25b21` |
-| P0 frontend build broken: `@vitejs/plugin-react` missing from pkg+lock (agent finding 3) | pinned `5.1.4` (peer-compatible with vite 7.1.2; npm cache fracture worked around via /tmp cache); `npm ci` + `npm run build` → ✓ dist/ | `f6f25b21` |
-| P1 migration 0007 `Text` vs model `JSONB` (agent finding 5) | migration now `JSONB().with_variant(JSON,"sqlite")`; fresh-DB `alembic upgrade head` OK; orchestration tests 11/11 | `f6f25b21` |
-| P1 dev compose frontend: prod nginx image on 5173, dead HMR + no migrate step (agent finding 7) | dev compose now runs node:20 + Vite dev server with `npm ci`; explicit `migrate` service gates backend; compose config OK | `f6f25b21` |
-| Fatal env-template recipe: docs `cp .env.example .env` + compose-only keys → `extra="forbid"` crash (agent finding 1) | split into `.env.compose.example` + `ERP-BACKEND/.env.example`; docs updated; Settings loads from clean template | `f6f25b21` |
-| Invalid `typesafe==0.1.0` pin → `0.9.1` | dev-deps install OK | `7f1126ee` |
-| Idempotency conflict codes typed (no message sniffing) | full suite 48 passed / 1 PG-skip | `7f1126ee` |
-| `frontend/node_modules/` ignored; lockfile tracked | `git status` clean | `e1a507c4` |
-| Startup-failure root cause (null `pull_request.number`) | zero references; `runs-on: ubuntu-latest` everywhere | prior |
-| IaC workflow restored with safe concurrency | `.github/workflows/iac.yml` present | `8e56739d` |
-| tracker: agent finding 4 (compose sqlite default) duplicates ENV-1 row → superseded by `73ecc902` | — | `73ecc902` |
-| P1 FE-1: `VITE_API_BASE_URL` runtime-env no-op (agent finding 6) | Dockerfile `ARG` in build stage; compose `build.args` `${VITE_API_BASE_URL:-/api}`; `App.jsx` fallback removed; nginx `/api/`→`backend:8000/api/v1/` verified | `6883b400` |
-| P1 METRICS-1: `/metrics` unauthenticated (agent finding 10) | ASGI Bearer-JWT auth in `app/core/metrics.py`; no-auth 401 / invalid 401 / valid 200; +3 regression tests in `tests/test_api.py`; full suite 52 passed | `6883b400` |
-| P1 TS-2: legacy fingerprint-less replay semantics (agent finding 9) | `transaction_store.py` raises `IDEMPOTENCY_KEY_REUSED` on fingerprint-less replay; seeded-legacy-row test passes | `6883b400` |
-| P1 QUAL-1: `qualify.sh` PG precondition probe (agent finding 13) | `probe_postgres()` + hermetic SQLite fallback present & verified in script | `6883b400` |
-| P1 CI-1: frontend installs ignore lockfile (agent finding 8) | `frontend/Dockerfile` + `ci.yml:71` + `quality.yml` + `qualify.sh` all `npm ci`; lockfile `frontend/package-lock.json`; YAML validated | `6883b400` |
-| Deep-dive SETP-1 (env integration): setup.sh emitted undeclared keys → `extra="forbid"` crash | corrected dev/prod backend `.env` heredocs in `setup.sh` to declared Settings fields only; corrected `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`/`JWT_EXPIRY_MINUTES`; verified `Settings()` loads clean | `6883b400` |
-| Code review follow-up (2026-10-30): P0-1 idempotency key overflow; P0-2 frontend privileged port; P1-1/P1-2 rate limiter hardening; P1-3 TransactionStore test isolation; P1-4 Vite dev proxy; P1-5 invoice_no parsing guard; P2 hygiene/docs/password policy | full gate green: ruff 0, format clean, compileall OK, alembic single head, 54 passed / 1 skipped | `28fce033` |
-| Follow-up L3: trusted-proxy XFF resolution + 429 threshold tests for RateLimitMiddleware | 3 new tests in tests/test_rate_limiter.py; all pass | `cc786a23` |
-| Task 1.3/3.4: Docker image owner powerrangeranikg → nyeinpyaesone-ui | All compose/K8s/workflow/docs references updated | `b11df29` |
-| Task 1.2: /auth/register endpoint | POST /auth/register creates business+user+Owner role; returns 201 | `9b9194f` |
-| Task 2.1: Redis circuit breaker | Rate limiter fails open when Redis down; half-open after 30s | `9b9194f` |
-| Task 2.2: Per-tenant rate limiting | Rate limit key includes business_id from JWT; IP fallback preserved | `9b9194f` |
-| Task 2.3: Audit logging | AuditLog model + AuditMiddleware + alembic 0008 migration | `9b9194f` |
-| Task 2.4: Security headers | HSTS, Permissions-Policy, server header removed | `9b9194f` |
-| Task 2.5: DB engine disposal | await engine.dispose() in lifespan | `9b9194f` |
-| Task 1.1: Frontend SPA | React 19 + Vite + Tailwind; dist/ built successfully | `f0872a3` |
-| Task 3.1: security.yml workflow | CodeQL + pip-audit + dependency-review created | `bb77746` |
-| Task 3.2: rotate-secrets permissions | secrets: write added | `b11df29` |
-| Task 3.3: mypy enforcement | continue-on-error and || true removed | `b11df29` |
-| Task 4.1: DB pool metrics | active/idle/overflow Prometheus gauges added | `bb77746` |
-| Task 4.2: K8s HPA | production hpa.yaml created + added to kustomization | `bb77746` |
-| Task 4.3: Backup automation | systemd service + timer + README created | `0b6139a` |
-| Task 4.4: DR runbook | docs/DISASTER_RECOVERY.md with RPO/RTO and restore procedures | `0b6139a` |
-| Task 4.5: Resource limits | All base deployments (backend, frontend, postgres, redis, ollama) have requests+limits | `0b6139a` |
-| Task 4.6: OpenAPI branding | description, contact, license_info added to FastAPI | `bb77746` |
-| Task 5.1: TypeScript API client | frontend/src/services/api-client.ts created | `0b6139a` |
-| Task 5.2: Postman collection | tests/postman/ERP03.postman_collection.json created | `0b6139a` |
-| Task 5.5: Docs drift | scripts/build-frontend.sh exists; docs reference resolved | `0b6139a` |
-| Phase 6 gate: ruff check | All checks passed (0 errors) | `0b6139a` |
-| Phase 6 gate: ruff format | All 58 files formatted | `0b6139a` |
-| Phase 6 gate: compileall | app + alembic compile cleanly | `0b6139a` |
-| Phase 6 gate: alembic | Single head (0008_audit_log); upgrade head applies | `0b6139a` |
-| Phase 6 gate: pytest | 57 passed, 1 skipped, 0 failed | `0b6139a` |
-| Phase 6 gate: frontend build | dist/ generated with no errors | `f0872a3` |
-| Task 5.5 (follow-up): postcss.config.js added | Tailwind CSS PostCSS config for explicit plugin declaration | `182cd4d` |
-| Setup: non-interactive secret pre-configuration | --secret-key, --db-password, --redis-password, --postgres-password flags + ERP03_* env vars | `182cd4d` |
-| Phase 6 gate re-verified | ruff check/format, compileall, alembic, pytest (57/1/0), frontend build all pass | `182cd4d` |
-| Perf: rate limiter + audit middleware | jwt import moved to module level, secret key cached, bounded semaphore for audit writes | `60fe60c` |
-| Perf: database session | pool metrics wired via SQLAlchemy events, pool_timeout config, connect_args for prepared statements | `60fe60c` |
-| Perf: invoice numbering index | 0009 migration: composite index on invoices(branch_id, invoice_no) | `84f1e14` |
-| Perf: frontend code splitting | React.lazy for pages, Vite manual chunk splitting (vendor/ui/utils), esbuild minify | `e726a00` |
-| Perf: nginx caching | gzip compression, 1-year cache for static assets, proxy timeouts | `e726a00` |
-| Fix: hardcoded secret fallbacks | docker-compose.dev.yml SECRET_KEY requires explicit value; .env.example placeholders aligned; PASSWORD_MIN_LENGTH=12 matches config.py | `55503ac` |
-| Upgrade: Python dependencies | SQLAlchemy 2.1.6→2.1.8, pytest-asyncio 1.4.1→1.4.1.post1 | `a574b56` |
-| Upgrade: Frontend dependencies | React Router 7.1.1→7.18.5, React Hook Form 7.54.2→7.91.0, Zod 3.24.2→4.6.7, Lucide React 0.475.0→1.68.0, Axios 1.8.4→1.21.0, Hook Form Resolvers 3.10.0→7.0.2, Tailwind Merge 2.6.0→3.7.0, Vite 6.4.5→5.4.11 (rolled back from 8.3.5 - CSS extraction broken), @vitejs/plugin-react 5.2.0→4.3.4 | `a574b56` |
-| Finding: Tailwind CSS v4 incompatible with Vite/Rolldown | Tailwind CSS v4 does not produce CSS output with Vite 6/8 + Rolldown. Rolled back to v3.4.17 with PostCSS. PostCSS config renamed to .cjs due to "type": "module" in package.json. | `a574b56` |
+For each closed item record: PR URL, branch/head SHA, test commands and results, database migration/version if applicable, workflow run URLs, staging environment, image digests/SBOM/signature verification and rollback evidence. Keep production status **NOT QUALIFIED** until all required runtime gates have reproducible evidence.
