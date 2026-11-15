@@ -1,6 +1,6 @@
 # ERP03 Environment Configuration
 
-This document describes the current repository layout. For production rollout details, use [docs/ZERO_DOWNTIME_DEPLOYMENT_2026-11.md](ZERO_DOWNTIME_DEPLOYMENT_2026-11.md).
+This document describes the current repository layout. For production rollout details, use [the zero-downtime deployment runbook](ZERO_DOWNTIME_DEPLOYMENT_2026-11.md).
 
 ## Local setup
 
@@ -38,13 +38,15 @@ Then start the full profile:
 docker compose --profile full up --build
 ```
 
-## Container registry
+## Container registry and staging delivery
 
-The current workflows publish to GHCR:
+The publishing workflows push to GHCR:
 - `ghcr.io/nyeinpyaesone-ui/erp03-backend`
 - `ghcr.io/nyeinpyaesone-ui/erp03-frontend`
 
-They use the scoped GitHub Actions `GITHUB_TOKEN`, not `DOCKERHUB_TOKEN`. The backend and frontend images are built for AMD64 and ARM64. Production Kubernetes overlays must use verified image digests.
+They use the scoped GitHub Actions `GITHUB_TOKEN`, not `DOCKERHUB_TOKEN`. The backend and frontend images are built for AMD64 and ARM64.
+
+The manual `.github/workflows/deploy-staging.yml` workflow accepts a source SHA plus backend and frontend digests and deploys those immutable images over SSH to a Docker Compose staging host. It runs the migration service, checks container health and attempts to restore the prior images if deployment fails. Configure the SSH and read-only GHCR Environment secrets listed in [CONFIGURATION_SETUP.md](../CONFIGURATION_SETUP.md). This is not a multi-replica or zero-downtime deployment.
 
 ## Runtime secret management
 
@@ -75,4 +77,4 @@ npm run build
 
 ## Important production limitation
 
-The backend journal still uses SQLite on a ReadWriteOnce PVC, while the production overlay uses multiple backend replicas and an HPA. The checked-in PostgreSQL and Redis Kubernetes resources are single-instance. These are unresolved availability constraints; rolling application settings alone do not make the whole ERP zero-downtime.
+The backend journal still uses SQLite on a ReadWriteOnce PVC, while the production overlay uses multiple backend replicas and an HPA. The checked-in PostgreSQL and Redis Kubernetes resources are single-instance. The production deployment script is not fully wired to the supplied image digest and still has placeholder verification steps. These are unresolved availability constraints; rolling application settings alone do not make the whole ERP zero-downtime.
