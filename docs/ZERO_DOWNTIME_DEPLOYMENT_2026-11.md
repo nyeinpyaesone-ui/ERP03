@@ -139,7 +139,7 @@ These are application-layer safeguards. The backend rolling strategy must not be
 
 The Kubernetes Redis probes now invoke a shell and set `REDISCLI_AUTH` from the container environment; Kubernetes exec probes do not perform shell-style `$(VAR)` expansion inside a plain argument array. This avoids passing the literal string `$(REDIS_PASSWORD)` to `redis-cli` and avoids exposing the password as a CLI argument.
 
-Redis backs distributed rate limiting, not the domain transaction ledger. The backend rate limiter has fail-open circuit-breaker behavior and `/api/v1/readyz` checks PostgreSQL/schema state rather than Redis. Monitor Redis timeouts, connection counts, memory/evictions and circuit-breaker-open events separately. The single Redis pod remains a failure domain.
+Redis backs distributed rate limiting, not the domain transaction ledger. The backend client now uses `REDIS_MAX_CONNECTIONS` (default/configured value 50 per process), a 2-second connect timeout, a 2-second operation timeout, a 30-second health check and graceful pool cleanup. With ten backend pods and one Uvicorn process per pod, the configured upper bound is 500 pooled connections; lower the cap if the actual Redis service plan has a smaller connection budget. The rate limiter has fail-open circuit-breaker behavior and `/api/v1/readyz` checks PostgreSQL/schema state rather than Redis. Monitor Redis timeouts, connection-pool exhaustion, memory/evictions and circuit-breaker-open events separately. The single Redis pod remains a failure domain.
 
 ## 8. Hard blockers to a zero-downtime claim
 
