@@ -28,13 +28,18 @@ Compose variable substitution reads the repository-root `.env`. Create that file
 ```ini
 POSTGRES_DB=erp03
 POSTGRES_USER=erp03
-POSTGRES_PASSWORD=<local-password>
+# Single-quote raw passwords containing '$' to prevent Compose interpolation.
+POSTGRES_PASSWORD='local-password'
 SECRET_KEY=<random-secret-at-least-32-characters>
-# Local-only setting: allows localhost CORS. Deployed environments default to production.
+# Local-only: permits the localhost CORS origins below.
 ERP03_ENVIRONMENT=development
-# POSTGRES_PASSWORD must match the URL-decoded password in DATABASE_URL.
-# Use single quotes around values containing '
+# URL-encode reserved characters in the password; its decoded value must equal POSTGRES_PASSWORD.
+DATABASE_URL=postgresql+asyncpg://erp03:<url-encoded-password>@postgres:5432/erp03
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+REDIS_PASSWORD='local-redis-password'
 ```
+
+The Compose `migrate` and `backend` services consume the same `DATABASE_URL`. The raw `POSTGRES_PASSWORD` is used by the PostgreSQL container; its decoded value must match the password encoded in the URL. Single-quoted values in the Compose `.env` file prevent dollar-sign interpolation. The Compose services default to `ENVIRONMENT=production`; set `ERP03_ENVIRONMENT=development` only in this local development file. Keep production/staging CORS origins HTTPS-only.
 
 Then start the full profile:
 
