@@ -9,6 +9,7 @@ def _settings(environment: str, **overrides: object) -> Settings:
         environment=environment,
         secret_key="test-secret-key-with-at-least-32-characters",
         database_url="postgresql+asyncpg://erp03:test@localhost:5432/erp03",
+        cors_origins="https://erp.example.com",
         **overrides,
     )
 
