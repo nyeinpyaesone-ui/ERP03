@@ -46,38 +46,43 @@ export default function LoginPage() {
 
         <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200">
           {error && (
-            <div className="mb-6 p-4 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm">
+            <div role="alert" aria-live="polite" className="mb-6 p-4 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm">
               {error}
             </div>
           )}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Business Code</label>
+              <label htmlFor="business_code" className="block text-sm font-medium text-gray-700 mb-1">Business Code</label>
               <input
+                id="business_code"
                 name="business_code"
                 type="text"
+                autoComplete="off"
                 required
-                defaultValue="ERP03"
+                placeholder="Enter your business code"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input
+                id="email"
                 name="email"
                 type="email"
+                autoComplete="username"
                 required
-                defaultValue="admin@erp03.local"
+                placeholder="name@company.com"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
               <input
+                id="password"
                 name="password"
                 type="password"
+                autoComplete="current-password"
                 required
-                defaultValue="admin123456"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               />
             </div>
