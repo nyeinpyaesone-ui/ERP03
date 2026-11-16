@@ -21,7 +21,7 @@ export default {
           secondary: '#D8E8E4',
           secondaryForeground: '#163E39',
           accent: '#A7660F',
-          border: '#80928E',
+          border: '#788B87',
         },
       },
     },
