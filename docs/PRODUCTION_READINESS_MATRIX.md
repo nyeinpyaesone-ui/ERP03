@@ -1,50 +1,47 @@
 # ERP03 Production Readiness Matrix
 
-This matrix maps the repository implementation checklist to verified repository evidence. A checked source item does not equal production approval until its runtime gate passes.
+**Audited source:** `main` at `1b32c53b414b03412a0263e22071cb8a4ac5191b` (2026-11-17).  
+**Detailed evidence:** [IMPLEMENTATION_EVIDENCE_AUDIT_2026-11-17.md](IMPLEMENTATION_EVIDENCE_AUDIT_2026-11-17.md).
 
-| Area | Current evidence | State |
+A source file or workflow being present is not proof that its runtime control is active. Production approval requires reproducible staging evidence.
+
+| Area | Repository evidence | State |
 |---|---|---|
-| Repository discovery | Backend, frontend, deployment and workflow tree identified | PASS |
-| Baseline verification | Python/Node/PostgreSQL versions are pinned in CI; package manifests verified | PASS |
-| Code quality | Ruff lint/format gate added; path filters applied; CI green | PASS |
-| CI/CD | CI + Qualification + Quality + Security + Container + IaC workflows present; runners switched to ubuntu-latest; path filters added; CI green | PASS |
-| Containerization | Non-root backend, health checks, pinned runtime images, Dockerfile deps-path fixed | PASS |
-| Local bootstrap | Compose + env configuration present; devcontainer with PostgreSQL + Redis services | PASS |
-| Devcontainer | Docker Compose-based devcontainer with pre-built dependencies; Docker Hub push workflow | PASS |
-| Infrastructure as Code | Terraform contract + validation workflow + artifact upload | PASS |
-| Kubernetes | Base manifests, probes, resources, overlays, Redis, PostgreSQL, Ollama, ingress, RBAC, NetworkPolicy, PDB, security contexts, production/staging overlays | PASS |
-| Security | Dependency audit + CodeQL + container scanning; alerts added; security audit script; non-root containers; NetworkPolicy | PASS |
-| Observability | Request IDs, structured request logging, `/metrics` (auth-gated), Prometheus rules, OTEL collector, Grafana | PASS |
-| Database protection | Alembic migrations + restore runbook verified | PASS |
-| Release management | SemVer release workflow + notes template + deploy runbook | PASS |
-| Testing | Unit/integration/qualification gates present; idempotency payload mismatch test updated; CI green | PASS |
-| Operational runbooks | Deployment, rollback, backup/restore, incident, maintenance | PASS |
-| Final production readiness | All PASS-gates verified; Kubernetes and observability implemented with comprehensive manifests and monitoring | QUALIFIED |
+| Repository discovery | Backend, frontend, infra, tests, workflows, docs and Dev Container identified | PASS |
+| Baseline verification | Python/backend requirements, frontend manifest/lockfile, Dockerfiles and Compose present | PARTIAL — reconcile exact frontend versions and docs |
+| Code quality | Ruff/mypy config; Quality and Type Check workflows | PARTIAL — frontend lint/type-check gates not evidenced |
+| CI/CD | CI, Quality, Type Check, Coverage, Security, Container, Docker, IaC, staging, production and release workflows | PARTIAL — current main Policy Enforcement startup failure; IaC startup failure on preceding SHA; security evidence not on audited SHA |
+| Containerization | Multi-stage, non-root runtime images and health checks | PARTIAL — base images not digest-pinned; Kubernetes digest placeholders remain |
+| Local development | Compose, Dev Container, PostgreSQL/Redis and environment examples | PARTIAL — clean-machine end-to-end startup not verified; object storage not evidenced |
+| Infrastructure as Code | Terraform contract and validation workflow | PARTIAL — no provider modules, remote state or environment-specific infrastructure |
+| Kubernetes | Base resources, overlays, probes, resources, PVCs, RBAC and NetworkPolicies | PARTIAL — image digest placeholders, namespace rendering and stateful-service design require validation |
+| Security | Dependency/code/container scan workflows, RBAC, NetworkPolicies, TLS template and Secret example | PARTIAL — secret manager, live TLS and exact-release scan evidence not verified |
+| Observability | Health/readiness, metrics, Prometheus and OTEL configuration | PARTIAL — no Grafana dashboards found; exporter discovery and alert delivery not verified |
+| Database protection | Alembic migrations and backup/restore runbooks | PARTIAL — scheduled encrypted off-host backups and restore drill not evidenced |
+| Release management | Release workflow, notes template and runbooks | PARTIAL — immutable digest promotion and staging rollback drill not evidenced |
+| Testing | Backend unit/integration tests, CI and coverage workflows | PARTIAL — latest main CI/coverage passed; release-grade smoke and minimum coverage policy require confirmation |
+| Operational runbooks | Deployment, incident, rollback, backup/restore and maintenance docs | PARTIAL — operator rehearsals not evidenced |
+| Final production readiness | Source configuration exists, but runtime gates remain outstanding | **NOT QUALIFIED** |
+
+## Current GitHub Actions evidence
+
+For audited main SHA `1b32c53b414b03412a0263e22071cb8a4ac5191b`:
+
+- PASS: Quality #446, Type Check #275, CI #790, Container #328, Docker #232, Coverage #222, Agent Parity #232.
+- BLOCKED: Policy Enforcement #281 — `startup_failure`, no job execution.
+- Security #606 and CodeQL Setup #98 passed on preceding SHA `c3cdcca4bcee786ca38f2cbc5ef01dc60de616a8`; they are not current-SHA security evidence.
+- IaC #86 ended `startup_failure` on that preceding SHA; rerun/validation on current main remains outstanding.
 
 ## Release blockers
 
-1. GitHub-hosted runner allocation verified on ubuntu-latest – RESOLVED
-2. Quality/security/container/IaC workflows execute and pass – RESOLVED
-3. Staging infrastructure, secret management, TLS, backup automation, alerting, and restore evidence – document in runbooks
-4. PR #219 qualification evidence captured – RESOLVED
+1. Resolve/diagnose GitHub Actions startup failures without weakening policy enforcement.
+2. Validate Kustomize overlays and replace every image digest placeholder with a verified immutable digest before deployment.
+3. Implement provider-specific IaC and remote state only after provider/account/network decisions are confirmed.
+4. Configure production secret management and TLS.
+5. Deploy and verify Prometheus, exporters, Grafana dashboards and Alertmanager delivery.
+6. Automate encrypted off-host backups and complete an isolated restore drill.
+7. Complete staging smoke, rollback and exact-image promotion evidence.
 
-## Immediate next steps (GitHub-side)
+## Production approval rule
 
-```bash
-# Verify CI green for current HEAD
-gh run list --repo nyeinpyaesone-ui/ERP03 --branch main --status success --limit 5
-
-# Merge Priority 1 PRs (only after CI green)
-gh pr merge 170 --repo nyeinpyaesone-ui/ERP03 --squash
-gh pr merge 191 --repo nyeinpyaesone-ui/ERP03 --squash
-gh pr merge 192 --repo nyeinpyaesone-ui/ERP03 --squash
-gh pr merge 193 --repo nyeinpyaesone-ui/ERP03 --squash
-gh pr merge 194 --repo nyeinpyaesone-ui/ERP03 --squash
-gh pr merge 195 --repo nyeinpyaesone-ui/ERP03 --squash
-gh pr merge 196 --repo nyeinpyaesone-ui/ERP03 --squash
-
-# Close resolved issues
-gh issue close 224 --repo nyeinpyaesone-ui/ERP03 --comment "CI runners on ubuntu-latest, path filters added, runs green."
-gh issue close 226 --repo nyeinpyaesone-ui/ERP03 --comment "CI reliability verified on ubuntu-latest."
-gh issue close 223 --repo nyeinpyaesone-ui/ERP03 --comment "Idempotency payload mismatch vs reuse distinguished (typed error codes, tests updated)."
-```
+Do not mark ERP03 production-qualified or promote a production release until all blockers have recorded evidence for the exact release candidate. No production deployment, infrastructure apply, database mutation or secret change is authorized by this matrix.
