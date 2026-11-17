@@ -168,7 +168,7 @@ The Redis client cap is separate: its configured default is 50 connections per p
 
 ### Active transaction-journal decision
 
-The SQLite journal remains a synchronous process-local store, separate from PostgreSQL domain transactions. Its unique idempotency key and fingerprint semantics are valuable and must be preserved, but its current locking/storage topology is not a multi-replica production design. See [ADR-0004](adr/0004-postgresql-transaction-journal.md) for the proposed PostgreSQL journal and recovery state machine. Do not cut over until additive migrations, backfill verification, crash/concurrency tests and a write-fenced staging rehearsal pass.
+The inspected `main` baseline still stores generic transaction intake in a synchronous SQLite process-local journal, which is not a multi-replica production design. On this feature branch, PostgreSQL-backed environments route transaction intake into the existing shared `operations` table; SQLite remains a local/dev adapter. Migration `0010_operation_claim_leases` adds fenced worker leases, and `scripts/migrate_transaction_journal.py` provides a read-only-by-default import path for a write-fenced legacy snapshot. The generic API still accepts commands rather than executing domain operations. Do not cut over until Alembic, import, cross-connection concurrency, crash/recovery and domain-handler atomicity tests pass in staging. See [ADR-0004](adr/0004-postgresql-transaction-journal.md) and [Transaction Integrity](TRANSACTION_INTEGRITY.md).
 
 ### Current release-control evidence
 
