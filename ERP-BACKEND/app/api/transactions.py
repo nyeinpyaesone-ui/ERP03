@@ -204,16 +204,18 @@ async def create_transaction(
         return _to_operation_response(operation, replay=replay)
 
     # SQLite is deliberately retained only for local/dev and isolated tests.
-    result = await asyncio.to_thread(
-        get_store().execute,
+    def _execute_local() -> TransactionResult:
+        return get_store().execute(
         transaction_id=uuid4().hex,
         idempotency_key=f"{business_id}:{idempotency_key}",
         business_id=business_id,
         operation=payload.operation,
         amount=str(amount),
         currency=payload.currency,
-        metadata=payload.metadata,
-    )
+            metadata=payload.metadata,
+        )
+
+    result = await asyncio.to_thread(_execute_local)
     return _to_response(result)
 
 
@@ -243,11 +245,10 @@ async def get_transaction(
             raise HTTPException(status_code=404, detail="Transaction not found")
         return _to_operation_response(operation)
 
-    result = await asyncio.to_thread(
-        get_store().get,
-        transaction_id,
-        business_id=business_id,
-    )
+    def _get_local() -> TransactionResult | None:
+        return get_store().get(transaction_id, business_id=business_id)
+
+    result = await asyncio.to_thread(_get_local)
     if result is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return _to_response(result)
