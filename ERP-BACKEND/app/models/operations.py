@@ -77,7 +77,7 @@ class Operation(Base):
 
     id: Mapped[UUID] = mapped_column(GUID(), primary_key=True, default=uuid4)
     operation_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    operation_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    operation_type: Mapped[str] = mapped_column(String(100), nullable=False)
     state: Mapped[OperationState] = mapped_column(
         SAEnum(OperationState, name="operation_state", native_enum=False),
         default=OperationState.PENDING,
@@ -98,6 +98,8 @@ class Operation(Base):
     backoff_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     claimed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    claim_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
