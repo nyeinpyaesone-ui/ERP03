@@ -14,7 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ConflictError, PaymentError, SaleValidationError
 from app.models.erp import Customer, Invoice, InvoiceItem, Payment, Product, Warehouse
 from app.models.identity import Branch
+from app.models.operations import Operation, OperationState
 from app.services.inventory import adjust_stock
+from app.services.orchestration import OperationService
 
 
 async def _find_idempotent_invoice(
@@ -209,6 +211,75 @@ async def create_pos_sale(
         if branch is None:
             raise SaleValidationError("Branch is not valid for this business")
 
+        operation_service: OperationService | None = None
+        operation: Operation | None = None
+        if idempotency_key is not None:
+            existing_invoice = await _find_idempotent_invoice(
+                session, business_id, branch_id, idempotency_key
+            )
+            if existing_invoice is not None:
+                if existing_invoice.request_fingerprint is None:
+                    # Legacy invoice rows cannot prove request equality. Keep
+                    # the historical replay behavior without inventing an
+                    # orchestration record for an unverifiable command.
+                    return SaleResult.from_invoice(existing_invoice)
+                if existing_invoice.request_fingerprint != fingerprint:
+                    raise ConflictError("Idempotency key was already used for a different sale")
+
+            key_prefix = f"{business_id}:"
+            operation_id = (
+                idempotency_key
+                if idempotency_key.startswith(key_prefix)
+                else f"{key_prefix}{idempotency_key}"
+            )
+            operation_service = OperationService(
+                session,
+                worker_id=f"pos-sale-{uuid4().hex}",
+            )
+            operation, _replayed = await operation_service.create_operation_with_replay(
+                operation_id=operation_id,
+                operation_type="pos.sale",
+                business_id=business_id,
+                branch_id=branch_id,
+                payload={"request_fingerprint": fingerprint},
+            )
+
+            if operation.state == OperationState.COMMITTED:
+                if existing_invoice is None:
+                    existing_invoice = await _find_idempotent_invoice(
+                        session, business_id, branch_id, idempotency_key
+                    )
+                if (
+                    existing_invoice is None
+                    or existing_invoice.request_fingerprint != fingerprint
+                ):
+                    raise ConflictError(
+                        "Committed POS operation has no matching invoice; "
+                        "manual reconciliation is required"
+                    )
+                return SaleResult.from_invoice(existing_invoice)
+
+            operation = await operation_service.claim_operation(operation_id)
+            if operation is None:
+                raise ConflictError(
+                    "POS sale operation is already processing, not yet retryable, "
+                    "or requires manual reconciliation"
+                )
+
+            if existing_invoice is not None:
+                result = SaleResult.from_invoice(existing_invoice)
+                await operation_service.commit_operation(
+                    operation,
+                    result={
+                        "invoice_id": str(existing_invoice.id),
+                        "total": str(existing_invoice.total),
+                        "paid": str(existing_invoice.paid),
+                        "balance": str(existing_invoice.total - existing_invoice.paid),
+                        "currency": existing_invoice.currency,
+                    },
+                )
+                return result
+
         warehouse = await session.scalar(
             select(Warehouse)
             .where(
@@ -277,21 +348,23 @@ async def create_pos_sale(
             raise PaymentError("Overpayment is not allowed")
 
         if idempotency_key is not None:
-            existing = await session.scalar(
-                select(Invoice)
-                .where(
-                    Invoice.business_id == business_id,
-                    Invoice.branch_id == branch_id,
-                    Invoice.idempotency_key == idempotency_key,
-                )
-                .with_for_update()
+            existing = await _find_idempotent_invoice(
+                session, business_id, branch_id, idempotency_key
             )
             if existing is not None:
-                if (
-                    existing.request_fingerprint is not None
-                    and existing.request_fingerprint != fingerprint
-                ):
+                if existing.request_fingerprint != fingerprint:
                     raise ConflictError("Idempotency key was already used for a different sale")
+                if operation_service is not None and operation is not None:
+                    await operation_service.commit_operation(
+                        operation,
+                        result={
+                            "invoice_id": str(existing.id),
+                            "total": str(existing.total),
+                            "paid": str(existing.paid),
+                            "balance": str(existing.total - existing.paid),
+                            "currency": existing.currency,
+                        },
+                    )
                 return SaleResult.from_invoice(existing)
 
         invoice = Invoice(
@@ -324,6 +397,21 @@ async def create_pos_sale(
                     session, business_id, branch_id, idempotency_key
                 )
                 if existing is not None:
+                    if existing.request_fingerprint != fingerprint:
+                        raise ConflictError(
+                            "Idempotency key was already used for a different sale"
+                        ) from exc
+                    if operation_service is not None and operation is not None:
+                        await operation_service.commit_operation(
+                            operation,
+                            result={
+                                "invoice_id": str(existing.id),
+                                "total": str(existing.total),
+                                "paid": str(existing.paid),
+                                "balance": str(existing.total - existing.paid),
+                                "currency": existing.currency,
+                            },
+                        )
                     return SaleResult.from_invoice(existing)
             raise ConflictError("Invoice number already exists for this branch") from exc
 
@@ -370,9 +458,21 @@ async def create_pos_sale(
                 )
                 await session.flush()
 
-        return SaleResult(
+        result = SaleResult(
             invoice_id=invoice.id,
             total=total,
             paid=paid,
             balance=total - paid,
         )
+        if operation_service is not None and operation is not None:
+            await operation_service.commit_operation(
+                operation,
+                result={
+                    "invoice_id": str(invoice.id),
+                    "total": str(total),
+                    "paid": str(paid),
+                    "balance": str(total - paid),
+                    "currency": currency.upper(),
+                },
+            )
+        return result
