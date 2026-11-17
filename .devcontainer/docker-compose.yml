@@ -1,9 +1,8 @@
 version: "3.8"
 services:
   app:
-    build:
-      context: ..
-      dockerfile: .devcontainer/Dockerfile
+    image: ghcr.io/nyeinpyaesone-ui/erp03-devcontainer:sha-c3cdcca4bcee786ca38f2cbc5ef01dc60de616a8
+    pull_policy: always
     volumes:
       - ..:/workspace:cached
     command: sleep infinity
