@@ -4,12 +4,12 @@ resources:
   - ../../base
   - hpa.yaml
 images:
-  - name: docker.io/nyeinpyaesone-ui/erp03-backend
-    newName: docker.io/nyeinpyaesone-ui/erp03-backend
+  - name: ghcr.io/nyeinpyaesone-ui/erp03-backend
+    newName: ghcr.io/nyeinpyaesone-ui/erp03-backend
     newTag: "1.1.0"
     digest: sha256:REPLACE_WITH_REAL_BACKEND_DIGEST
-  - name: docker.io/nyeinpyaesone-ui/erp03-frontend
-    newName: docker.io/nyeinpyaesone-ui/erp03-frontend
+  - name: ghcr.io/nyeinpyaesone-ui/erp03-frontend
+    newName: ghcr.io/nyeinpyaesone-ui/erp03-frontend
     newTag: "1.1.0"
     digest: sha256:REPLACE_WITH_REAL_FRONTEND_DIGEST
 namespace: erp03
@@ -30,3 +30,21 @@ patches:
       - op: replace
         path: /spec/replicas
         value: 3
+  - target:
+      group: policy
+      version: v1
+      kind: PodDisruptionBudget
+      name: erp03-backend-pdb
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 2
+  - target:
+      group: policy
+      version: v1
+      kind: PodDisruptionBudget
+      name: erp03-frontend-pdb
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 2
