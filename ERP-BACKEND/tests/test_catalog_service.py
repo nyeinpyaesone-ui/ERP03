@@ -210,3 +210,31 @@ def select_balance(product_id, warehouse_id):
         .where(StockBalance.product_id == product_id)
         .where(StockBalance.warehouse_id == warehouse_id)
     )
+
+
+
+@pytest.mark.asyncio
+async def test_catalog_writes_reject_a_branch_owned_by_another_business():
+    """A tenant cannot create master data attached to another tenant's branch."""
+    business_a, _branch_a, _warehouse_a, _user_a = await _bootstrap("CATA")
+    _business_b, branch_b, _warehouse_b, _user_b = await _bootstrap("CATB")
+
+    async with SessionFactory() as session, session.begin():
+        with pytest.raises(NotFoundError, match="Branch not found"):
+            await create_product(
+                session,
+                business_id=business_a.id,
+                branch_id=branch_b.id,
+                sku=f"CROSS-{uuid4().hex[:8]}",
+                name="Cross-tenant branch product",
+                sale_price=Decimal("10.00"),
+            )
+        with pytest.raises(NotFoundError, match="Branch not found"):
+            await create_customer(
+                session,
+                claims={"business_id": str(business_a.id)},
+                business_id=business_a.id,
+                branch_id=branch_b.id,
+                code=f"CROSS-{uuid4().hex[:8]}",
+                name="Cross-tenant branch customer",
+            )
