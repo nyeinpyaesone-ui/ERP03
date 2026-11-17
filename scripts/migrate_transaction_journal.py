@@ -17,7 +17,7 @@ import sqlite3
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from uuid import NAMESPACE_URL, UUID, uuid5
+from uuid import UUID
 
 BACKEND_DIR = Path(__file__).resolve().parents[1] / "ERP-BACKEND"
 sys.path.insert(0, str(BACKEND_DIR))
@@ -69,8 +69,15 @@ def normalize_row(row: sqlite3.Row, columns: set[str]) -> tuple[UUID, str, str, 
             f"Journal transaction {row['transaction_id']!r} has no valid UUID tenant"
         ) from exc
 
-    prefix = f"{business_id}:"
-    operation_id = raw_key if raw_key.startswith(prefix) else f"{prefix}{raw_key}"
+    client_key = raw_key
+    if ":" in raw_key:
+        raw_prefix, candidate_key = raw_key.split(":", 1)
+        try:
+            if UUID(raw_prefix) == business_id:
+                client_key = candidate_key
+        except ValueError:
+            pass
+    operation_id = f"{business_id}:{client_key}"
     if len(operation_id) > 255:
         raise ValueError(
             f"Journal transaction {row['transaction_id']!r} has an operation ID over 255 chars"
@@ -93,12 +100,14 @@ def normalize_row(row: sqlite3.Row, columns: set[str]) -> tuple[UUID, str, str, 
         "metadata": metadata,
     }
     try:
+        # TransactionStore originally generated UUID hex strings. Preserve the
+        # original identity exactly so old clients can still look up the record.
         operation_uuid = UUID(str(row["transaction_id"]))
-    except ValueError:
-        operation_uuid = uuid5(
-            NAMESPACE_URL,
-            f"erp03:legacy-transaction:{business_id}:{row['transaction_id']}",
-        )
+    except ValueError as exc:
+        raise ValueError(
+            f"Legacy transaction ID {row['transaction_id']!r} is not a UUID; "
+            "resolve it explicitly before import"
+        ) from exc
 
     try:
         created_at = datetime.fromisoformat(str(row["created_at"]))
@@ -189,7 +198,8 @@ async def migrate(snapshot: Path, apply: bool) -> None:
                     )
                     if existing is not None:
                         same_command = (
-                            existing.business_id == business_id
+                            existing.id == operation_uuid
+                            and existing.business_id == business_id
                             and existing.operation_type == operation_type
                             and existing.payload_json == payload
                         )
