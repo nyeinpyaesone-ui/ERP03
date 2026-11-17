@@ -109,7 +109,7 @@ The application remains a modular monolith. Add queues or independently deployed
 |---|---|
 | `GET /api/v1` | API identity |
 | `GET /api/v1/healthz` | Process liveness |
-| `GET /api/v1/readyz` | PostgreSQL/schema readiness |
+| `GET /api/v1/readyz` | Database/schema readiness (PostgreSQL in integrated profiles) |
 | `GET /metrics` | Protected Prometheus metrics |
 | `GET /docs` | OpenAPI documentation |
 
