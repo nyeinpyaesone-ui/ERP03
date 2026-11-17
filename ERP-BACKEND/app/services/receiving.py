@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import SaleValidationError
 from app.models.erp import Product, Warehouse
+from app.models.identity import Branch
 from app.services.inventory import adjust_stock
 
 
@@ -38,6 +39,18 @@ async def receive_purchase_lines(
     if any(cost < 0 for _, _, cost in lines):
         raise SaleValidationError("Receipt unit costs cannot be negative")
 
+    branch = await session.scalar(
+        select(Branch)
+        .where(
+            Branch.id == branch_id,
+            Branch.business_id == business_id,
+            Branch.active.is_(True),
+        )
+        .with_for_update()
+    )
+    if branch is None:
+        raise SaleValidationError("Branch is not valid for this business")
+
     product_ids = sorted({pid for pid, _, _ in lines}, key=str)
     result = await session.execute(
         select(Product)
@@ -54,11 +67,13 @@ async def receive_purchase_lines(
         raise SaleValidationError("One or more products are invalid for this branch")
 
     warehouse = await session.scalar(
-        select(Warehouse).where(
+        select(Warehouse)
+        .where(
             Warehouse.id == warehouse_id,
             Warehouse.branch_id == branch_id,
             Warehouse.active.is_(True),
         )
+        .with_for_update()
     )
     if warehouse is None:
         raise SaleValidationError("Warehouse is not valid for this branch")
