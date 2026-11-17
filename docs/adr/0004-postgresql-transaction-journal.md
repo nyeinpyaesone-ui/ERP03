@@ -1,77 +1,78 @@
-# ADR-0004: Shared PostgreSQL Transaction Journal and Recovery State Machine
+# ADR-0004: PostgreSQL Operations as the Shared Transaction Journal
 
 ## Status
 
-Proposed — implementation and migration qualification required.
+Proposed — staged implementation on `feat/erp03-architecture-reconciliation`; review and staging qualification are still required.
 
 ## Context
 
-The current `TransactionStore` persists tenant-scoped idempotency records in SQLite using WAL mode and a process-local `threading.RLock`. The API creates one store per backend process. The Kubernetes production overlay runs three backend replicas and its HPA can scale to ten, while the SQLite data path is mounted through a ReadWriteOnce PVC.
+The inspected `main` baseline routes `POST /api/v1/transactions` to `TransactionStore`, which persists idempotency records in SQLite using WAL mode and a process-local `threading.RLock`. The API creates one store per backend process. The Kubernetes production overlay runs three backend replicas and its HPA can scale to ten, while the SQLite data path is mounted through a ReadWriteOnce PVC.
 
-The lock does not coordinate processes or pods. A ReadWriteOnce volume does not provide a safe shared-write contract across replicas or nodes. The journal is also separate from the PostgreSQL transaction that performs authoritative ERP domain mutations. A journal row with status `accepted` is not evidence that an invoice, payment, inventory update, or other business operation committed.
+The lock does not coordinate processes or pods. A ReadWriteOnce volume does not provide a safe shared-write contract across replicas or nodes. The journal is also separate from the PostgreSQL transaction that performs authoritative ERP domain mutations. An accepted journal row is not evidence that an invoice, payment, inventory update or other business operation committed.
 
-Issue #222 requires recoverable cross-module orchestration, crash recovery, bounded retries, safe concurrent reconciliation, and observability.
+ERP03 already has a PostgreSQL-backed `operations` table and `OperationService` with tenant identity, canonical command payloads, six lifecycle states, row-locking claims, retries and reconciliation. Adding a second journal table would duplicate this state model.
 
 ## Decision
 
-1. PostgreSQL is the shared durable store for production idempotency records and operation lifecycle state. It remains the authoritative database for ERP domain entities.
-2. Keep the existing FastAPI modular monolith. Do not add a microservice, distributed transaction coordinator, Celery, or Redis queue solely for this problem.
-3. Enforce idempotency in PostgreSQL with a unique constraint on `(business_id, idempotency_key)`. Store a canonical request fingerprint and reject a same-key/different-payload request with the existing typed conflict contract.
-4. Persist operation identity, canonical command metadata, state, attempt count, retry schedule, lease ownership/expiry, timestamps, and a sanitized last-error code. Do not persist credentials or unnecessary sensitive request data.
-5. Use explicit legal state transitions:
-   - `accepted -> processing`
-   - `processing -> committed` only in the same PostgreSQL transaction as the authoritative domain mutation
-   - `processing -> retryable` for a transient failure
-   - `processing -> reconciliation_required` when the outcome is ambiguous or a lease expires
-   - `retryable -> processing` after its retry time
-   - `reconciliation_required -> processing` after a successful lease claim
-   - `processing -> failed_terminal` after a classified permanent failure or bounded retry exhaustion
-6. Claim work with PostgreSQL row-level concurrency control (for example, `SELECT ... FOR UPDATE SKIP LOCKED`) and a time-bounded lease. A worker may finalize only while it owns the current lease token.
-7. For domain work contained in PostgreSQL, commit the domain mutation and the journal's `committed` transition atomically in one database transaction. For external side effects, write an outbox record in that same transaction and deliver it through an idempotent consumer; do not hold a database transaction open across a network call.
-8. Reconciliation uses bounded exponential backoff with jitter, a maximum-attempt policy, stale-lease recovery, and an explicit manual-review terminal path. Every handler must be idempotent at its domain boundary.
-9. SQLite remains available for local development and isolated unit tests only. Production must not use a per-process SQLite journal.
+1. Reuse the existing PostgreSQL `operations` table as the shared production operation journal. Do not add a second journal table or a distributed transaction coordinator.
+2. Route transaction intake to `OperationService` whenever `DATABASE_URL` uses PostgreSQL. Retain the SQLite `TransactionStore` only for local development and isolated tests.
+3. Namespace caller idempotency keys as `{business_uuid}:{client_idempotency_key}` in the unique `operations.operation_id` column. A matching tenant, operation type, branch context and canonical payload replays the existing operation; a different command conflicts.
+4. Preserve the API distinction between acceptance and execution: the API maps `pending` to `accepted`. It does not execute a generic operation. A domain handler may mark an operation `committed` only in the same PostgreSQL transaction as the authoritative domain mutation.
+5. Keep the existing lifecycle states: `pending`, `processing`, `committed`, `failed`, `reconciliation_required` and `cancelled`. Retryable failures use `failed` plus `backoff_until`; bounded retry exhaustion moves to `reconciliation_required`.
+6. Fence worker ownership with a random `claim_token` and `lease_expires_at`. Claims use PostgreSQL row locking with `SELECT ... FOR UPDATE SKIP LOCKED`. Renew, commit and fail operations must conditionally match the current worker, token, state and unexpired lease.
+7. Stale leases return to `pending` for safe re-claiming. A worker whose token has been replaced must never commit or fail the operation.
+8. Store only a safe generic error summary and a bounded error code in the operation record. Raw exception text may contain credentials or personal data and must not be persisted.
+9. For domain work contained in PostgreSQL, commit the domain mutation and operation's `committed` transition atomically in one session transaction. External side effects require an outbox or independently idempotent consumer; do not hold a database transaction open across a network call.
+10. SQLite is never the shared production journal. Redis remains a rate-limiting dependency, not the transaction ledger.
 
 ## Migration and rollout
 
-1. Add the PostgreSQL journal schema through an Alembic migration. Keep the migration additive and backward-compatible with the current application release.
-2. Implement the PostgreSQL store behind the existing store contract and test it against real PostgreSQL in CI. Preserve the SQLite adapter for local tests.
-3. Define and rehearse a write-fenced migration: stop journal writes, take a protected SQLite snapshot, import records, verify row counts, tenant/key uniqueness, fingerprints and deterministic sample checksums, then switch all replicas to PostgreSQL.
-4. Do not dual-write two stores as an implicit consistency strategy. There is no atomic commit spanning SQLite and PostgreSQL.
-5. Keep the SQLite snapshot read-only for the agreed retention/rollback window. Rollback to SQLite is allowed only before PostgreSQL accepts new writes. After cutover writes begin, recover forward from PostgreSQL; do not silently switch back and lose accepted commands.
-6. Remove the SQLite PVC mount only in a later release after code-path and runtime evidence proves it is unused.
+1. Apply Alembic revision `0010_operation_claim_leases`, which adds claim-token and lease-expiry columns, an index for lease scans, and expands `operation_type` to 100 characters to match the API contract.
+2. Put all legacy SQLite journal writers behind a write fence and take a consistent SQLite backup/snapshot.
+3. Run `scripts/migrate_transaction_journal.py` in dry-run mode. It validates tenant UUIDs and Business rows, preserves legacy transaction UUIDs, checks operation-key collisions and prints a normalized-row checksum.
+4. Review source counts, checksum, tenant/key uniqueness and conflicts. Run with `--apply` only as a controlled, explicitly approved migration. The importer never modifies its SQLite source.
+5. Legacy rows import as `pending`, never `committed`, because the SQLite journal recorded acceptance but did not prove that a PostgreSQL domain mutation committed.
+6. Verify imported row counts, IDs, tenant ownership and payloads before switching backend replicas to the PostgreSQL intake path.
+7. Keep the SQLite snapshot read-only for the agreed rollback window. After PostgreSQL accepts new writes, recover forward from PostgreSQL; switching back to the old snapshot would lose accepted commands.
+8. Remove the SQLite PVC mount only in a later reviewed release after runtime evidence proves it is unused.
+
+There is no dual-write mode: no atomic transaction spans SQLite and PostgreSQL.
 
 ## Validation requirements
 
-- Same tenant/key/same fingerprint returns the original operation ID.
-- Same tenant/key/different fingerprint returns HTTP 409 with the existing conflict code.
+- Same tenant/key/same operation type and canonical payload returns the original operation UUID.
+- Same tenant/key with a changed operation type, recorded branch or payload returns HTTP 409.
 - Different tenants may use the same raw idempotency key without collision.
-- Concurrent requests across independent database connections and worker processes create one operation.
-- Crash injection before and after domain commit never produces a false `committed` response or duplicate domain mutation.
-- Ambiguous timeouts, worker lease expiry, retries, permanent failures, and retry exhaustion are tested.
-- Migration tests cover legacy rows with and without fingerprints and verify counts/checksums.
-- Metrics and structured logs include operation/request IDs, state transitions, retry counts, and sanitized error codes.
-- PostgreSQL restore and reconciliation are exercised in staging before multi-replica production use.
+- PostgreSQL requests use the shared `operations` table; local SQLite mode remains supported.
+- Concurrent requests over independent PostgreSQL connections/processes create one operation.
+- Commit/fail updates from an expired or superseded worker token affect zero rows and return a conflict.
+- Lease renewal works only for the current unexpired owner.
+- Retry backoff, retry exhaustion, stale-lease recovery and manual reconciliation states are covered.
+- Importer tests prove read-only source access, tenant/key normalization, UUID preservation and rejection of invalid legacy identity.
+- Crash-window tests prove that domain writes and `committed` state are atomic for each real domain handler.
+- PostgreSQL migration/import and restore/reconciliation are rehearsed in staging before multi-replica production use.
 
 ## Consequences
 
 ### Positive
 
-- Idempotency is enforced across replicas by the database, not process-local locks.
-- Journal and domain outcomes can share a transaction boundary.
-- Recovery is explicit, observable, and safe under concurrent workers.
-- Existing API conflict semantics and modular-monolith boundaries can be retained.
+- Production idempotency is shared across API replicas through PostgreSQL.
+- The existing orchestration model is reused instead of introducing duplicate infrastructure.
+- Claim tokens fence stale workers from overwriting newer work.
+- Legacy SQLite data can be imported with deterministic identity preservation and a write-fenced process.
 
 ### Trade-offs
 
-- PostgreSQL becomes a hard dependency for production transaction-journal writes.
-- Schema migration and legacy data import require a controlled write fence.
-- Reconciliation requires operational ownership, metrics, alerts, and runbooks.
-- A PostgreSQL single instance is still a failure domain; this ADR does not make the database highly available.
+- PostgreSQL becomes a hard dependency for production transaction intake.
+- A controlled snapshot import and verification window are required.
+- Generic transaction intake still requires domain handlers to execute real ERP work; accepting an operation is not executing it.
+- Reconciliation, metrics, alerts and operator ownership remain required.
+- The current single PostgreSQL StatefulSet is still a failure domain; this ADR does not make the database highly available.
 
 ## Alternatives considered
 
-- **Keep SQLite and one backend replica:** rejected as the production target because it constrains availability and horizontal scaling and leaves the journal separate from domain transactions.
-- **Shared SQLite over a network filesystem:** rejected because WAL and filesystem locking semantics do not establish a reliable multi-node transactional contract.
-- **Redis as the journal:** rejected because Redis is an operational rate-limiting dependency, not the authoritative durable ERP transaction store.
-- **Distributed two-phase commit:** rejected as unnecessary complexity for a modular monolith sharing one PostgreSQL database.
-- **A new transaction microservice or Celery queue:** rejected until measured scale or independently deployable boundaries justify the added failure modes.
+- **Add a second PostgreSQL journal table:** rejected because the existing `operations` table already provides durable command identity and lifecycle state.
+- **Keep SQLite and one backend replica:** rejected as the production target because it constrains availability and horizontal scaling.
+- **Shared SQLite over a network filesystem:** rejected because WAL and filesystem locking do not establish a reliable multi-node transactional contract.
+- **Redis as the journal:** rejected because Redis is an operational rate-limiting dependency, not the authoritative ERP transaction store.
+- **Distributed two-phase commit or a transaction microservice:** rejected as unnecessary complexity for a modular monolith sharing one PostgreSQL database.
