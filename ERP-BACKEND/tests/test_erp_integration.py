@@ -11,6 +11,7 @@ from app.db.session import SessionFactory
 from app.main import app
 from app.models.erp import Invoice, Product, StockBalance, Warehouse
 from app.models.identity import Branch
+from app.models.operations import Operation, OperationState
 from app.services.bootstrap import bootstrap_business
 from app.services.sales import SaleLine, SalePayment, create_pos_sale
 from sqlalchemy import select
@@ -363,3 +364,103 @@ async def test_pos_sale_idempotency_replays_same_invoice_without_double_stock():
         )
         assert balance is not None
         assert balance.quantity == Decimal("3")
+
+
+
+@pytest.mark.asyncio
+async def test_purchase_receipt_is_idempotent_and_returns_committed_operation():
+    """A retried receipt must not duplicate stock or weighted-average costing."""
+    business, branch, warehouse, user = await _bootstrap("PURID")
+    async with SessionFactory() as session, session.begin():
+        product = Product(
+            id=uuid4(),
+            business_id=business.id,
+            branch_id=branch.id,
+            sku=f"PUR-{uuid4().hex[:8]}",
+            name="Purchase receipt idempotency item",
+            unit="pcs",
+            sale_price=Decimal("25.00"),
+            cost_price=Decimal("10.00"),
+            min_stock=Decimal("0"),
+            active=True,
+        )
+        session.add(product)
+        await session.flush()
+        session.add(
+            StockBalance(
+                warehouse_id=warehouse.id,
+                product_id=product.id,
+                quantity=Decimal("0"),
+            )
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        login = await client.post(
+            "/api/v1/auth/login",
+            json={
+                "business_code": business.code,
+                "email": user.email,
+                "password": "Correct-Horse-123",
+            },
+        )
+        assert login.status_code == 200, login.text
+        token = login.json()["access_token"]
+        key = f"purchase-{uuid4().hex}"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "X-Idempotency-Key": key,
+        }
+        payload = {
+            "branch_id": str(branch.id),
+            "warehouse_id": str(warehouse.id),
+            "lines": [
+                {
+                    "product_id": str(product.id),
+                    "quantity": "5",
+                    "unit_cost": "10.00",
+                }
+            ],
+        }
+
+        first = await client.post("/api/v1/purchases/receipts", headers=headers, json=payload)
+        assert first.status_code == 201, first.text
+        replay = await client.post("/api/v1/purchases/receipts", headers=headers, json=payload)
+        assert replay.status_code == 201, replay.text
+        assert replay.json() == first.json()
+
+        changed = {
+            **payload,
+            "lines": [
+                {
+                    "product_id": str(product.id),
+                    "quantity": "6",
+                    "unit_cost": "10.00",
+                }
+            ],
+        }
+        conflict = await client.post(
+            "/api/v1/purchases/receipts",
+            headers=headers,
+            json=changed,
+        )
+        assert conflict.status_code == 409, conflict.text
+
+    operation_id = f"{business.id}:{key}"
+    async with SessionFactory() as session:
+        operation = await session.scalar(
+            select(Operation).where(Operation.operation_id == operation_id)
+        )
+        balance = await session.scalar(
+            select(StockBalance).where(
+                StockBalance.warehouse_id == warehouse.id,
+                StockBalance.product_id == product.id,
+            )
+        )
+    assert operation is not None
+    assert operation.state == OperationState.COMMITTED
+    assert operation.result_json == {"total_value": "50.00", "lines_received": 1, "currency": "MMK"}
+    assert balance is not None
+    assert balance.quantity == Decimal("5.000")
