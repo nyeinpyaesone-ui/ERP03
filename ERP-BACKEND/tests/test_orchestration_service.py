@@ -3,12 +3,16 @@
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import httpx
 import pytest
+from app.api import transactions as transactions_api
 from app.core.errors import ConflictError
+from app.core.security import current_claims
 from app.db.session import SessionFactory
 from app.models.operations import Operation, OperationState
 from app.services.bootstrap import bootstrap_business
 from app.services.orchestration import OperationService
+from app.main import app
 from sqlalchemy import delete, select
 
 
@@ -573,3 +577,58 @@ async def test_failure_message_redacts_common_secret_assignments():
     assert "do-not-store" not in (operation.error_message or "")
     assert "secret-value" not in (operation.error_message or "")
     assert "[REDACTED]" in (operation.error_message or "")
+
+
+
+@pytest.mark.asyncio
+async def test_postgres_transaction_api_uses_shared_operations_table(monkeypatch):
+    """PostgreSQL mode must use the shared operation table, not process-local SQLite."""
+    business, branch, _warehouse, _user = await _bootstrap("TXAPI")
+    identity = {
+        "sub": str(uuid4()),
+        "business_id": str(business.id),
+        "branch_id": str(branch.id),
+    }
+    app.dependency_overrides[current_claims] = lambda: identity
+    monkeypatch.setattr(transactions_api, "_uses_shared_journal", lambda: True)
+
+    payload = {
+        "operation": "invoice.create",
+        "amount": "42.00",
+        "currency": "mmk",
+        "metadata": {"invoice": "TX-API-001"},
+    }
+    headers = {"X-Idempotency-Key": f"tx-api-{uuid4().hex}"}
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://erp03.test") as client:
+            first = await client.post("/api/v1/transactions", json=payload, headers=headers)
+            replay = await client.post("/api/v1/transactions", json=payload, headers=headers)
+            conflict = await client.post(
+                "/api/v1/transactions",
+                json={**payload, "amount": "43.00"},
+                headers=headers,
+            )
+            transaction_id = first.json()["transaction_id"]
+            fetched = await client.get(f"/api/v1/transactions/{transaction_id}")
+
+        assert first.status_code == 201, first.text
+        assert first.json()["status"] == "accepted"
+        assert first.json()["idempotent_replay"] is False
+        assert replay.status_code == 201
+        assert replay.json()["transaction_id"] == transaction_id
+        assert replay.json()["idempotent_replay"] is True
+        assert conflict.status_code == 409
+        assert conflict.json()["detail"]["code"] == "IDEMPOTENCY_PAYLOAD_MISMATCH"
+        assert fetched.status_code == 200
+        assert fetched.json()["metadata"] == payload["metadata"]
+
+        # The API accepted into operations; it did not claim a domain commit.
+        async with SessionFactory() as session:
+            operation = await session.scalar(
+                select(Operation).where(Operation.id == UUID(transaction_id))
+            )
+        assert operation is not None
+        assert operation.state == OperationState.PENDING
+    finally:
+        app.dependency_overrides.pop(current_claims, None)
