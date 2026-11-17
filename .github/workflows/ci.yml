@@ -118,3 +118,45 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Build frontend
         run: VITE_API_BASE_URL=/api npm run build
+
+
+  standalone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SECRET_KEY: "ci-only-standalone-secret-key-not-for-reuse-000000"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Validate standalone Compose configuration
+        run: docker compose --project-name erp03-ci -f docker-compose.standalone.yml config --quiet
+
+      - name: Build, boot, and smoke-test standalone runtime
+        run: |
+          set -Eeuo pipefail
+          compose=(docker compose --project-name erp03-ci -f docker-compose.standalone.yml)
+          cleanup() {
+            result=$?
+            if [ "$result" -ne 0 ]; then
+              "${compose[@]}" logs --no-color --tail=100 migrate backend frontend || true
+            fi
+            "${compose[@]}" down --volumes --remove-orphans || true
+            exit "$result"
+          }
+          trap cleanup EXIT
+
+          "${compose[@]}" up --build -d
+
+          ready=false
+          for attempt in $(seq 1 60); do
+            if curl --silent --show-error --fail --max-time 5 http://127.0.0.1:8000/api/v1/readyz >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = true
+
+          curl --silent --show-error --fail --max-time 5 http://127.0.0.1:3000/ >/dev/null
+          curl --silent --show-error --fail --max-time 5 http://127.0.0.1:3000/api/readyz >/dev/null
