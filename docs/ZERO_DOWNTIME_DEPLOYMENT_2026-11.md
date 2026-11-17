@@ -143,19 +143,31 @@ Redis backs distributed rate limiting, not the domain transaction ledger. The ba
 
 ## 8. Hard blockers to a zero-downtime claim
 
-### 8.1 SQLite journal is not horizontally safe in the current deployment
+### 8.1 SQLite journal and PostgreSQL operation state
 
-`TransactionStore` uses SQLite WAL mode, thread/process-local application locking and a file under `/app/.local`. The backend Deployment mounts `erp-data-pvc` with `ReadWriteOnce`; production runs three replicas and can scale to ten. This topology does not provide a reliable shared write path across nodes.
+On the inspected `main` baseline, `TransactionStore` still uses SQLite WAL mode, a process-local lock and a file under `/app/.local`. The backend Deployment mounts `erp-data-pvc` with `ReadWriteOnce`; production runs three replicas and can scale to ten. That topology is not a safe multi-replica shared write path.
 
-Required remediation:
-1. Implement a PostgreSQL-backed journal table with tenant-scoped unique idempotency keys and database-enforced uniqueness.
-2. Use a compatibility window: create the new schema first, deploy code compatible with old and new journals, backfill and reconcile counts/fingerprints, then switch writes/reads to PostgreSQL.
-3. Keep the legacy journal as a read-only rollback source until verification and the rollback window are complete.
-4. Remove the SQLite PVC mount only in a later release after evidence confirms no active code path depends on it.
-5. Load-test duplicate requests, concurrent claims, crash/retry and reconciliation across multiple backend pods.
+The architecture-reconciliation feature branch changes the application path as follows:
 
-Do not place SQLite WAL on a network filesystem as a shortcut for multi-replica access.
+1. When `DATABASE_URL` is PostgreSQL, `POST /api/v1/transactions` uses the shared SQLAlchemy `operations` table through `OperationService`. The tenant-scoped `operation_id` is unique in PostgreSQL; SQLite is retained only for local development and isolated tests.
+2. Migration `0010_operation_claim_leases` adds a random claim token and lease expiry, and aligns the operation type length with the API contract.
+3. Worker commit/fail updates are conditional on the active claim token and an unexpired lease. A stale worker cannot finalize work after another worker reclaims it.
+4. `scripts/migrate_transaction_journal.py` imports a write-fenced SQLite snapshot. It is dry-run by default, validates tenant UUIDs and Business rows, detects idempotency conflicts, and imports legacy entries as `pending`—never `committed`.
+5. The import must be reviewed and approved as a controlled migration. The source snapshot remains read-only; the application does not dual-write SQLite and PostgreSQL.
 
+**Important limit:** the generic transactions endpoint accepts and records a command; it does not execute `operation`. Existing domain endpoints such as POS sales perform their own PostgreSQL domain transaction. A future/associated domain handler must mutate its domain tables and call `commit_operation` in that same transaction before an operation can truthfully become `committed`. Do not treat `accepted` as proof of an invoice, payment or stock mutation.
+
+Required rollout sequence:
+
+1. Apply Alembic through `0010_operation_claim_leases` as one controlled migration job.
+2. Freeze legacy journal writes and take a consistent SQLite snapshot.
+3. Run the import tool in dry-run mode; compare counts, normalized-row checksum, unique tenant/key mappings and conflicts with the approved migration record.
+4. With explicit migration approval, run the importer with `--apply`; verify row counts, tenant ownership, payloads and representative operation IDs.
+5. Switch all backend replicas to the PostgreSQL-backed API path and run cross-connection idempotency, lease-expiry, crash/retry and stale-worker tests in staging.
+6. Keep the SQLite snapshot read-only for the rollback window. After PostgreSQL accepts new writes, recover forward from PostgreSQL; do not roll back to the old snapshot and lose accepted commands.
+7. Remove the SQLite PVC mount only in a later reviewed release after runtime evidence proves that no deployed code path uses it.
+
+Do not place SQLite WAL on a network filesystem as a shortcut for multi-replica access. No migration or cutover has been executed by this feature branch.
 ### 8.2 Database and cache service availability
 
 The checked-in PostgreSQL StatefulSet has one replica; the Redis Deployment has one replica. Neither manifest proves automatic failover. Before claiming full-service zero downtime, use a supported managed HA PostgreSQL service or a proven HA cluster, validate failover behavior, and demonstrate point-in-time restore. For Redis, document that rate limiting fails open during outages; alert on that condition and decide whether HA Redis is required by the security policy.
