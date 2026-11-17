@@ -7,14 +7,21 @@ from uuid import uuid4
 
 import pytest
 
-SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "migrate_transaction_journal.py"
+SCRIPT_PATH = (
+    Path(__file__).resolve().parents[2] / "scripts" / "migrate_transaction_journal.py"
+)
 SPEC = importlib.util.spec_from_file_location("migrate_transaction_journal", SCRIPT_PATH)
 assert SPEC is not None and SPEC.loader is not None
 MIGRATOR = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MIGRATOR)
 
 
-def _snapshot(path: Path, *, transaction_id: str | None = None, business_id: str | None = None):
+def _snapshot(
+    path: Path,
+    *,
+    transaction_id: str | None = None,
+    business_id: str | None = None,
+):
     tenant_id = business_id or str(uuid4())
     transaction_id = transaction_id or uuid4().hex
     connection = sqlite3.connect(path)
