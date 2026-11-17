@@ -62,11 +62,16 @@ class OperationService:
         branch_id: UUID | None,
         canonical_payload: str,
     ) -> None:
-        """Reject an operation ID reused for another tenant or command."""
+        """Reject an operation ID reused for another tenant or command.
+
+        A null branch on a migrated legacy operation means its original branch
+        context was not recorded; preserve replay compatibility in that case.
+        Once a branch is recorded, a replay from another branch is rejected.
+        """
         same_command = (
             existing.operation_type == operation_type
             and existing.business_id == business_id
-            and existing.branch_id == branch_id
+            and (existing.branch_id is None or existing.branch_id == branch_id)
             and OperationService._canonical_payload(existing.payload_json) == canonical_payload
         )
         if not same_command:
