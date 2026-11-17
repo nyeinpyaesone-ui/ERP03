@@ -4,7 +4,7 @@ All reads and writes are tenant-scoped by ``business_id``; uniqueness is
 enforced at the database level (per-tenant code/SKU) and surfaced through
 the typed :class:`ConflictError` contract instead of raw driver errors.
 Write helpers flush but never commit: callers own the transaction boundary
-(``session.begin()`` in tests/services, autocommit-on-close in routers).
+(``session.begin()`` in tests/services, request-scoped unit-of-work commit in routers).
 """
 
 from decimal import Decimal
