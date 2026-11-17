@@ -100,15 +100,22 @@ class DockerPublishWorkflowTests(unittest.TestCase):
 
 
 class RelatedWorkflowDependencyTests(unittest.TestCase):
-    def test_frontend_buildx_action_is_pinned_to_v7_4_0_commit(self):
-        workflow = load_workflow(".github/workflows/container.yml")
-        build_actions = [
-            step["uses"]
-            for job in workflow["jobs"].values()
-            for step in job["steps"]
-            if step.get("uses", "").startswith("docker/build-push-action@")
-        ]
-        self.assertTrue(build_actions)
+    def test_all_image_build_workflows_use_buildx_v7_4_0(self):
+        paths = (
+            ".github/workflows/container.yml",
+            ".github/workflows/devcontainer.yml",
+            ".github/workflows/docker-publish.yml",
+        )
+        build_actions = []
+        for path in paths:
+            workflow = load_workflow(path)
+            build_actions.extend(
+                step["uses"]
+                for job in workflow["jobs"].values()
+                for step in job["steps"]
+                if step.get("uses", "").startswith("docker/build-push-action@")
+            )
+        self.assertGreaterEqual(len(build_actions), 5)
         self.assertEqual(set(build_actions), {"docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc"})
 
     def test_codecov_v7_uses_the_current_files_input(self):
