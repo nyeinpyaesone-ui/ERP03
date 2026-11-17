@@ -249,6 +249,7 @@ async def test_reconcile_stale_recovers_processing_operations():
         service = OperationService(session, worker_id="worker-a")
         op = await service.claim_next()
         op.updated_at = datetime.now(UTC) - timedelta(hours=2)
+        op.lease_expires_at = datetime.now(UTC) - timedelta(hours=1)
         await session.commit()
     async with SessionFactory() as session, session.begin():
         service = OperationService(session, worker_id="worker-b")
@@ -390,3 +391,185 @@ async def test_operation_id_cannot_replay_across_businesses():
                 payload={"product": "widget", "qty": 1},
             )
         await session.rollback()
+
+
+
+@pytest.mark.asyncio
+async def test_create_operation_with_replay_reports_replay_without_duplicate():
+    """The API can distinguish a newly accepted command from an idempotent replay."""
+    business, branch, _warehouse, _user = await _bootstrap("ORCHREPLAY")
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        first, first_replay = await service.create_operation_with_replay(
+            operation_id="orch-replay-001",
+            operation_type="pos.sale",
+            business_id=business.id,
+            branch_id=branch.id,
+            payload={"amount": "12.00"},
+        )
+        await session.commit()
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        replay, replayed = await service.create_operation_with_replay(
+            operation_id="orch-replay-001",
+            operation_type="pos.sale",
+            business_id=business.id,
+            branch_id=branch.id,
+            payload={"amount": "12.00"},
+        )
+        await session.commit()
+    assert first_replay is False
+    assert replayed is True
+    assert replay.id == first.id
+
+
+@pytest.mark.asyncio
+async def test_claim_lease_is_fenced_and_cleared_on_commit():
+    """A successful domain commit invalidates the worker's claim token."""
+    business, branch, _warehouse, _user = await _bootstrap("ORCHLEASE")
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        await service.create_operation(
+            operation_id="orch-lease-001",
+            operation_type="pos.sale",
+            business_id=business.id,
+            branch_id=branch.id,
+            payload={"order": "A"},
+        )
+        await session.commit()
+
+    async with SessionFactory() as session, session.begin():
+        worker = OperationService(session, worker_id="lease-worker", lease_seconds=60)
+        operation = await worker.claim_next()
+        assert operation is not None
+        token = operation.claim_token
+        assert token
+        assert operation.lease_expires_at is not None
+        await worker.commit_operation(operation, result={"ok": True})
+        await session.commit()
+
+    assert operation.state == OperationState.COMMITTED
+    assert operation.claim_token is None
+    assert operation.lease_expires_at is None
+    assert token is not None
+
+
+@pytest.mark.asyncio
+async def test_stale_worker_cannot_commit_after_lease_is_reclaimed():
+    """A worker whose lease was replaced cannot overwrite the current result."""
+    business, branch, _warehouse, _user = await _bootstrap("ORCHFENCE")
+    async with SessionFactory() as session, session.begin():
+        creator = OperationService(session)
+        await creator.create_operation(
+            operation_id="orch-fence-001",
+            operation_type="pos.sale",
+            business_id=business.id,
+            branch_id=branch.id,
+            payload={"order": "B"},
+        )
+        await session.commit()
+
+    async with SessionFactory() as session, session.begin():
+        worker_a = OperationService(session, worker_id="worker-a", lease_seconds=1)
+        stale_operation = await worker_a.claim_next()
+        assert stale_operation is not None
+        old_token = stale_operation.claim_token
+        await session.commit()
+
+    async with SessionFactory() as session, session.begin():
+        operation = await session.get(Operation, stale_operation.id)
+        assert operation is not None
+        operation.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+
+    async with SessionFactory() as session, session.begin():
+        worker_b = OperationService(session, worker_id="worker-b", lease_seconds=60)
+        recovered = await worker_b.reconcile_stale(stale_after_seconds=1)
+        assert len(recovered) == 1
+        replacement = await worker_b.claim_next()
+        assert replacement is not None
+        assert replacement.id == stale_operation.id
+        assert replacement.claim_token != old_token
+        await worker_b.commit_operation(replacement, result={"owner": "worker-b"})
+        await session.commit()
+
+    async with SessionFactory() as session, session.begin():
+        stale_writer = OperationService(session, worker_id="worker-a")
+        with pytest.raises(ConflictError, match="lease was lost"):
+            await stale_writer.commit_operation(stale_operation, result={"owner": "worker-a"})
+        await session.rollback()
+
+    async with SessionFactory() as session:
+        final = await session.get(Operation, stale_operation.id)
+    assert final is not None
+    assert final.state == OperationState.COMMITTED
+    assert final.result_json == {"owner": "worker-b"}
+
+
+@pytest.mark.asyncio
+async def test_lease_heartbeat_extends_only_current_claim():
+    """An active owner can extend its lease; an unknown owner cannot."""
+    business, branch, _warehouse, _user = await _bootstrap("ORCHHEART")
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        await service.create_operation(
+            operation_id="orch-heartbeat-001",
+            operation_type="pos.sale",
+            business_id=business.id,
+            branch_id=branch.id,
+            payload={"order": "C"},
+        )
+        await session.commit()
+
+    async with SessionFactory() as session, session.begin():
+        owner = OperationService(session, worker_id="heartbeat-owner", lease_seconds=60)
+        operation = await owner.claim_next()
+        assert operation is not None
+        before = operation.lease_expires_at
+        assert await owner.renew_lease(operation) is True
+        assert operation.lease_expires_at >= before
+        await session.commit()
+
+    async with SessionFactory() as session, session.begin():
+        other = OperationService(session, worker_id="other-worker")
+        operation = await session.get(Operation, operation.id)
+        assert operation is not None
+        with pytest.raises(ConflictError, match="does not own"):
+            await other.renew_lease(operation)
+        await session.rollback()
+
+
+@pytest.mark.asyncio
+async def test_failure_message_redacts_common_secret_assignments():
+    """Persisted failure diagnostics must not retain common credential values."""
+    business, branch, _warehouse, _user = await _bootstrap("ORCHREDACT")
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        await service.create_operation(
+            operation_id="orch-redact-001",
+            operation_type="pos.sale",
+            business_id=business.id,
+            branch_id=branch.id,
+            payload={"order": "D"},
+        )
+        await session.commit()
+
+    async with SessionFactory() as session, session.begin():
+        worker = OperationService(session, worker_id="redaction-worker")
+        operation = await worker.claim_next()
+        assert operation is not None
+        await worker.fail_operation(
+            operation,
+            error_code="PAYMENT_ERROR",
+            error_message="payment failed token=do-not-store password:secret-value",
+        )
+        await session.commit()
+
+    async with SessionFactory() as session:
+        operation = await session.scalar(
+            select(Operation).where(Operation.operation_id == "orch-redact-001")
+        )
+    assert operation is not None
+    assert "do-not-store" not in (operation.error_message or "")
+    assert "secret-value" not in (operation.error_message or "")
+    assert "[REDACTED]" in (operation.error_message or "")
