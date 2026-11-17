@@ -8,7 +8,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:?Run ./scripts/setup-standalone.sh to generate local configuration}
       DATABASE_URL: sqlite+aiosqlite:////app/.local/erp03-domain.sqlite3
       DATABASE_PATH: /app/.local/erp03-journal.sqlite3
-      CORS_ORIGINS: http://localhost:3000
+      CORS_ORIGINS: http://localhost:${ERP03_HTTP_PORT:-3000}
       RATE_LIMIT_ENABLED: "false"
       REDIS_URL: ""
     volumes:
@@ -25,7 +25,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:?Run ./scripts/setup-standalone.sh to generate local configuration}
       DATABASE_URL: sqlite+aiosqlite:////app/.local/erp03-domain.sqlite3
       DATABASE_PATH: /app/.local/erp03-journal.sqlite3
-      CORS_ORIGINS: http://localhost:3000
+      CORS_ORIGINS: http://localhost:${ERP03_HTTP_PORT:-3000}
       RATE_LIMIT_ENABLED: "false"
       REDIS_URL: ""
       LOG_LEVEL: INFO
@@ -70,4 +70,3 @@ services:
 
 volumes:
   erp03_standalone_data:
-    name: erp03_standalone_data
