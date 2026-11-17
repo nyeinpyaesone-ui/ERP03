@@ -28,6 +28,22 @@ _LIMIT = Annotated[int, Query(ge=1, le=200)]
 _OFFSET = Annotated[int, Query(ge=0)]
 
 
+def _claim_branch_id(claims: Claims) -> UUID | None:
+    """Parse the optional branch scope from verified JWT claims."""
+    value = claims.get("branch_id")
+    if value is None:
+        return None
+    try:
+        return UUID(str(value))
+    except ValueError as exc:
+        from fastapi import HTTPException, status
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authorization claims",
+        ) from exc
+
+
 def _page_payload(page: Page, model) -> PageResponse:
     return PageResponse(
         items=[model.model_validate(item).model_dump(mode="json") for item in page.items],
@@ -48,6 +64,7 @@ async def create_product(
     product = await catalog.create_product(
         session,
         business_id=UUID(claims["business_id"]),
+        claims=claims,
         **payload.model_dump(),
     )
     return ProductResponse.model_validate(product)
@@ -66,6 +83,7 @@ async def list_products(
     page = await catalog.list_products(
         session,
         business_id=UUID(claims["business_id"]),
+        branch_id=_claim_branch_id(claims),
         search=search,
         include_inactive=include_inactive,
         limit=limit,
@@ -87,6 +105,7 @@ async def set_product_active(
         business_id=UUID(claims["business_id"]),
         product_id=product_id,
         active=payload.active,
+        branch_id=_claim_branch_id(claims),
     )
     return ProductResponse.model_validate(product)
 
@@ -120,6 +139,7 @@ async def list_customers(
     page = await catalog.list_customers(
         session,
         business_id=UUID(claims["business_id"]),
+        branch_id=_claim_branch_id(claims),
         search=search,
         include_inactive=include_inactive,
         limit=limit,
@@ -157,6 +177,7 @@ async def list_suppliers(
     page = await catalog.list_suppliers(
         session,
         business_id=UUID(claims["business_id"]),
+        branch_id=_claim_branch_id(claims),
         search=search,
         include_inactive=include_inactive,
         limit=limit,
