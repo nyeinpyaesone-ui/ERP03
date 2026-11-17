@@ -13,7 +13,7 @@ This profile runs the existing FastAPI backend and React/Nginx frontend without 
 From the repository root:
 
 ```bash
-./scripts/setup-standalone.sh
+bash scripts/setup-standalone.sh
 ```
 
 The script creates `.env.standalone` with mode 0600 if it does not already exist, validates the Compose model, builds both images, runs Alembic migrations, waits for API readiness, and smoke-tests the frontend.
@@ -43,6 +43,6 @@ This is a developer/demo standalone profile, not a production topology. SQLite j
 docker compose --project-name erp03-standalone --env-file .env.standalone -f docker-compose.standalone.yml down
 ```
 
-The named volume is intentionally retained. To remove it, an operator must separately run `docker volume rm erp03_standalone_data`; that permanently deletes local ERP data and is not part of normal shutdown.
+The named volume is intentionally retained. To permanently delete local ERP data, run `docker compose --project-name erp03-standalone --env-file .env.standalone -f docker-compose.standalone.yml down --volumes`. This destructive option is not part of normal shutdown.
 
 Do not commit `.env.standalone`. It is covered by the repository's `.env.*` ignore rule. The generated key is local-only and must not be reused in staging or production.
