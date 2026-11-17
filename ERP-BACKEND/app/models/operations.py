@@ -88,7 +88,9 @@ class Operation(Base):
         GUID(), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False
     )
     branch_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True)
-    payload_json: Mapped[dict] = mapped_column(JSONB().with_variant(JSON, "sqlite"), nullable=False)
+    payload_json: Mapped[dict] = mapped_column(
+        JSONB().with_variant(JSON, "sqlite"), nullable=False
+    )
     result_json: Mapped[dict | None] = mapped_column(
         JSONB().with_variant(JSON, "sqlite"), nullable=True
     )
@@ -100,8 +102,12 @@ class Operation(Base):
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     claimed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     claim_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    committed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
