@@ -77,5 +77,17 @@ SessionFactory = async_sessionmaker(
 
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:
+    """Yield a request-scoped unit of work.
+
+    Router/service helpers flush but do not commit. Commit once after a
+    successful request; rollback on handler errors or cancellation. Services
+    that own an explicit transaction remain compatible: their transaction is
+    already closed when control returns here.
+    """
     async with SessionFactory() as session:
-        yield session
+        try:
+            yield session
+            await session.commit()
+        except BaseException:
+            await session.rollback()
+            raise
