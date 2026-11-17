@@ -35,13 +35,19 @@ This plan maps the implementation checklist to the existing ERP03 architecture. 
 
 ## P1 — transaction integrity
 
-1. Implement ADR-0004's PostgreSQL-backed journal adapter and additive Alembic schema.
-2. Preserve the existing tenant-scoped idempotency key and canonical fingerprint contract.
-3. Persist legal lifecycle transitions, retry schedule, lease token/expiry and sanitized failure metadata.
-4. Make domain mutation plus `committed` journal transition atomic in PostgreSQL. Use an outbox for external effects.
-5. Implement safe multi-worker claims, bounded retries, stale-lease recovery and manual-review handling.
-6. Add cross-connection/process concurrency tests, crash-window tests, ambiguous-timeout tests and migration/backfill verification.
-7. Cut over only after a write-fenced staging rehearsal; retain the old SQLite snapshot read-only for the agreed rollback window.
+<text>Source implementation staged on this feature branch:</text>
+
+- [x] Route PostgreSQL transaction intake through the existing shared `operations` table; retain SQLite only for local/dev and isolated tests.
+- [x] Add Alembic revision `0010_operation_claim_leases` with fenced claim tokens, lease expiry, scan index and an expanded operation type.
+- [x] Add operation-specific lease claims, renewal, commit/fail fencing, stale-lease recovery and bounded retry handling.
+- [x] Add read-only-by-default SQLite journal import tooling with tenant/key/UUID validation and a write-fenced `--apply` mode.
+- [x] Make POS sale invoice, payment, stock and operation outcome atomic; retries replay the existing invoice without duplicate stock movement.
+- [x] Make purchase receiving, stock-in, weighted-average cost and operation outcome atomic; require a tenant-scoped idempotency key.
+- [x] Fix request-scoped SQLAlchemy unit-of-work commit/rollback behavior.
+- [x] Enforce branch ownership and branch-scoped catalog access.
+- [x] Add test definitions for replay, fencing, import validation, request commit/rollback, POS, purchase receipts and branch isolation.
+
+**Not yet validated:** this branch has not had its backend test suite, Alembic migration, cross-process PostgreSQL concurrency, importer against a protected snapshot, or staging recovery drills executed. No test pass or production qualification is claimed.
 
 ## P1 — stateful infrastructure and recovery
 
@@ -72,7 +78,7 @@ Production may be considered only when all of the following are evidenced on the
 
 - Required CI, security, container and policy jobs are created and pass.
 - Production overlays render without placeholders and use verified immutable digests.
-- Staging uses those exact digests and passes auth, tenant-isolation, sales/inventory transaction, rate-limit, observability and smoke tests.
+- Staging uses those exact digests and passes auth, tenant-isolation, POS/purchase atomicity, rate-limit, observability and smoke tests.
 - Journal migration, concurrent idempotency, crash recovery and reconciliation tests pass.
 - PostgreSQL backup/restore, failover/RPO/RTO and rollback drills are recorded.
 - Runtime secrets, TLS, ingress, network policy and monitoring/alert delivery are verified.
