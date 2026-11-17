@@ -84,12 +84,43 @@ class DockerPublishWorkflowTests(unittest.TestCase):
         self.assertIn("certificate-identity", verify["run"])
         self.assertIn("certificate-oidc-issuer", verify["run"])
 
+    def test_current_buildx_and_cosign_versions_are_pinned(self):
+        build = self.action("docker/build-push-action")
+        self.assertEqual(build["uses"], "docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc")
+        cosign = self.named("Install cosign")
+        self.assertEqual(cosign["uses"], "sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532")
+        self.assertEqual(cosign["with"]["cosign-release"], "v3.1.4")
+
     def test_every_action_is_pinned_to_a_full_commit_sha(self):
         for step in self.steps:
             action = step.get("uses")
             if action:
                 with self.subTest(action=action):
                     self.assertRegex(action.rsplit("@", 1)[-1], re.compile(r"^[0-9a-fA-F]{40}$"))
+
+
+class RelatedWorkflowDependencyTests(unittest.TestCase):
+    def test_frontend_buildx_action_is_pinned_to_v7_4_0_commit(self):
+        workflow = load_workflow(".github/workflows/container.yml")
+        build_actions = [
+            step["uses"]
+            for job in workflow["jobs"].values()
+            for step in job["steps"]
+            if step.get("uses", "").startswith("docker/build-push-action@")
+        ]
+        self.assertTrue(build_actions)
+        self.assertEqual(set(build_actions), {"docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc"})
+
+    def test_codecov_v7_uses_the_current_files_input(self):
+        workflow = load_workflow(".github/workflows/coverage.yml")
+        uploads = [
+            step for job in workflow["jobs"].values() for step in job["steps"]
+            if step.get("uses", "").startswith("codecov/codecov-action@")
+        ]
+        self.assertEqual(len(uploads), 1)
+        self.assertEqual(uploads[0]["uses"], "codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5")
+        self.assertEqual(uploads[0]["with"]["files"], "ERP-BACKEND/coverage.xml")
+        self.assertNotIn("file", uploads[0]["with"])
 
 
 class KubernetesPreflightWorkflowTests(unittest.TestCase):
