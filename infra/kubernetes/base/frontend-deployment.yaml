@@ -7,6 +7,14 @@ metadata:
     app: erp03-frontend
 spec:
   replicas: 2
+  revisionHistoryLimit: 5
+  minReadySeconds: 10
+  progressDeadlineSeconds: 600
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: erp03-frontend
@@ -15,6 +23,7 @@ spec:
       labels:
         app: erp03-frontend
     spec:
+      terminationGracePeriodSeconds: 45
       securityContext:
         runAsNonRoot: true
         runAsUser: 101
@@ -24,10 +33,14 @@ spec:
           type: RuntimeDefault
       containers:
         - name: frontend
-          image: docker.io/nyeinpyaesone-ui/erp03-frontend@sha256:REPLACE_WITH_REAL_DIGEST
+          image: ghcr.io/nyeinpyaesone-ui/erp03-frontend:latest
           ports:
             - containerPort: 8080
               name: http
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
           startupProbe:
             httpGet:
               path: /

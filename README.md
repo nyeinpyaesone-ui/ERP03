@@ -6,102 +6,146 @@
 
 ## Overview
 
-ERP03 is a production-focused AI ERP modular monolith built with FastAPI (backend) and React/Vite (frontend). It provides a foundation for enterprise resource planning with explicit domain boundaries, idempotent transactions, and production-grade infrastructure.
+ERP03 is a multi-tenant business ERP implemented as a modular monolith. The frontend is React/Vite; the API and domain services run in FastAPI. PostgreSQL is the authoritative relational store, Redis supports distributed rate limiting, and the current transaction-intent journal is a separate SQLite component with a documented multi-replica limitation.
 
-## Tech Stack
+## Current technology baseline
 
 | Layer | Technology |
-|-------|-----------|
-| Backend | FastAPI 0.116, Python 3.12, SQLAlchemy 2.0, Alembic |
-| Frontend | React 19, Vite 7, nginx (production) |
-| Database | PostgreSQL 15 (production), SQLite (development) |
-| Cache/Rate Limit | Redis 7 (sorted sets, sliding window) |
-| Infra | Terraform, Kubernetes, Docker, Docker Compose |
-| Observability | Prometheus, OpenTelemetry, Grafana |
-| AI | TypeSafe System One (optional) |
+|---|---|
+| Backend runtime | Python 3.12.13 slim |
+| API | FastAPI 0.162.0, Uvicorn 0.54.0 |
+| ORM / migrations | SQLAlchemy 2.1.8 async, Alembic 1.20.1 |
+| Database | PostgreSQL 15; SQLite for local journal/development paths |
+| Cache / rate limit | Redis server 7.4 in Kubernetes; redis-py 8.1.0 |
+| Frontend | React 19.3.1, Vite 8.3.6 |
+| Frontend runtime | unprivileged Nginx 1.27 Alpine |
+| Infrastructure | Docker Compose, Kubernetes, Kustomize, Terraform |
+| Observability | Prometheus metrics, request IDs, audit logging, optional OpenTelemetry |
+| AI integration | Optional TypeSafe System One integration |
 
-## Quick Start
+## Quick start
 
-### Prerequisites
-- Python ≥ 3.12
-- Node.js ≥ 18
-- Docker (optional, for full stack)
+### Automated setup
 
-### Automated Setup
 ```bash
-./scripts/setup.sh                # toolchain detection, venv, deps, secure .env, smoke tests
-./scripts/setup.sh --with-infra   # additionally start Docker Compose stack
-./scripts/setup.sh --qualify      # run full CI-equivalent qualification gate
+./scripts/setup.sh
+./scripts/setup.sh --with-infra
+./scripts/setup.sh --qualify
 ```
 
-### Manual Setup
+### Manual backend setup
+
 ```bash
-# Backend
 cd ERP-BACKEND
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt -r dev-requirements.txt
-cp .env.example .env  # edit with your values
+cp .env.example .env
 alembic upgrade head
 uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
 
-# Frontend
+### Frontend
+
+```bash
 cd frontend
 npm ci
 npm run build
+npm run dev
 ```
 
 ### Docker Compose
+
 ```bash
-# Minimal (backend + frontend + SQLite)
+# Minimal local stack
 docker compose up --build
 
-# Full (with PostgreSQL + Redis + migrations)
-docker compose --profile full up
+# PostgreSQL + Redis + migration profile
+docker compose --profile full up --build
 
-# Development (with HMR)
+# Development hot reload
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-## Verification Endpoints
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/v1` | API identity |
-| `GET /api/v1/healthz` | Liveness probe |
-| `GET /api/v1/readyz` | Transactional DB + migration readiness |
-| `GET /metrics` | Prometheus metrics (bearer token auth) |
-| `GET /docs` | OpenAPI documentation |
+See [Configuration & Credentials](CONFIGURATION_SETUP.md) before setting production secrets or container publishing.
 
 ## Architecture
 
-Modular monolith — business capabilities behind explicit app/domain boundaries:
+The backend keeps transport, schemas, domain services, persistence and operational concerns in separate modules:
 
+```text
+ERP-BACKEND/app/
+├── api/       # auth, catalog, sales, purchasing, transactions, health
+├── schemas/   # validated request/response contracts
+├── services/  # business rules, inventory, orchestration, RBAC
+├── models/    # identity, ERP and operations models
+├── db/        # async SQLAlchemy engine/session
+└── core/      # config, security, audit, metrics, errors, journal, AI adapter
 ```
-app/
-├── api/          # REST endpoints (auth, catalog, sales, purchasing, transactions, health)
-├── core/         # Config, errors, security, metrics, typesafe, transaction store
-├── db/           # SQLAlchemy session factory
-├── models/       # ORM models (identity, erp, operations)
-├── schemas/      # Pydantic request/response schemas
-└── services/     # Domain logic (sales, catalog, inventory, orchestration, rbac, bootstrap)
+
+The application remains a modular monolith. Add queues or independently deployed services only when measured workload or ownership boundaries justify them.
+
+## Core capabilities
+
+- Tenant-scoped authentication and authorization.
+- Sales, catalog, purchasing and inventory domain operations.
+- Idempotent transaction orchestration and journal records.
+- PostgreSQL transactions, migrations and row-level concurrency controls.
+- Redis sorted-set distributed rate limiting with fail-open circuit-breaker behavior.
+- Request IDs, structured logs, audit records and protected Prometheus metrics.
+- Optional TypeSafe integration outside authoritative domain commit decisions.
+
+## Verification endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/v1` | API identity |
+| `GET /api/v1/healthz` | Process liveness |
+| `GET /api/v1/readyz` | PostgreSQL/schema readiness |
+| `GET /metrics` | Protected Prometheus metrics |
+| `GET /docs` | OpenAPI documentation |
+
+Redis is intentionally not part of the readiness probe while its current rate-limiter integration can fail open. The backend now bounds each Redis client pool with `REDIS_MAX_CONNECTIONS` (default 50), uses explicit 2-second connect/operation timeouts and a 30-second health check, and closes the pool during graceful shutdown. Redis degradation must be monitored and alerted separately.
+
+## CI, container publishing and staging deployment
+
+- Backend image: `ghcr.io/nyeinpyaesone-ui/erp03-backend`
+- Frontend image: `ghcr.io/nyeinpyaesone-ui/erp03-frontend`
+- Images are built for Linux AMD64 and ARM64.
+- GitHub Actions uses scoped `GITHUB_TOKEN` package permissions; no Docker Hub token is required by the current GHCR publishing workflows.
+- Production Kubernetes images must be pinned by real build digests, not mutable `latest` tags.
+
+The manual `.github/workflows/deploy-staging.yml` workflow accepts a source commit and both image digests, connects over SSH, deploys to a Docker Compose staging host, runs migrations, checks container health and attempts image rollback on failure. This is a single-host staging flow; it is not a Kubernetes deployment and does not provide a multi-replica zero-downtime guarantee.
+
+The production shell deployment script is not yet qualified: its digest verification and endpoint smoke-test steps are placeholders, and the production manifests still require real image digests. Do not use it for a production cutover until those issues and the stateful-data blockers are resolved.
+
+## Kubernetes
+
+Base manifests and environment overlays are located in `infra/kubernetes/`:
+
+```bash
+kubectl kustomize infra/kubernetes/overlays/dev
+kubectl kustomize infra/kubernetes/overlays/staging
+kubectl kustomize infra/kubernetes/overlays/production
 ```
 
-Target capability sequence: authentication → business profile → capability registry → policy/context → runtime/workflow → approvals/audit → control tower → AI agent integration → E2E qualification.
+Provision runtime secrets outside Git before applying any environment. The placeholder template is intentionally excluded from the Kustomize resource list. PostgreSQL, Redis and Ollama image digest placeholders also require real, verified digests before applying the Kubernetes manifests.
 
-## Key Features
+**Production is not yet zero-downtime qualified.** The current SQLite journal uses a ReadWriteOnce volume while the backend scales to multiple replicas; PostgreSQL and Redis manifests are also single-instance. See the deployment runbook before applying production resources.
 
-- **Idempotent POS Sales** — SHA-256 fingerprint verification, branch-row locking, savepoints per payment
-- **Cross-Module Orchestration** — 6-state lifecycle (PENDING → PROCESSING → COMMITTED/FAILED → RECONCILIATION_REQUIRED → CANCELLED)
-- **Redis Rate Limiting** — Distributed sliding window using sorted sets
-- **TypeSafe Integration** — Optional AI judgment layer with confidence thresholds
-- **Production Security** — JWT auth, tenant-scoped queries, non-root containers, NetworkPolicy, RBAC
-- **Observability** — Request IDs, structured logging, Prometheus metrics, OpenTelemetry
-- **Backup/Restore** — Automated backups with checksum verification and restore scripts
+## Documentation
 
-## Development
+- [Architecture Blueprint — November 2026](docs/ARCHITECTURE_BLUEPRINT_2026-11.md)
+- [Zero-Downtime Deployment and Runtime Configuration](docs/ZERO_DOWNTIME_DEPLOYMENT_2026-11.md)
+- [Configuration & Credentials Setup](CONFIGURATION_SETUP.md)
+- [Deployment Runbook](docs/DEPLOY_RUNBOOK.md)
+- [Production Readiness Matrix](docs/PRODUCTION_READINESS_MATRIX.md)
+- [Remediation Tracker](docs/REMAINING_TASKS.md)
+- [Security Policy](SECURITY.md)
+- [Changelog](CHANGELOG.md)
 
-### Qualification Gate
+## Qualification
+
 ```bash
 cd ERP-BACKEND
 ruff check app tests alembic
@@ -109,58 +153,8 @@ ruff format --check app tests alembic
 python -m compileall -q app alembic
 alembic upgrade head
 pytest -q
+
+cd ../frontend
+npm ci
+npm run build
 ```
-
-### Frontend Build
-```bash
-cd frontend
-npm ci && npm run build
-```
-
-### Scripts
-| Script | Purpose |
-|--------|---------|
-| `scripts/setup.sh` | Bootstrap development environment |
-| `scripts/doctor.sh` | Repository health check |
-| `scripts/qualify.sh` | CI-equivalent qualification gate |
-| `scripts/preflight.sh` | Production pre-flight validation |
-| `scripts/security-audit.sh` | Security scan |
-| `scripts/backup.sh` | Database backup |
-| `scripts/restore.sh` | Database restore |
-| `scripts/deploy-production.sh` | Production deployment |
-| `scripts/rollback.sh` | Production rollback |
-
-## Environment Variables
-
-See `.env.example` for all available configuration options. Key variables:
-
-- `SECRET_KEY` — ≥32 characters (production)
-- `DATABASE_URL` — PostgreSQL for production, SQLite for dev
-- `CORS_ORIGINS` — Comma-separated origins
-- `REDIS_URL` — Redis connection URL
-- `ENVIRONMENT` — development/staging/production
-
-## Kubernetes
-
-Base manifests in `infra/kubernetes/base/` with overlays for dev, staging, and production:
-
-```bash
-# Validate manifests
-python -c "import yaml; [yaml.safe_load_all(open(f)) for f in __import__('glob').glob('infra/kubernetes/**/*.yaml', recursive=True)]"
-
-# Apply (requires kubectl)
-kubectl apply -k infra/kubernetes/overlays/production/
-```
-
-## Documentation
-
-- [AGENTS.md](AGENTS.md) — Developer instructions
-- [SECURITY.md](SECURITY.md) — Security policy
-- [CHANGELOG.md](CHANGELOG.md) — Change history
-- [docs/TODO.md](docs/TODO.md) — Remediation tracker
-- [docs/PRODUCTION_READINESS_MATRIX.md](docs/PRODUCTION_READINESS_MATRIX.md) — Production readiness
-- [docs/adr/](docs/adr/) — Architecture Decision Records
-
-## License
-
-See [LICENSE](LICENSE) for details.

@@ -1,181 +1,105 @@
-# ERP03 — Configuration & Credentials Setup Guide
+# ERP03 — Configuration & Credentials Setup
 
-This document consolidates all secrets, workflow permissions, branch protection, and environment configuration needed to activate the CI/CD pipeline.
+**Repository:** `nyeinpyaesone-ui/ERP03`  
+**Current image registry:** GitHub Container Registry (GHCR)  
+**Application model:** FastAPI + React/Vite modular monolith
 
-## 1. Repository Secrets (GitHub UI)
+This guide replaces older Docker Hub instructions. Configure credentials only in the relevant runtime environment; do not commit secrets or generated runtime files.
 
-**URL:** `https://github.com/nyeinpyaesone-ui/ERP03/settings/secrets/actions`
+## 1. Image publishing and GitHub permissions
 
-### Required Secrets
+Current publishing workflows:
+- `.github/workflows/docker-publish.yml` builds `ghcr.io/nyeinpyaesone-ui/erp03-backend`.
+- `.github/workflows/container.yml` builds `ghcr.io/nyeinpyaesone-ui/erp03-frontend`.
 
-| Secret | How to Generate | Purpose |
-|--------|----------------|---------|
-| `DOCKERHUB_TOKEN` | Docker Hub → Account Settings → Security → New Access Token (write access) | Push container images to Docker Hub |
-| `POSTGRES_PASSWORD` | Your chosen strong password | Database access for CI & compose |
-| `SECRET_KEY` | `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` | Application signing / sessions |
-| `DATABASE_URL` | `postgresql+asyncpg://erp03:<password>@postgres:5432/erp03` | Backend database connection |
+Both publish Linux AMD64 and ARM64 images. Backend publishing uses keyless Cosign signing and verifies its signature. Both workflows produce SBOM/provenance metadata and verify architecture manifests.
 
-### Optional Secrets (Advanced Pipeline)
+The workflows use the automatically provided `GITHUB_TOKEN` with explicit `packages: write` permission. **Do not configure `DOCKERHUB_TOKEN` for these GHCR workflows.** Keep repository Actions default permissions restrictive; do not enable broad write permissions just to make image publishing work.
 
-| Secret | How to Generate | Purpose |
-|--------|----------------|---------|
-| `COSIGN_KEY` | `cosign generate-key-pair k8s://erp03/signing-key` | Image signing |
-| `COSIGN_PUB_KEY` | Public key from above | Image verification |
-| `SLACK_WEBHOOK_URL` | Slack → Incoming Webhooks | Secret rotation alerts |
-| `SLACK_BOT_TOKEN` | Slack → OAuth & Permissions | Bot messages |
-| `PYPI_TOKEN` | PyPI → Account Settings → API tokens | Package publishing |
+Verify that both GHCR packages are associated with this repository. If a target host or Kubernetes cluster cannot pull the packages anonymously, provision a narrowly scoped read-only GHCR credential in that runtime environment.
 
-### How to Add
+## 2. Manual staging deployment workflow
 
-1. Go to the URL above
-2. Click **New repository secret**
-3. Enter name and value, click **Add secret**
-4. Repeat for all secrets
+The repository contains `.github/workflows/deploy-staging.yml`. It is triggered manually from the `main` branch and deploys immutable GHCR image digests to a remote Docker Compose staging host over SSH.
 
----
+Configure these GitHub Environment secrets in the `staging` environment:
 
-## 2. Workflow Permissions
+| Secret | Purpose |
+|---|---|
+| `STAGING_SSH_PRIVATE_KEY` | SSH private key used by the runner |
+| `STAGING_SSH_KNOWN_HOSTS` | Pinned host key; do not disable host verification |
+| `STAGING_SSH_HOST` | Staging host |
+| `STAGING_SSH_USER` | Restricted deployment user |
+| `STAGING_SSH_PORT` | SSH port; optional, defaults to 22 |
+| `STAGING_GHCR_USERNAME` | GHCR account used by the remote host |
+| `STAGING_GHCR_READ_TOKEN` | Read-only GHCR token with `read:packages` |
 
-**URL:** `https://github.com/nyeinpyaesone-ui/ERP03/settings/actions`
+Configure the `STAGING_DEPLOY_PATH` GitHub Environment variable to the existing checkout directory containing the Compose file on the staging host.
 
-1. Scroll to **Workflow permissions**
-2. Select **"Read and write permissions"**
-3. Click **Save**
+The manual workflow requires three inputs:
+- `source_sha`: full 40-character commit SHA.
+- `backend_digest`: exact backend OCI digest, formatted `sha256:<64 lowercase hex>`.
+- `frontend_digest`: exact frontend OCI digest, formatted `sha256:<64 lowercase hex>`.
 
-This enables the `DOCKERHUB_TOKEN` (Docker Hub access token) so the container workflow can push to Docker Hub without a separate PAT.
+The workflow checks the source/image revision labels, requires a previously running backend and frontend for rollback, executes the migration service, updates the application containers, waits for health checks, and attempts to restore prior images on failure. The staging host must have the expected Compose file, Docker Engine, Compose plugin, a clean checkout and a healthy previous application release.
 
----
+This workflow is a single-host Docker Compose deployment. It has no multi-replica service strategy and must not be described as zero downtime. Do not put database passwords or the application signing key in GitHub Actions unless a future reviewed workflow explicitly needs them.
 
-## 3. Branch Protection
+## 3. Local Docker Compose configuration
 
-**URL:** `https://github.com/nyeinpyaesone-ui/ERP03/settings/branches`
+The repository-root `.env` is used for Compose variable substitution. Keep it out of Git and restrict file permissions.
 
-Click **Add branch protection rule**:
-
-| Setting | Value |
-|---------|-------|
-| Branch name pattern | `main` |
-| Require a pull request before merging | ✅ Enabled |
-| Required approving reviews | 1 |
-| Require review from Code Owners | ✅ Enabled |
-| Require status checks before merging | ✅ Enabled |
-| Required status checks | `CI / backend`, `CI / frontend`, `Quality / lint`, `Security / dependency-audit`, `Container / build-backend`, `Container / build-frontend` |
-| Require branches to be up to date | ✅ Enabled |
-| Do not allow bypassing the above settings | ✅ Enabled |
-
----
-
-## 4. GitHub Environments
-
-**URL:** `https://github.com/nyeinpyaesone-ui/ERP03/settings/environments`
-
-| Environment | Reviewers | Wait Timer | Secrets to Add |
-|-------------|-----------|------------|----------------|
-| `development` | None | 0 | `POSTGRES_PASSWORD`, `SECRET_KEY`, `DATABASE_URL` |
-| `staging` | 1 | 5 min | `POSTGRES_PASSWORD`, `SECRET_KEY`, `DATABASE_URL` |
-| `production` | 2 | 10 min | `POSTGRES_PASSWORD`, `SECRET_KEY`, `DATABASE_URL` |
-
-To add environment secrets: Click environment → **Add secret** → Enter name and value.
-
----
-
-## 5. Local Environment File
-
-```bash
-cd /home/ubuntu/ERP03/ERP-BACKEND
-cp .env.example .env
-```
-
-Edit `.env`:
+Example key names (use fresh local values):
 
 ```ini
-ENVIRONMENT=development
-SECRET_KEY=<from-step-1>
 POSTGRES_DB=erp03
 POSTGRES_USER=erp03
-POSTGRES_PASSWORD=<from-step-1>
-DATABASE_URL=postgresql+asyncpg://erp03:<password>@postgres:5432/erp03
-DATABASE_PATH=./.local/erp03.sqlite3
+POSTGRES_PASSWORD=<local-postgres-password>
+SECRET_KEY=<random-secret-at-least-32-characters>
+DATABASE_URL=postgresql+asyncpg://erp03:<url-encoded-password>@postgres:5432/erp03
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
-
-DOCKERHUB_REGISTRY=docker.io
-DOCKERHUB_USERNAME=<your-dockerhub-username>
-DOCKERHUB_TOKEN=<DockerHub_PAT-value>
-DOCKERHUB_IMAGE_BACKEND=docker.io/<your-dockerhub-username>/erp03-backend
-DOCKERHUB_IMAGE_FRONTEND=docker.io/<your-dockerhub-username>/erp03-frontend
+REDIS_PASSWORD=<local-redis-password>
 IMAGE_TAG=latest
 ```
 
-**Never commit `.env`** — it is gitignored.
+For local backend development without Compose, copy `ERP-BACKEND/.env.example` to `ERP-BACKEND/.env` and set the fields declared in `ERP-BACKEND/app/core/config.py`. Settings use `extra="forbid"`; do not add undeclared environment variables to that file.
 
----
+For production, use HTTPS-only `CORS_ORIGINS`, PostgreSQL (never SQLite as the primary domain database), a unique signing key and distinct database/cache passwords. The Redis client reads `REDIS_MAX_CONNECTIONS` (default 50 per process), uses 2-second connect/operation timeouts and a 30-second connection health check, and closes its pool during graceful shutdown. The Kubernetes ConfigMap sets the 50-connection default explicitly. At the backend HPA maximum of ten pods, that permits up to 500 Redis connections if there is one Uvicorn process per pod; lower the setting if the actual Redis service's connection budget is smaller.
 
-## 6. Trigger the Pipeline
+## 4. Kubernetes runtime secrets
 
-```bash
-cd /home/ubuntu/ERP03
-git push origin main
-```
+Kubernetes uses a Secret named `erp03-secrets` in each namespace. Required keys:
+- `SECRET_KEY`
+- `POSTGRES_PASSWORD`
+- `REDIS_PASSWORD`
 
-Or tag a release:
+The old checked-in placeholder was removed from the base Kustomize resource list. The file `infra/kubernetes/base/erp03-secrets.example.yaml` is documentation only and must not be applied. Provision the real Secret through External Secrets Operator / your secret manager, or the secure manual bootstrap in [the zero-downtime runbook](docs/ZERO_DOWNTIME_DEPLOYMENT_2026-11.md).
 
-```bash
-git tag v1.0.0 && git push origin v1.0.0
-```
+Use unique credentials per environment. Never place the values in a manifest, GitHub issue, workflow summary, shell history or committed `.env`.
 
-This triggers the Container workflow which builds and pushes:
-- `docker.io/nyeinpyaesone-ui/erp03-backend`
-- `docker.io/nyeinpyaesone-ui/erp03-frontend`
+## 5. Image tags and digests
 
----
+The workflows publish branch, release-tag, SHA and (for main) latest tags. The production overlay pins the backend and frontend by digest. The Kubernetes base also contains digest placeholders for PostgreSQL, Redis and Ollama. Replace every `REPLACE_WITH_REAL_DIGEST` / `REPLACE_WITH_REAL_*_DIGEST` marker with the digest verified for that exact image version before applying the corresponding Kustomize overlay.
 
-## 7. Pull Images
+- `ghcr.io/nyeinpyaesone-ui/erp03-backend@sha256:<verified-digest>`
+- `ghcr.io/nyeinpyaesone-ui/erp03-frontend@sha256:<verified-digest>`
 
-```bash
-echo $DOCKERHUB_TOKEN | docker login docker.io -u $DOCKERHUB_USERNAME --password-stdin
-docker pull docker.io/nyeinpyaesone-ui/erp03-backend:latest
-docker pull docker.io/nyeinpyaesone-ui/erp03-frontend:latest
-```
+Never infer a digest from a tag or an earlier build. Keep the production web images immutable and pinned to the exact published release.
 
----
+## 6. Verification checklist
 
-## 8. Current Repository State
+- [ ] CI, Quality, Security, Container, Docker, Type Check and Coverage pass for the exact release commit.
+- [ ] Policy Enforcement completes with a successful job (not `startup_failure` / no jobs).
+- [ ] Both GHCR images exist and include AMD64 + ARM64 manifests.
+- [ ] Image digests are copied from the exact successful build.
+- [ ] Staging Environment secrets and `STAGING_DEPLOY_PATH` are configured for the manual staging workflow.
+- [ ] Kubernetes runtime Secret exists in the target namespace, provisioned outside Git.
+- [ ] The target host/cluster can pull the images.
+- [ ] Staging deployment, smoke tests, backup/restore and rollback drill pass.
+- [ ] SQLite journal / RWO storage and database HA blockers are resolved before production zero-downtime qualification.
 
-| Item | Status |
-|------|--------|
-| Working tree | Clean |
-| Remote | `origin/main` at `cbe60362` |
-| Lint (ruff) | 0 findings |
-| Format | Clean |
-| Tests | 48 passed, 1 skipped |
-| Alembic migrations | Single head, applies cleanly |
-| GitHub Actions workflows | 11 workflows, all valid YAML |
-| Secrets configured | ❌ Pending (you must add) |
-| Workflow permissions | ❌ Pending (you must enable) |
-| Branch protection | ❌ Pending (you must configure) |
+## 7. Production status
 
----
+The repository includes Kubernetes Deployment, HPA, PDB, Service, Ingress and probe configuration, plus a manual Docker Compose staging deployment workflow. The production deployment shell script still contains placeholder digest verification and health-check steps, and the checked-in Kubernetes images contain digest placeholders. The connected Railway project inspected for this task is a separate ERPNext/MariaDB environment, not an ERP03 deployment.
 
-## 9. Quick Verification
-
-```bash
-# Check pipeline ran
-gh run list --repo nyeinpyaesone-ui/ERP03 --limit 5
-
-# Check images in Docker Hub
-gh api repos/nyeinpyaesone-ui/ERP03/packages/container/erp03-backend/versions
-
-# Pull and run
-docker run -p 8000:8000 docker.io/nyeinpyaesone-ui/erp03-backend:latest
-curl http://localhost:8000/api/v1/healthz
-```
-
----
-
-## 10. Important Notes
-
-- **Never paste credentials in chat.** Configure them directly in the GitHub UI.
-- **DOCKERHUB_TOKEN** is a Docker Hub access token with push access.
-- **Workflow permissions** must be "Read and write" for `GITHUB_TOKEN` to push to Docker Hub.
-- **Branch protection** requires Code Owners review — `CODEOWNERS` file is already in the repo.
-- All workflows use only official GitHub Actions (`actions/*`, `docker/*`, `github/codeql-action*`).
+There is no evidence here that an ERP03 production cluster is live, that production database failover works, or that the multi-replica SQLite journal is safe. Do not label production as zero-downtime qualified until those conditions are tested and recorded.

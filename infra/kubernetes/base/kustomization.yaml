@@ -3,7 +3,6 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - configmap.yaml
-  - erp03-secrets.yaml
   - erp-data-pvc.yaml
   - redis.yaml
   - postgres.yaml
