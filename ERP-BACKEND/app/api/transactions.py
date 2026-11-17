@@ -111,13 +111,14 @@ def _to_operation_response(
     replay: bool = False,
 ) -> TransactionResponse:
     payload = operation.payload_json
+    result = operation.result_json or {}
     return TransactionResponse(
         transaction_id=operation.id.hex,
         status=_OPERATION_STATUS[operation.state],
         operation=operation.operation_type,
-        amount=str(payload["amount"]),
-        currency=str(payload["currency"]),
-        metadata=payload.get("metadata") or {},
+        amount=str(payload.get("amount", result.get("total", "0.00"))),
+        currency=str(payload.get("currency", result.get("currency", "MMK"))),
+        metadata=payload.get("metadata") or result.get("metadata") or {},
         idempotent_replay=replay,
     )
 
