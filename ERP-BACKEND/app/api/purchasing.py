@@ -53,58 +53,57 @@ async def receive_purchase(
         ],
     }
 
-    try:
-        async with session.begin():
-            service = OperationService(
-                session,
-                worker_id=f"purchase-receipt-{uuid4().hex}",
-            )
-            operation, _replayed = await service.create_operation_with_replay(
-                operation_id=operation_id,
-                operation_type="purchase.receipt",
-                business_id=business_id,
-                branch_id=payload.branch_id,
-                payload=command,
-            )
-
-            if operation.state == OperationState.COMMITTED:
-                result = operation.result_json or {}
-                if "total_value" not in result or "lines_received" not in result:
-                    raise ConflictError(
-                        "Committed purchase receipt has no stored result; "
-                        "manual reconciliation is required"
-                    )
-                return ReceivePurchaseResponse(
-                    total_value=str(result["total_value"]),
-                    lines_received=int(result["lines_received"]),
-                )
-
-            claimed = await service.claim_operation(operation_id)
-            if claimed is None:
-                raise ConflictError(
-                    "Purchase receipt is already processing, not yet retryable, "
-                    "or requires manual reconciliation"
-                )
-
-            total_value = await receive_purchase_lines(
-                session,
-                business_id=business_id,
-                branch_id=payload.branch_id,
-                warehouse_id=payload.warehouse_id,
-                lines=[
-                    (line.product_id, line.quantity, line.unit_cost)
-                    for line in payload.lines
-                ],
-            )
-            await service.commit_operation(
-                claimed,
-                result={
-                    "total_value": str(total_value),
-                    "lines_received": len(payload.lines),
-                    "currency": "MMK",
-                },
-            )
-        return ReceivePurchaseResponse(
-            total_value=str(total_value),
-            lines_received=len(payload.lines),
+    async with session.begin():
+        service = OperationService(
+            session,
+            worker_id=f"purchase-receipt-{uuid4().hex}",
         )
+        operation, _replayed = await service.create_operation_with_replay(
+            operation_id=operation_id,
+            operation_type="purchase.receipt",
+            business_id=business_id,
+            branch_id=payload.branch_id,
+            payload=command,
+        )
+
+        if operation.state == OperationState.COMMITTED:
+            result = operation.result_json or {}
+            if "total_value" not in result or "lines_received" not in result:
+                raise ConflictError(
+                    "Committed purchase receipt has no stored result; "
+                    "manual reconciliation is required"
+                )
+            return ReceivePurchaseResponse(
+                total_value=str(result["total_value"]),
+                lines_received=int(result["lines_received"]),
+            )
+
+        claimed = await service.claim_operation(operation_id)
+        if claimed is None:
+            raise ConflictError(
+                "Purchase receipt is already processing, not yet retryable, "
+                "or requires manual reconciliation"
+            )
+
+        total_value = await receive_purchase_lines(
+            session,
+            business_id=business_id,
+            branch_id=payload.branch_id,
+            warehouse_id=payload.warehouse_id,
+            lines=[
+                (line.product_id, line.quantity, line.unit_cost)
+                for line in payload.lines
+            ],
+        )
+        await service.commit_operation(
+            claimed,
+            result={
+                "total_value": str(total_value),
+                "lines_received": len(payload.lines),
+                "currency": "MMK",
+            },
+        )
+    return ReceivePurchaseResponse(
+        total_value=str(total_value),
+        lines_received=len(payload.lines),
+    )
