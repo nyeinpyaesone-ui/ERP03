@@ -1,0 +1,73 @@
+services:
+  migrate:
+    build:
+      context: ./ERP-BACKEND
+      dockerfile: Dockerfile
+    environment:
+      ENVIRONMENT: development
+      SECRET_KEY: ${SECRET_KEY:?Run ./scripts/setup-standalone.sh to generate local configuration}
+      DATABASE_URL: sqlite+aiosqlite:////app/.local/erp03-domain.sqlite3
+      DATABASE_PATH: /app/.local/erp03-journal.sqlite3
+      CORS_ORIGINS: http://localhost:3000
+      RATE_LIMIT_ENABLED: "false"
+      REDIS_URL: ""
+    volumes:
+      - erp03_standalone_data:/app/.local
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  backend:
+    build:
+      context: ./ERP-BACKEND
+      dockerfile: Dockerfile
+    environment:
+      ENVIRONMENT: development
+      SECRET_KEY: ${SECRET_KEY:?Run ./scripts/setup-standalone.sh to generate local configuration}
+      DATABASE_URL: sqlite+aiosqlite:////app/.local/erp03-domain.sqlite3
+      DATABASE_PATH: /app/.local/erp03-journal.sqlite3
+      CORS_ORIGINS: http://localhost:3000
+      RATE_LIMIT_ENABLED: "false"
+      REDIS_URL: ""
+      LOG_LEVEL: INFO
+    volumes:
+      - erp03_standalone_data:/app/.local
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/readyz', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    ports:
+      - "127.0.0.1:${ERP03_HTTP_PORT:-3000}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  erp03_standalone_data:
+    name: erp03_standalone_data
