@@ -33,6 +33,14 @@ ERP03 is a multi-tenant business ERP implemented as a modular monolith. The fron
 ./scripts/setup.sh --qualify
 ```
 
+### Standalone Docker runtime (no PostgreSQL/Redis required)
+
+```bash
+bash scripts/setup-standalone.sh
+```
+
+This builds the FastAPI and React/Nginx images, applies SQLite migrations, starts both services, and verifies API/frontend readiness. Local state is persisted in a Compose-managed volume. This profile is for development/demo use only; it is not a production or multi-replica topology. See [Standalone Setup](docs/STANDALONE_SETUP.md).
+
 ### Manual backend setup
 
 ```bash
@@ -101,7 +109,7 @@ The application remains a modular monolith. Add queues or independently deployed
 |---|---|
 | `GET /api/v1` | API identity |
 | `GET /api/v1/healthz` | Process liveness |
-| `GET /api/v1/readyz` | PostgreSQL/schema readiness |
+| `GET /api/v1/readyz` | Database/schema readiness (PostgreSQL in integrated profiles) |
 | `GET /metrics` | Protected Prometheus metrics |
 | `GET /docs` | OpenAPI documentation |
 
@@ -137,7 +145,7 @@ Provision runtime secrets outside Git before applying any environment. The place
 
 - [Architecture Blueprint — November 2026](docs/ARCHITECTURE_BLUEPRINT_2026-11.md)
 - [Zero-Downtime Deployment and Runtime Configuration](docs/ZERO_DOWNTIME_DEPLOYMENT_2026-11.md)
-- [Configuration & Credentials Setup](CONFIGURATION_SETUP.md)
+- [Standalone local runtime](docs/STANDALONE_SETUP.md)\n- [Configuration & Credentials Setup](CONFIGURATION_SETUP.md)
 - [Deployment Runbook](docs/DEPLOY_RUNBOOK.md)
 - [Production Readiness Matrix](docs/PRODUCTION_READINESS_MATRIX.md)
 - [Remediation Tracker](docs/REMAINING_TASKS.md)
