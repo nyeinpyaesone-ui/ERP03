@@ -153,7 +153,7 @@ async def migrate(snapshot: Path, apply: bool) -> None:
     try:
         async with session_factory() as session:
             async with session.begin():
-                async for item in _async_rows(source_rows(connection)):
+                for item in source_rows(connection):
                     business_id, operation_id, operation_type, payload, operation_uuid, created_at = item
                     source_count += 1
                     canonical = json.dumps(
@@ -176,6 +176,12 @@ async def migrate(snapshot: Path, apply: bool) -> None:
                         raise ValueError(
                             f"Tenant {business_id} for operation {operation_id!r} "
                             "does not exist in PostgreSQL"
+                        )
+
+                    by_primary_key = await session.get(Operation, operation_uuid)
+                    if by_primary_key is not None and by_primary_key.operation_id != operation_id:
+                        raise ValueError(
+                            f"Legacy transaction ID collides with another operation: {operation_uuid}"
                         )
 
                     existing = await session.scalar(
@@ -215,10 +221,11 @@ async def migrate(snapshot: Path, apply: bool) -> None:
                     inserted += 1
 
         mode = "APPLIED" if apply else "DRY RUN"
+        count_label = "inserted" if apply else "would_insert"
         print(
             f"{mode}: source_rows={source_count} "
-            f"inserted={inserted} already_present={already_present} "
-            f"source_sha256={checksum.hexdigest()}"
+            f"{count_label}={inserted} already_present={already_present} "
+            f"normalized_rows_sha256={checksum.hexdigest()}"
         )
         if not apply:
             print("No PostgreSQL rows were inserted. Re-run with --apply after approval.")
@@ -226,12 +233,6 @@ async def migrate(snapshot: Path, apply: bool) -> None:
         connection.rollback()
         connection.close()
         await engine.dispose()
-
-
-async def _async_rows(rows):
-    """Adapt the source iterator to an async loop without blocking the event loop."""
-    for item in rows:
-        yield item
 
 
 def main() -> int:
