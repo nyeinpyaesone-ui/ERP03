@@ -1,0 +1,121 @@
+name: ERP03 Kubernetes Preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      namespace:
+        description: "Existing namespace to inspect (read-only)"
+        required: true
+        type: choice
+        options:
+          - erp03-staging
+          - erp03
+
+permissions:
+  contents: read
+
+concurrency:
+  group: erp03-kubernetes-preflight
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Read-only self-managed cluster preflight
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, erp03-k8s]
+    environment: kubernetes-preflight
+    timeout-minutes: 15
+    steps:
+      - name: Checkout reviewed main revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Kustomize
+        uses: imranismail/setup-kustomize@2ba527d4d055ab63514ba50a99456fc35684947f
+
+      - name: Validate runner context and read-only RBAC
+        env:
+          EXPECTED_CONTEXT: ${{ vars.ERP03_KUBE_CONTEXT }}
+          TARGET_NAMESPACE: ${{ inputs.namespace }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          command -v kubectl >/dev/null
+          command -v kustomize >/dev/null
+
+          test -n "${EXPECTED_CONTEXT}" || {
+            echo "::error::Set ERP03_KUBE_CONTEXT in the kubernetes-preflight environment"
+            exit 1
+          }
+
+          actual_context="$(kubectl config current-context)"
+          test "$actual_context" = "$EXPECTED_CONTEXT" || {
+            echo "::error::Kube context mismatch; expected configured context, refusing to inspect another cluster"
+            exit 1
+          }
+
+          kubectl version --client
+          kubectl version
+
+          kubectl auth can-i get namespaces | grep -qx yes || {
+            echo "::error::Runner identity needs cluster-scoped get permission on namespaces"
+            exit 1
+          }
+          kubectl get namespace "$TARGET_NAMESPACE" >/dev/null
+
+          for resource in deployments pods persistentvolumeclaims services ingresses; do
+            kubectl auth can-i list "$resource" --namespace "$TARGET_NAMESPACE" | grep -qx yes || {
+              echo "::error::Runner identity lacks read permission for $resource in $TARGET_NAMESPACE"
+              exit 1
+            }
+          done
+
+          echo "Read-only cluster access confirmed for namespace: $TARGET_NAMESPACE"
+          kubectl get deployments,pods,pvc,services,ingress --namespace "$TARGET_NAMESPACE" --no-headers
+
+      - name: Render overlays and enforce the selected environment's image policy
+        env:
+          TARGET_NAMESPACE: ${{ inputs.namespace }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rendered_dir="$(mktemp -d)"
+          trap 'rm -rf "$rendered_dir"' EXIT
+
+          for environment in dev staging production; do
+            overlay="infra/kubernetes/overlays/$environment"
+            rendered="$rendered_dir/$environment.yaml"
+            test -f "$overlay/kustomization.yaml"
+            kustomize build "$overlay" > "$rendered"
+            test -s "$rendered"
+            echo "Rendered $environment overlay"
+          done
+
+          case "$TARGET_NAMESPACE" in
+            erp03-staging) target_environment="staging" ;;
+            erp03) target_environment="production" ;;
+            *)
+              echo "::error::Unsupported target namespace"
+              exit 1
+              ;;
+          esac
+
+          target_rendered="$rendered_dir/$target_environment.yaml"
+          if [[ "$target_environment" == "production" ]]; then
+            if grep -nE 'REPLACE_WITH|sha256:[<A-Z_]' "$target_rendered"; then
+              echo "::error::Production image digest placeholders must be replaced with verified OCI digests"
+              exit 1
+            fi
+
+            if grep -nE 'image: .+:(latest|[0-9]+\.[0-9]+\.[0-9]+)' "$target_rendered" | grep -v '@sha256:'; then
+              echo "::error::Production images must be pinned by immutable digest"
+              exit 1
+            fi
+          elif grep -nE 'REPLACE_WITH|sha256:[<A-Z_]' "$target_rendered"; then
+            echo "::warning::Staging base images still contain digest placeholders; this read-only preflight does not authorize a deployment"
+            echo "Staging image placeholders remain; deployment is blocked pending verified digests." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "Manifest render and selected-environment policy checks completed. No cluster resources were changed."

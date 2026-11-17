@@ -118,3 +118,17 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Build frontend
         run: VITE_API_BASE_URL=/api npm run build
+
+  workflow-contract:
+    name: Workflow contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: "3.12"
+      - name: Install YAML parser
+        run: python -m pip install --disable-pip-version-check --no-input PyYAML==6.0.3
+      - name: Validate workflow contracts
+        run: python -m unittest discover -s tests -p "test_*_workflow.py" -v
