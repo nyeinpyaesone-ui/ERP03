@@ -576,7 +576,9 @@ async def test_failure_message_redacts_common_secret_assignments():
     assert operation is not None
     assert "do-not-store" not in (operation.error_message or "")
     assert "secret-value" not in (operation.error_message or "")
-    assert "[REDACTED]" in (operation.error_message or "")
+    assert operation.error_message == (
+        "Operation failed; inspect sanitized application logs using the operation ID."
+    )
 
 
 
