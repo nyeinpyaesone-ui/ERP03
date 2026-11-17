@@ -709,6 +709,7 @@ async def test_pos_sale_commits_operation_and_domain_mutations_atomically():
     """POS invoice, stock and operation outcome must commit as one unit."""
     business, branch, warehouse, _user = await _bootstrap("POSOP")
     product = Product(
+        id=uuid4(),
         business_id=business.id,
         branch_id=branch.id,
         sku=f"POS-{uuid4().hex[:8]}",
