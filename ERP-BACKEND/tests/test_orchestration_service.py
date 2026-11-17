@@ -625,6 +625,11 @@ async def test_postgres_transaction_api_uses_shared_operations_table(monkeypatch
         assert fetched.status_code == 200
         assert fetched.json()["metadata"] == payload["metadata"]
 
+        identity["business_id"] = str(uuid4())
+        async with httpx.AsyncClient(transport=transport, base_url="http://erp03.test") as other_tenant:
+            foreign = await other_tenant.get(f"/api/v1/transactions/{transaction_id}")
+        assert foreign.status_code == 404
+
         # The API accepted into operations; it did not claim a domain commit.
         async with SessionFactory() as session:
             operation = await session.scalar(
@@ -634,3 +639,62 @@ async def test_postgres_transaction_api_uses_shared_operations_table(monkeypatch
         assert operation.state == OperationState.PENDING
     finally:
         app.dependency_overrides.pop(current_claims, None)
+
+
+
+@pytest.mark.asyncio
+async def test_branch_mismatch_conflicts_once_branch_is_recorded():
+    """A branch-bound operation key cannot be replayed from another branch."""
+    business, branch_a, _warehouse_a, _user_a = await _bootstrap("ORCHBRANCHA")
+    _business_b, branch_b, _warehouse_b, _user_b = await _bootstrap("ORCHBRANCHB")
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        await service.create_operation(
+            operation_id="orch-branch-bound-001",
+            operation_type="inventory.adjust",
+            business_id=business.id,
+            branch_id=branch_a.id,
+            payload={"sku": "SKU-1", "quantity": 2},
+        )
+        await session.commit()
+
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        with pytest.raises(ConflictError, match="different command"):
+            await service.create_operation(
+                operation_id="orch-branch-bound-001",
+                operation_type="inventory.adjust",
+                business_id=business.id,
+                branch_id=branch_b.id,
+                payload={"sku": "SKU-1", "quantity": 2},
+            )
+        await session.rollback()
+
+
+@pytest.mark.asyncio
+async def test_branchless_legacy_operation_can_be_replayed_with_branch_context():
+    """A migrated legacy row without branch metadata retains safe replay compatibility."""
+    business, branch, _warehouse, _user = await _bootstrap("ORCHLEGACYBRANCH")
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        await service.create_operation(
+            operation_id="orch-legacy-branch-001",
+            operation_type="invoice.create",
+            business_id=business.id,
+            branch_id=None,
+            payload={"amount": "10.00"},
+        )
+        await session.commit()
+
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        operation, replay = await service.create_operation_with_replay(
+            operation_id="orch-legacy-branch-001",
+            operation_type="invoice.create",
+            business_id=business.id,
+            branch_id=branch.id,
+            payload={"amount": "10.00"},
+        )
+        await session.commit()
+    assert replay is True
+    assert operation.branch_id is None
