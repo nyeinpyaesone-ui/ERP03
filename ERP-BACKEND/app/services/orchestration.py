@@ -187,6 +187,58 @@ class OperationService:
             .with_for_update(skip_locked=dialect != "sqlite")
         )
 
+    def _claim_row(self, operation: Operation, *, now: datetime) -> Operation:
+        """Assign a fresh fencing token to an already-locked eligible operation."""
+        token = uuid4().hex
+        operation.state = OperationState.PROCESSING
+        operation.claimed_at = now
+        operation.claimed_by = self.worker_id
+        operation.claim_token = token
+        operation.lease_expires_at = now + timedelta(seconds=self.lease_seconds)
+        operation.backoff_until = None
+        operation.updated_at = now
+        return operation
+
+    async def claim_operation(self, operation_id: str) -> Operation | None:
+        """Claim one named operation, including an expired processing lease.
+
+        This is used by synchronous domain endpoints that must atomically
+        execute a known operation in the same session as its business writes.
+        A live claim held by another worker is never stolen.
+        """
+        bind = self.session.get_bind()
+        dialect = bind.dialect.name if bind is not None else "sqlite"
+        result = await self.session.execute(
+            select(Operation)
+            .where(Operation.operation_id == operation_id)
+            .with_for_update(skip_locked=dialect != "sqlite")
+        )
+        operation = result.scalar_one_or_none()
+        if operation is None:
+            return None
+
+        now = datetime.now(UTC)
+        if operation.state in (OperationState.PENDING, OperationState.FAILED):
+            if not operation.is_claimable:
+                return None
+        elif operation.state == OperationState.PROCESSING:
+            lease_expired = (
+                operation.lease_expires_at is not None
+                and operation.lease_expires_at <= now
+            )
+            legacy_claim_expired = (
+                operation.lease_expires_at is None
+                and operation.updated_at < now - timedelta(seconds=self.lease_seconds)
+            )
+            if not (lease_expired or legacy_claim_expired):
+                return None
+        else:
+            return None
+
+        self._claim_row(operation, now=now)
+        await self.session.flush()
+        return operation
+
     async def claim_next(self) -> Operation | None:
         """Claim one available operation using a unique, expiring fencing token."""
         result = await self.session.execute(self._claimable_query())
@@ -201,14 +253,7 @@ class OperationService:
             return None
 
         now = datetime.now(UTC)
-        token = uuid4().hex
-        operation.state = OperationState.PROCESSING
-        operation.claimed_at = now
-        operation.claimed_by = self.worker_id
-        operation.claim_token = token
-        operation.lease_expires_at = now + timedelta(seconds=self.lease_seconds)
-        operation.backoff_until = None
-        operation.updated_at = now
+        self._claim_row(operation, now=now)
         await self.session.flush()
         return operation
 
