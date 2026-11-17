@@ -3,7 +3,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import Claims
@@ -36,8 +36,6 @@ def _claim_branch_id(claims: Claims) -> UUID | None:
     try:
         return UUID(str(value))
     except ValueError as exc:
-        from fastapi import HTTPException, status
-
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authorization claims",
