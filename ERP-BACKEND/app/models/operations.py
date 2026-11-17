@@ -73,6 +73,7 @@ class Operation(Base):
         UniqueConstraint("operation_id", name="uq_operations_operation_id"),
         Index("ix_operations_state_updated", "state", "updated_at"),
         Index("ix_operations_business_state", "business_id", "state"),
+        Index("ix_operations_state_lease_expiry", "state", "lease_expires_at"),
     )
 
     id: Mapped[UUID] = mapped_column(GUID(), primary_key=True, default=uuid4)
