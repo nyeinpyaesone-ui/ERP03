@@ -73,10 +73,16 @@ def normalize_row(row: sqlite3.Row, columns: set[str]) -> tuple[UUID, str, str, 
     if ":" in raw_key:
         raw_prefix, candidate_key = raw_key.split(":", 1)
         try:
-            if UUID(raw_prefix) == business_id:
-                client_key = candidate_key
+            parsed_prefix = UUID(raw_prefix)
         except ValueError:
-            pass
+            parsed_prefix = None
+        if parsed_prefix is not None:
+            if parsed_prefix != business_id:
+                raise ValueError(
+                    f"Journal transaction {row['transaction_id']!r} idempotency key "
+                    "tenant prefix does not match business_id"
+                )
+            client_key = candidate_key
     operation_id = f"{business_id}:{client_key}"
     if len(operation_id) > 255:
         raise ValueError(
