@@ -207,6 +207,7 @@ class OperationService:
         operation.claimed_by = self.worker_id
         operation.claim_token = token
         operation.lease_expires_at = now + timedelta(seconds=self.lease_seconds)
+        operation.backoff_until = None
         operation.updated_at = now
         await self.session.flush()
         return operation
