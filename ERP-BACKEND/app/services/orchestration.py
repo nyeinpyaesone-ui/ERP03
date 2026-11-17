@@ -226,9 +226,12 @@ class OperationService:
                 operation.lease_expires_at is not None
                 and operation.lease_expires_at <= now
             )
+            updated_at = operation.updated_at
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=UTC)
             legacy_claim_expired = (
                 operation.lease_expires_at is None
-                and operation.updated_at < now - timedelta(seconds=self.lease_seconds)
+                and updated_at < now - timedelta(seconds=self.lease_seconds)
             )
             if not (lease_expired or legacy_claim_expired):
                 return None
