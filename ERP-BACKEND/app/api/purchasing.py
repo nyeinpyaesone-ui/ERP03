@@ -1,6 +1,6 @@
 """Idempotent purchase receiving endpoint with atomic inventory commit."""
 
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,7 +57,7 @@ async def receive_purchase(
         async with session.begin():
             service = OperationService(
                 session,
-                worker_id=f"purchase-receipt-{UUID(int=0).hex[:8]}",
+                worker_id=f"purchase-receipt-{uuid4().hex}",
             )
             operation, _replayed = await service.create_operation_with_replay(
                 operation_id=operation_id,
@@ -108,5 +108,3 @@ async def receive_purchase(
             total_value=str(total_value),
             lines_received=len(payload.lines),
         )
-    except ConflictError:
-        raise
