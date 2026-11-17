@@ -44,6 +44,17 @@ Migration `0010_operation_claim_leases` adds `claim_token` and `lease_expires_at
 
 Domain handlers must call `commit_operation` in the same database session transaction as their business changes. External side effects must be delivered through an outbox or an independently idempotent integration; do not hold a database transaction open across a network call.
 
+## Integrated ERP domain handlers
+
+The feature branch now wires the existing orchestration lifecycle into the two stock-changing ERP workflows:
+
+- **POS sales — `POST /api/v1/sales`:** the sale service creates/claims a tenant-scoped `pos.sale` operation. Invoice header, invoice items, payment rows, inventory movements, stock balances and the operation `committed` result are persisted in the same PostgreSQL transaction. A retry with the same sale fingerprint returns the existing invoice without decrementing stock again; a changed request under the same key returns HTTP 409.
+- **Purchase receiving — `POST /api/v1/purchases/receipts`:** requires `X-Idempotency-Key`. The operation row, stock-in movements, stock balances, weighted-average product costs and committed result are persisted in one PostgreSQL transaction. A replay returns the prior receipt totals without increasing stock a second time; a changed payload conflicts.
+- **Catalog:** product/customer/supplier creation now verifies that the target branch is active and belongs to the authenticated tenant. Branch-scoped list and product-activation routes constrain access to the branch in the verified token.
+- **Request unit of work:** `get_db_session` commits once after a successful request and rolls back on exceptions/cancellation. This closes a previous gap where CRUD/receiving helpers flushed changes but the request dependency closed the session without committing.
+
+The generic `POST /api/v1/transactions` endpoint intentionally remains an acceptance API. It records intent but does not execute arbitrary operation names. POS and purchase endpoints are the domain handlers that execute their own validated work and atomically advance the corresponding operation. Other domain actions must follow the same rule before they are considered fully orchestrated.
+
 ## SQLite journal migration
 
 The import utility is `scripts/migrate_transaction_journal.py`.
@@ -70,7 +81,7 @@ The importer is read-only by default. Its `--apply` option writes to PostgreSQL 
 
 ## Tests and operational evidence
 
-The backend test suite covers SQLite idempotency behavior and the orchestration service. The feature branch adds tests for PostgreSQL-mode API intake against the shared operations table, replay/conflict behavior, claim leases, renewal, expiry recovery, stale-worker fencing and failure-message redaction.
+The backend test suite covers SQLite idempotency behavior and the orchestration service. The feature branch adds test definitions for PostgreSQL-mode API intake against the shared operations table, request-session commit/rollback, replay/conflict behavior, POS invoice/stock atomicity, purchase receipt replay, branch isolation, claim leases, renewal, expiry recovery, stale-worker fencing, importer validation and failure-message redaction.
 
 A test definition is not a passing test result. Run the backend test and migration workflows on this exact branch and retain their execution evidence before calling this implementation qualified.
 
@@ -79,7 +90,7 @@ A test definition is not a passing test result. Run the backend test and migrati
 - Run Alembic upgrade/downgrade validation on both supported test dialects.
 - Run concurrency and crash-window tests against real PostgreSQL with independent connections/processes.
 - Exercise write-fenced import and reconciliation in staging using a protected snapshot.
-- Implement/verify each operation's domain handler so the business mutation and `committed` transition are atomic.
+- Extend the atomic operation pattern to any future ERP write endpoints; generic transaction intake is still acceptance-only.
 - Verify PostgreSQL HA, backup/PITR and restore; the current single StatefulSet is not HA.
 - Complete the staging rollback, auth, tenant-isolation and ERP workflow smoke tests before production approval.
 
