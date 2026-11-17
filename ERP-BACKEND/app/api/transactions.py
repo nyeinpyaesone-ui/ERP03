@@ -116,7 +116,7 @@ def _to_operation_response(
         transaction_id=operation.id.hex,
         status=_OPERATION_STATUS[operation.state],
         operation=operation.operation_type,
-        amount=str(payload.get("amount", result.get("total", "0.00"))),
+        amount=str(payload.get("amount", result.get("total", result.get("total_value", "0.00")))),
         currency=str(payload.get("currency", result.get("currency", "MMK"))),
         metadata=payload.get("metadata") or result.get("metadata") or {},
         idempotent_replay=replay,
