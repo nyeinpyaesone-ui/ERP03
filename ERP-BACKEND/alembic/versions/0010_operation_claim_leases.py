@@ -36,6 +36,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    oversized = bind.execute(
+        sa.text("SELECT count(*) FROM operations WHERE length(operation_type) > 80")
+    ).scalar_one()
+    if oversized:
+        raise RuntimeError(
+            "Cannot downgrade operation_type to 80 characters: "
+            f"{oversized} operation(s) exceed the legacy limit"
+        )
+
     op.drop_index("ix_operations_state_lease_expiry", table_name="operations")
     with op.batch_alter_table("operations") as batch_op:
         batch_op.alter_column(
