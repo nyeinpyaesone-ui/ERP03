@@ -8,7 +8,6 @@ A persisted claim token fences out workers whose leases expired or were reclaime
 from __future__ import annotations
 
 import json
-import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
@@ -285,15 +284,9 @@ class OperationService:
         operation.lease_expires_at = None
 
     @staticmethod
-    def _safe_error_message(value: str) -> str:
-        """Bound and redact common credential assignments before persistence."""
-        message = " ".join(value.split())
-        message = re.sub(
-            r"(?i)\b(password|passwd|secret|token|authorization|api[_-]?key)\s*[:=]\s*[^\s,;]+",
-            r"\1=[REDACTED]",
-            message,
-        )
-        return message[:500]
+    def _safe_error_message(_value: str) -> str:
+        """Persist a safe summary; raw exception text may contain credentials or PII."""
+        return "Operation failed; inspect sanitized application logs using the operation ID."
 
     async def fail_operation(
         self,
