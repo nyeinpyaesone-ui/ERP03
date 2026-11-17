@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError
 from app.core.pagination import Page
 from app.models.erp import Customer, Product, Supplier
+from app.models.identity import Branch
 
 
 def _ensure_branch_scope(claims: dict, branch_id: UUID) -> None:
@@ -26,11 +27,30 @@ def _ensure_branch_scope(claims: dict, branch_id: UUID) -> None:
         raise ForbiddenError("Branch access denied")
 
 
+async def _ensure_branch_belongs_to_business(
+    session: AsyncSession,
+    *,
+    business_id: UUID,
+    branch_id: UUID,
+) -> None:
+    """Reject missing, inactive or cross-tenant branch references without disclosure."""
+    branch = await session.scalar(
+        select(Branch).where(
+            Branch.id == branch_id,
+            Branch.business_id == business_id,
+            Branch.active.is_(True),
+        )
+    )
+    if branch is None:
+        raise NotFoundError("Branch not found")
+
+
 async def create_product(
     session: AsyncSession,
     *,
     business_id: UUID,
     branch_id: UUID,
+    claims: dict | None = None,
     sku: str,
     name: str,
     sale_price: Decimal,
@@ -39,7 +59,12 @@ async def create_product(
     barcode: str | None = None,
     min_stock: Decimal = Decimal("0"),
 ) -> Product:
-    """Register an active product within one tenant scope."""
+    """Register an active product within one tenant and branch scope."""
+    if claims is not None:
+        _ensure_branch_scope(claims, branch_id)
+    await _ensure_branch_belongs_to_business(
+        session, business_id=business_id, branch_id=branch_id
+    )
     product = Product(
         id=uuid4(),
         business_id=business_id,
@@ -70,9 +95,12 @@ async def list_products(
     include_inactive: bool = False,
     limit: int = 50,
     offset: int = 0,
+    branch_id: UUID | None = None,
 ) -> Page:
-    """Paginated product listing scoped to one business."""
+    """Paginated product listing scoped to one business and optional branch."""
     conditions = [Product.business_id == business_id]
+    if branch_id is not None:
+        conditions.append(Product.branch_id == branch_id)
     if not include_inactive:
         conditions.append(Product.active.is_(True))
     if search:
@@ -91,11 +119,20 @@ async def list_products(
 
 
 async def set_product_active(
-    session: AsyncSession, *, business_id: UUID, product_id: UUID, active: bool
+    session: AsyncSession,
+    *,
+    business_id: UUID,
+    product_id: UUID,
+    active: bool,
+    branch_id: UUID | None = None,
 ) -> Product:
     """Activate or deactivate a product without deleting its history."""
     product = await session.scalar(
-        select(Product).where(Product.id == product_id, Product.business_id == business_id)
+        select(Product).where(
+            Product.id == product_id,
+            Product.business_id == business_id,
+            *([Product.branch_id == branch_id] if branch_id is not None else []),
+        )
     )
     if product is None:
         raise NotFoundError("Product not found")
@@ -117,6 +154,9 @@ async def create_customer(
 ) -> Customer:
     """Register a walk-in account for one branch of the tenant."""
     _ensure_branch_scope(claims, branch_id)
+    await _ensure_branch_belongs_to_business(
+        session, business_id=business_id, branch_id=branch_id
+    )
     customer = Customer(
         id=uuid4(),
         business_id=business_id,
@@ -144,9 +184,12 @@ async def list_customers(
     include_inactive: bool = False,
     limit: int = 50,
     offset: int = 0,
+    branch_id: UUID | None = None,
 ) -> Page:
-    """Paginated customer listing scoped to one business."""
+    """Paginated customer listing scoped to one business and optional branch."""
     conditions = [Customer.business_id == business_id]
+    if branch_id is not None:
+        conditions.append(Customer.branch_id == branch_id)
     if not include_inactive:
         conditions.append(Customer.active.is_(True))
     if search:
@@ -176,6 +219,9 @@ async def create_supplier(
 ) -> Supplier:
     """Register a supplier/payable account for the tenant."""
     _ensure_branch_scope(claims, branch_id)
+    await _ensure_branch_belongs_to_business(
+        session, business_id=business_id, branch_id=branch_id
+    )
     supplier = Supplier(
         id=uuid4(),
         business_id=business_id,
@@ -203,9 +249,12 @@ async def list_suppliers(
     include_inactive: bool = False,
     limit: int = 50,
     offset: int = 0,
+    branch_id: UUID | None = None,
 ) -> Page:
-    """Paginated supplier listing scoped to one business."""
+    """Paginated supplier listing scoped to one business and optional branch."""
     conditions = [Supplier.business_id == business_id]
+    if branch_id is not None:
+        conditions.append(Supplier.branch_id == branch_id)
     if not include_inactive:
         conditions.append(Supplier.active.is_(True))
     if search:
