@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     environment:
       ENVIRONMENT: development
-      SECRET_KEY: ${SECRET_KEY:?Run ./scripts/setup-standalone.sh to generate local configuration}
+      SECRET_KEY: ${SECRET_KEY:?Run bash scripts/setup-standalone.sh to generate local configuration}
       DATABASE_URL: sqlite+aiosqlite:////app/.local/erp03-domain.sqlite3
       DATABASE_PATH: /app/.local/erp03-journal.sqlite3
       CORS_ORIGINS: http://localhost:${ERP03_HTTP_PORT:-3000}
@@ -22,7 +22,7 @@ services:
       dockerfile: Dockerfile
     environment:
       ENVIRONMENT: development
-      SECRET_KEY: ${SECRET_KEY:?Run ./scripts/setup-standalone.sh to generate local configuration}
+      SECRET_KEY: ${SECRET_KEY:?Run bash scripts/setup-standalone.sh to generate local configuration}
       DATABASE_URL: sqlite+aiosqlite:////app/.local/erp03-domain.sqlite3
       DATABASE_PATH: /app/.local/erp03-journal.sqlite3
       CORS_ORIGINS: http://localhost:${ERP03_HTTP_PORT:-3000}
