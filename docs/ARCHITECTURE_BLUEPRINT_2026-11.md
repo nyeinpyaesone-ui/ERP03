@@ -1,8 +1,8 @@
 # ERP03 Architecture Blueprint — November 2026
 
 **Repository:** `nyeinpyaesone-ui/ERP03`  
-**Baseline inspected:** `main` at `716f305f27739c6f53dceac77126734795f2efa7` (2026-11-12)  
-**Assessment date:** 2026-11-16  
+**Baseline inspected:** `main` at `9a2a234061f7deef5d65150c271e0647c1983598` (2026-11-17)  
+**Assessment date:** 2026-11-18  
 **Architecture:** modular monolith; one FastAPI application and one React/Vite frontend.
 
 > This document describes repository configuration inspected on the date above. It is not a production deployment certification. Runtime availability, database recovery and zero-downtime cutover require environment-specific evidence.
@@ -152,3 +152,30 @@ The connected Railway account exposed a project named `erpnext`, containing a Fr
 ## Related operations guide
 
 See [Zero-Downtime Deployment and Runtime Configuration](ZERO_DOWNTIME_DEPLOYMENT_2026-11.md) for staging deployment inputs, secret provisioning, digest pinning, rollout verification and the conditions that must be met before a zero-downtime claim is valid.
+
+
+## 10. Current-main reconciliation — 2026-11-18
+
+The observations below supersede older baseline references in this document. They describe checked-in source and GitHub metadata only; they do not certify a live cluster or deployment.
+
+### Database connection budget
+
+The current main `ERP-BACKEND/app/core/config.py` auto-tunes production SQLAlchemy pools to at least 20 pooled connections plus 50 overflow connections per process. At the production HPA maximum of ten pods and one Uvicorn process per pod, this permits up to **700 application connections** before migration jobs, administrative sessions or other clients. This is not a safe budget without measuring the actual PostgreSQL limit and all consumers.
+
+Open PR #275 proposes a 4 + 2 per-process cap, or **60 theoretical application connections** at ten pods. That proposal is not part of this main baseline; review and verify it against the actual database connection budget before enabling the HPA range.
+
+The Redis client cap is separate: its configured default is 50 connections per process, or up to 500 across ten one-process pods. This also requires sizing against the actual Redis service limit.
+
+### Active transaction-journal decision
+
+The SQLite journal remains a synchronous process-local store, separate from PostgreSQL domain transactions. Its unique idempotency key and fingerprint semantics are valuable and must be preserved, but its current locking/storage topology is not a multi-replica production design. See [ADR-0004](adr/0004-postgresql-transaction-journal.md) for the proposed PostgreSQL journal and recovery state machine. Do not cut over until additive migrations, backfill verification, crash/concurrency tests and a write-fenced staging rehearsal pass.
+
+### Current release-control evidence
+
+- Main is `9a2a234061f7deef5d65150c271e0647c1983598`.
+- Policy Enforcement run #296 for that SHA ended `startup_failure`; no job was created. This is not a policy pass and does not establish that an OPA rule failed.
+- PR #274 (JWT claim verification), #275 (database pool cap), #289 (readiness evidence audit) and #290 (Kubernetes preflight/workflow hardening) are separate open work at this baseline. Their changes must not be represented as merged into main.
+- PR #290's read-only Kubernetes preflight requires a dedicated self-hosted runner and configured environment. It does not perform a deployment.
+- Production Kustomize still contains backend/frontend digest placeholders. The production database and Redis manifests remain single-instance. The production deployment script is not qualified for cutover.
+
+**Production readiness remains NOT QUALIFIED.** A green frontend deployment or selected CI jobs do not establish backend API reachability, data integrity, database recovery, staging rollback, or zero-downtime operation. Use the current [Implementation Plan](IMPLEMENTATION_PLAN_2026-11-18.md) as the ordered remediation and acceptance checklist.
