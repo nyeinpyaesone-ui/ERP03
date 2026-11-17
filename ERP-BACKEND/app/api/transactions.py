@@ -206,16 +206,22 @@ async def create_transaction(
     # SQLite is deliberately retained only for local/dev and isolated tests.
     def _execute_local() -> TransactionResult:
         return get_store().execute(
-        transaction_id=uuid4().hex,
-        idempotency_key=f"{business_id}:{idempotency_key}",
-        business_id=business_id,
-        operation=payload.operation,
-        amount=str(amount),
-        currency=payload.currency,
+            transaction_id=uuid4().hex,
+            idempotency_key=f"{business_id}:{idempotency_key}",
+            business_id=business_id,
+            operation=payload.operation,
+            amount=str(amount),
+            currency=payload.currency,
             metadata=payload.metadata,
         )
 
-    result = await asyncio.to_thread(_execute_local)
+    try:
+        result = await asyncio.to_thread(_execute_local)
+    except IdempotencyConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
     return _to_response(result)
 
 
