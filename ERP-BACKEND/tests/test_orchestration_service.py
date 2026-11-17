@@ -1,7 +1,7 @@
 """Coverage for the cross-module operation orchestration state machine."""
 
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -12,9 +12,11 @@ from app.core.errors import ConflictError
 from app.core.security import current_claims
 from app.db.session import SessionFactory
 from app.main import app
+from app.models.erp import Product, StockBalance
 from app.models.operations import Operation, OperationState
 from app.services.bootstrap import bootstrap_business
 from app.services.orchestration import OperationService
+from app.services.sales import SaleLine, create_pos_sale
 
 
 @pytest.fixture(autouse=True)
@@ -699,3 +701,88 @@ async def test_branchless_legacy_operation_can_be_replayed_with_branch_context()
         await session.commit()
     assert replay is True
     assert operation.branch_id is None
+
+
+
+@pytest.mark.asyncio
+async def test_pos_sale_commits_operation_and_domain_mutations_atomically():
+    """POS invoice, stock and operation outcome must commit as one unit."""
+    business, branch, warehouse, _user = await _bootstrap("POSOP")
+    product = Product(
+        business_id=business.id,
+        branch_id=branch.id,
+        sku=f"POS-{uuid4().hex[:8]}",
+        name="Operation-linked item",
+        unit="pcs",
+        sale_price=Decimal("12.50"),
+        cost_price=Decimal("7.00"),
+        min_stock=Decimal("0"),
+        active=True,
+    )
+    balance = StockBalance(
+        warehouse_id=warehouse.id,
+        product_id=product.id,
+        quantity=Decimal("5"),
+    )
+    async with SessionFactory() as session, session.begin():
+        session.add_all([product, balance])
+
+    key = f"{business.id}:pos-op-{uuid4().hex}"
+    sale_arguments = {
+        "business_id": business.id,
+        "branch_id": branch.id,
+        "warehouse_id": warehouse.id,
+        "lines": [SaleLine(product_id=product.id, quantity=Decimal("1"))],
+        "payments": [],
+        "currency": "MMK",
+        "idempotency_key": key,
+    }
+
+    async with SessionFactory() as session:
+        first = await create_pos_sale(session, **sale_arguments)
+    async with SessionFactory() as session:
+        replay = await create_pos_sale(session, **sale_arguments)
+
+    assert first.invoice_id == replay.invoice_id
+    assert first.total == Decimal("12.50")
+    assert replay.balance == Decimal("12.50")
+
+    async with SessionFactory() as session:
+        operation = await session.scalar(
+            select(Operation).where(Operation.operation_id == key)
+        )
+        persisted_balance = await session.scalar(
+            select(StockBalance).where(
+                StockBalance.warehouse_id == warehouse.id,
+                StockBalance.product_id == product.id,
+            )
+        )
+    assert operation is not None
+    assert operation.state == OperationState.COMMITTED
+    assert operation.result_json == {
+        "invoice_id": str(first.invoice_id),
+        "total": "12.50",
+        "paid": "0",
+        "balance": "12.50",
+        "currency": "MMK",
+    }
+    assert persisted_balance is not None
+    assert persisted_balance.quantity == Decimal("4.000")
+
+    changed_arguments = {
+        **sale_arguments,
+        "lines": [SaleLine(product_id=product.id, quantity=Decimal("2"))],
+    }
+    async with SessionFactory() as session:
+        with pytest.raises(ConflictError, match="different command"):
+            await create_pos_sale(session, **changed_arguments)
+
+    async with SessionFactory() as session:
+        unchanged = await session.scalar(
+            select(StockBalance).where(
+                StockBalance.warehouse_id == warehouse.id,
+                StockBalance.product_id == product.id,
+            )
+        )
+    assert unchanged is not None
+    assert unchanged.quantity == Decimal("4.000")
