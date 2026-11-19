@@ -1,98 +1,86 @@
 # ERP03 Environment Configuration
 
-## Quick Start
+Keep backend settings and Docker Compose interpolation variables separate. The backend uses
+Pydantic Settings with `extra="forbid"`; do not put Compose-only values in
+`ERP-BACKEND/.env`.
 
-### 1. Copy the environment template
+## Backend development environment
+
+From the repository root:
 
 ```bash
 cd ERP-BACKEND
-cp ERP-BACKEND/.env.example ERP-BACKEND/.env
+cp .env.example .env
 ```
 
-### 2. Generate a secure SECRET_KEY
+Edit `ERP-BACKEND/.env`. The checked-in template uses a repository-relative SQLite URL
+(`sqlite+aiosqlite:///./.local/erp03.sqlite3`) suitable for host-side Alembic and Uvicorn
+commands run from `ERP-BACKEND/`. Use only fields declared in
+`ERP-BACKEND/app/core/config.py`.
+
+## Docker Compose environment
+
+From the repository root, copy the root template to the Compose-specific filename:
 
 ```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+cp .env.example .env.compose
 ```
 
-### 3. Edit `.env` with your values
+Set the Compose values in `.env.compose` (never commit it):
 
 ```ini
-ENVIRONMENT=development
-SECRET_KEY=<your-generated-secret-key>
+ERP03_ENVIRONMENT=development
+SECRET_KEY=<generated-secret-at-least-32-characters>
 POSTGRES_DB=erp03
 POSTGRES_USER=erp03
-POSTGRES_PASSWORD=<your-secure-password>
-DATABASE_URL=postgresql+asyncpg://erp03:<your-secure-password>@postgres:5432/erp03
-DATABASE_PATH=./.local/erp03.sqlite3
+POSTGRES_PASSWORD=<raw-postgres-password>
+REDIS_PASSWORD=<redis-password>
+DATABASE_URL=postgresql+asyncpg://erp03:<url-encoded-postgres-password>@postgres:5432/erp03
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
-
-# Docker Hub (optional, for container publishing)
-DOCKERHUB_REGISTRY=docker.io
-DOCKERHUB_USERNAME=<your-dockerhub-username>
-DOCKERHUB_TOKEN=<your-github-pat-with-write-packages>
-DOCKERHUB_IMAGE_BACKEND=docker.io/<your-dockerhub-username>/erp03-backend
-DOCKERHUB_IMAGE_FRONTEND=docker.io/<your-dockerhub-username>/erp03-frontend
-IMAGE_TAG=latest
 ```
 
-### 4. Bootstrap the project
+The password in `DATABASE_URL` must be URL-encoded (for example, `@` becomes `%40`,
+`:` becomes `%3A`, and `%` becomes `%25`). Its decoded value must exactly match
+`POSTGRES_PASSWORD`. The migration and backend services consume this same URL, avoiding
+independent URL construction and password parsing differences.
+
+Start the full stack:
 
 ```bash
-cd /home/ubuntu/ERP03
-chmod +x scripts/setup.sh
-./scripts/setup.sh
+docker compose --env-file .env.compose --profile full up --build -d
 ```
 
-### 5. Start with Docker Compose
+For production, set `ERP03_ENVIRONMENT=production`, use a strong unique signing key,
+HTTPS-only CORS origins, and production database credentials. Do not reuse development
+credentials.
 
-Minimal (SQLite journal):
+## Container registry
 
-```bash
-docker compose up -d
-```
+The checked-in publishing workflows publish multi-architecture images to GHCR:
 
-Full (PostgreSQL):
+- `ghcr.io/nyeinpyaesone-ui/erp03-backend`
+- `ghcr.io/nyeinpyaesone-ui/erp03-frontend`
 
-```bash
-POSTGRES_PASSWORD=<secure-password> \
-SECRET_KEY=<secret-key> \
-CORS_ORIGINS=https://your-domain.com \
-docker compose --profile full up -d
-```
+They authenticate with the workflow-scoped `GITHUB_TOKEN` and
+`packages: write`; no Docker Hub token or broad repository Actions permissions are needed
+for these workflows.
 
-## Production Deployment Checklist
+## Kubernetes runtime secrets
 
-- [ ] `SECRET_KEY` is set to a 32+ character random value
-- [ ] `CORS_ORIGINS` contains only HTTPS origins (no `http://localhost`)
-- [ ] `DATABASE_URL` points to production PostgreSQL
-- [ ] `ENVIRONMENT=production`
-- [ ] Docker Hub images are built and tagged
-- [ ] Branch protection rules are configured (see PROTOCOLS.md)
-- [ ] Required status checks pass on `main`
-
-## GitHub Actions Secrets
-
-Add these in **Settings → Secrets and variables → Actions**:
-
-| Secret | Value Source |
-|--------|--------------|
-| `GITHUB_TOKEN` | Auto-provided by GitHub Actions |
-| `DOCKERHUB_TOKEN` | Docker Hub access token (write:packages scope) |
-| `POSTGRES_PASSWORD` | Your chosen PostgreSQL password |
-| `SECRET_KEY` | Your generated secret key |
-| `DATABASE_URL` | Production database URL |
+The Kustomize base intentionally does not create `erp03-secrets`. Provision a Secret with
+the required keys (`SECRET_KEY`, `POSTGRES_PASSWORD`, and `REDIS_PASSWORD`) in each target
+namespace through the cluster's secret manager or the approved secure bootstrap procedure.
+`infra/kubernetes/base/erp03-secrets.example.yaml` is documentation only and must not be
+applied. Never commit real credentials or apply placeholder values.
 
 ## Verification
 
 ```bash
-# Backend health
-curl http://localhost:8000/api/v1/healthz
-
-# Frontend
-curl http://localhost:3000
-
-# Docker Hub images
-docker pull docker.io/nyeinpyaesone-ui/erp03-backend:latest
-docker pull docker.io/nyeinpyaesone-ui/erp03-frontend:latest
+docker compose --env-file .env.compose config --quiet
+kubectl kustomize infra/kubernetes/overlays/dev
+kubectl kustomize infra/kubernetes/overlays/staging
+kubectl kustomize infra/kubernetes/overlays/production
 ```
+
+Do not apply production manifests until real runtime Secrets exist and the production image
+digests have been copied from successful, verified GHCR publications.
