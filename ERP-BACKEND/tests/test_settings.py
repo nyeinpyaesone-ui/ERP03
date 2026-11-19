@@ -111,7 +111,10 @@ class TestOptionalFeatures:
     def test_empty_typesafe_api_key_becomes_none(self) -> None:
         assert _base(typesafe_api_key="").typesafe_api_key is None
 
-    def test_redis_defaults(self) -> None:
+    def test_redis_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # CI and developer shells may export REDIS_URL for integration tests.
+        # Remove it here so this test verifies the actual model default.
+        monkeypatch.delenv("REDIS_URL", raising=False)
         s = _base()
         assert s.redis_url is None
         assert s.redis_db == 0
