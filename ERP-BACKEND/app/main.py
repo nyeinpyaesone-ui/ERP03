@@ -79,7 +79,15 @@ class RedisRateLimitMiddleware:
 
             self.redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
         else:
-            self.redis = redis.from_url(redis_url, encoding="utf-8", decode_responses=True)
+            self.redis = redis.from_url(
+                redis_url,
+                encoding="utf-8",
+                decode_responses=True,
+                max_connections=settings.redis_max_connections,
+                socket_connect_timeout=2.0,
+                socket_timeout=2.0,
+                health_check_interval=30,
+            )
 
     def _circuit_available(self) -> bool:
         """Return True if the circuit allows Redis calls."""
