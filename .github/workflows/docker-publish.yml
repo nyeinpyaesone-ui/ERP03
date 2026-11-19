@@ -1,19 +1,28 @@
 name: Docker
+
 on:
   schedule:
     - cron: '41 16 * * *'
   push:
-    branches: [ "main" ]
-    tags: [ 'v*.*.*' ]
+    branches: ["main"]
+    tags: ['v*.*.*']
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+
+permissions:
+  contents: read
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/erp03-backend
 
+concurrency:
+  group: backend-image-publish-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
+    name: Build and publish backend to GHCR
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -21,22 +30,24 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
 
       - name: Install cosign
         if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532
         with:
-          cosign-release: 'v2.2.4'
+          cosign-release: 'v3.1.4'
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
 
-      - name: Set up Docker Buildx
+      - name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
 
-      - name: Log into GitHub Container Registry
+      - name: Log in to GHCR
         if: github.event_name != 'pull_request'
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
@@ -44,7 +55,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract Docker metadata
+      - name: Extract GHCR image metadata
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
         with:
@@ -56,9 +67,9 @@ jobs:
             type=sha,format=long
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build and push multi-architecture backend image
+      - name: Build and publish multi-architecture backend
         id: build-and-push
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
         with:
           context: ./ERP-BACKEND
           file: ./ERP-BACKEND/Dockerfile
@@ -68,6 +79,7 @@ jobs:
           labels: |
             ${{ steps.meta.outputs.labels }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
           provenance: mode=max
@@ -80,22 +92,17 @@ jobs:
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
         run: |
           set -Eeuo pipefail
-          docker buildx imagetools inspect --raw "${IMAGE_REF}@${DIGEST}" |
+          expected_platforms="linux/amd64,linux/arm64"
+          echo "Verifying required platforms: $expected_platforms"
+          docker buildx imagetools inspect --raw "$IMAGE_REF@$DIGEST" |
             jq -e '[.manifests[].platform | select(.os == "linux" and (.architecture == "amd64" or .architecture == "arm64"))] | map(.architecture) | unique | length == 2' >/dev/null
-          {
-            echo "## Backend image publication"
-            echo
-            echo "- Image: ${IMAGE_REF}"
-            echo "- Digest: ${DIGEST}"
-            echo "- Verified platforms: linux/amd64, linux/arm64"
-          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Sign the published GHCR image
         if: github.event_name != 'pull_request'
         env:
           IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
-        run: cosign sign --yes "${IMAGE_REF}@${DIGEST}"
+        run: cosign sign --yes "$IMAGE_REF@$DIGEST"
 
       - name: Verify keyless image signature
         if: github.event_name != 'pull_request'
@@ -106,6 +113,140 @@ jobs:
         run: |
           set -Eeuo pipefail
           cosign verify \
-            --certificate-identity "${CERTIFICATE_IDENTITY}" \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-            "${IMAGE_REF}@${DIGEST}"
+            "$IMAGE_REF@$DIGEST"
+
+      - name: Log out from GHCR
+        if: always() && github.event_name != 'pull_request'
+        run: docker logout ghcr.io || true
+
+  mirror-backend-dockerhub:
+    name: Mirror backend to Docker Hub (optional)
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: Docker1
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME || vars.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      DOCKERHUB_ENABLED: ${{ (secrets.DOCKERHUB_USERNAME != '' || vars.DOCKERHUB_USERNAME != '') && secrets.DOCKERHUB_TOKEN != '' }}
+    steps:
+      - name: Skip Docker Hub mirror when credentials are absent
+        if: env.DOCKERHUB_ENABLED != 'true'
+        run: echo "Docker Hub credentials are not configured in the Docker1 environment; GHCR publication remains successful."
+
+      - name: Validate Docker Hub namespace
+        if: env.DOCKERHUB_ENABLED == 'true'
+        run: |
+          set -Eeuo pipefail
+          [[ "$DOCKERHUB_USERNAME" =~ ^[a-z0-9]+([._-][a-z0-9]+)*$ ]] || {
+            echo "::error::Docker Hub namespace must be lowercase and valid"
+            exit 1
+          }
+
+      - name: Checkout
+        if: env.DOCKERHUB_ENABLED == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Install Cosign
+        if: env.DOCKERHUB_ENABLED == 'true'
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532
+        with:
+          cosign-release: 'v3.1.4'
+
+      - name: Set up QEMU
+        if: env.DOCKERHUB_ENABLED == 'true'
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+
+      - name: Set up Buildx
+        if: env.DOCKERHUB_ENABLED == 'true'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+
+      - name: Log in to Docker Hub
+        if: env.DOCKERHUB_ENABLED == 'true'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: docker.io
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+
+      - name: Extract Docker Hub backend metadata
+        if: env.DOCKERHUB_ENABLED == 'true'
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
+        with:
+          images: docker.io/${{ env.DOCKERHUB_USERNAME }}/erp03-backend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,format=long
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and publish Docker Hub backend
+        if: env.DOCKERHUB_ENABLED == 'true'
+        id: build-and-push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
+        with:
+          context: ./ERP-BACKEND
+          file: ./ERP-BACKEND/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            ${{ steps.meta.outputs.labels }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+          provenance: mode=max
+          sbom: true
+
+      - name: Verify Docker Hub backend manifest
+        if: env.DOCKERHUB_ENABLED == 'true'
+        env:
+          IMAGE_REF: docker.io/${{ env.DOCKERHUB_USERNAME }}/erp03-backend
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+        run: |
+          set -Eeuo pipefail
+          docker buildx imagetools inspect --raw "$IMAGE_REF@$DIGEST" |
+            jq -e '[.manifests[].platform | select(.os == "linux" and (.architecture == "amd64" or .architecture == "arm64"))] | map(.architecture) | unique | length == 2' >/dev/null
+
+      - name: Sign Docker Hub backend
+        if: env.DOCKERHUB_ENABLED == 'true'
+        env:
+          IMAGE_REF: docker.io/${{ env.DOCKERHUB_USERNAME }}/erp03-backend
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+        run: cosign sign --yes "$IMAGE_REF@$DIGEST"
+
+      - name: Verify Docker Hub backend signature
+        if: env.DOCKERHUB_ENABLED == 'true'
+        env:
+          IMAGE_REF: docker.io/${{ env.DOCKERHUB_USERNAME }}/erp03-backend
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/docker-publish.yml@${{ github.ref }}
+        run: |
+          set -Eeuo pipefail
+          cosign verify \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$IMAGE_REF@$DIGEST"
+
+      - name: Log out from Docker Hub
+        if: always() && env.DOCKERHUB_ENABLED == 'true'
+        run: docker logout docker.io || true
+
+      - name: Report Docker1 credential readiness without exposing values
+        if: always()
+        run: |
+          if [[ "$DOCKERHUB_ENABLED" == "true" ]]; then
+            echo "- Docker1: Docker Hub namespace and token are present; authentication/push outcome is reported by the preceding steps." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Docker1: required Docker Hub namespace or token is missing; optional mirror was skipped." >> "$GITHUB_STEP_SUMMARY"
+          fi
