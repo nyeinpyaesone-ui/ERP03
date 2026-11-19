@@ -11,6 +11,10 @@ on:
         description: "Type DEPLOY-PRODUCTION to authorize deployment"
         required: true
         type: string
+      backup_reference:
+        description: "Verified pre-deployment database backup identifier or URI"
+        required: true
+        type: string
 
 concurrency:
   group: production-deployment
@@ -132,16 +136,18 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           VERSION: ${{ inputs.version }}
+          BACKUP_REFERENCE: ${{ inputs.backup_reference }}
         run: |
           set -Eeuo pipefail
           remote="$DEPLOY_USER@$DEPLOY_HOST"
-          printf -v remote_args '%q %q' "$DEPLOY_PATH" "$VERSION"
+          printf -v remote_args '%q %q %q' "$DEPLOY_PATH" "$VERSION" "$BACKUP_REFERENCE"
           ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes \
             -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             "$remote" "bash -s -- $remote_args" <<'REMOTE'
           set -Eeuo pipefail
           deploy_root="$1"
           version="$2"
+          backup_reference="$3"
           release_dir="$deploy_root/releases/$version"
           shared_env="$deploy_root/shared/.env"
 
@@ -157,8 +163,11 @@ jobs:
           # The token is removed from the remote Docker credential store after pulls.
           docker logout ghcr.io >/dev/null 2>&1 || true
 
+          # Start dependencies first, then run the migration exactly once, and
+          # finally replace the application containers without restarting DBs.
+          docker compose --profile full up -d postgres redis
           docker compose --profile full run --rm migrate
-          docker compose --profile full up -d --remove-orphans
+          docker compose --profile full up -d --no-deps backend frontend
 
           for attempt in $(seq 1 36); do
             unhealthy=0
