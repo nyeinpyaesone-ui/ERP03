@@ -23,7 +23,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: redis
-          image: redis:7.4-alpine@sha256:REPLACE_WITH_REAL_DIGEST
+          image: redis:7.4.12-alpine3.22@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
           ports:
             - containerPort: 6379
               name: redis
