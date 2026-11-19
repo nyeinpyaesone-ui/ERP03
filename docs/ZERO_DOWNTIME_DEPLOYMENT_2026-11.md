@@ -133,7 +133,7 @@ Backend and frontend Deployment templates now specify:
 
 The production overlay raises each web Deployment to three replicas and patches both PDBs to `minAvailable: 2`. The backend HPA remains configured for three to ten replicas.
 
-These are application-layer safeguards. The backend rolling strategy must not be used as proof of HA while it still depends on a single ReadWriteOnce volume for SQLite journal writes. Resolve that stateful dependency before using the production overlay.
+These are application-layer safeguards. The production transaction-journal endpoint now fails closed while the shared PostgreSQL journal is unimplemented. The backend Deployment no longer mounts the legacy `erp-data-pvc`, avoiding a ReadWriteOnce volume shared by horizontally scaled API pods. The PVC resource remains declared and must be retained for controlled backup/migration; do not delete or recycle it until its contents are backed up and reconciliation is complete.
 
 ## 7. Redis configuration and behavior
 
@@ -151,7 +151,7 @@ Required remediation:
 1. Implement a PostgreSQL-backed journal table with tenant-scoped unique idempotency keys and database-enforced uniqueness.
 2. Use a compatibility window: create the new schema first, deploy code compatible with old and new journals, backfill and reconcile counts/fingerprints, then switch writes/reads to PostgreSQL.
 3. Keep the legacy journal as a read-only rollback source until verification and the rollback window are complete.
-4. Remove the SQLite PVC mount only in a later release after evidence confirms no active code path depends on it.
+4. The production API now fails closed for the SQLite journal, and the backend pod no longer mounts the legacy PVC. Keep the PVC resource and its contents intact as a read-only recovery source until a verified PostgreSQL journal migration and rollback window are complete.
 5. Load-test duplicate requests, concurrent claims, crash/retry and reconciliation across multiple backend pods.
 
 Do not place SQLite WAL on a network filesystem as a shortcut for multi-replica access.

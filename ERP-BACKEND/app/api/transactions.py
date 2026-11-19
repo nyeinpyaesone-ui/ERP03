@@ -20,7 +20,19 @@ _store_lock = threading.Lock()
 
 
 def get_store() -> TransactionStore:
-    """Return the process-wide transaction journal (lazy, thread-safe)."""
+    """Return the process-wide local journal; production requires a shared DB journal."""
+    if settings.environment.lower() in {"production", "prod"}:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "TRANSACTION_JOURNAL_UNAVAILABLE",
+                "message": (
+                    "The SQLite transaction journal is disabled in production. "
+                    "Configure the shared PostgreSQL journal before enabling this endpoint."
+                ),
+            },
+        )
+
     global _store
     if _store is None:
         with _store_lock:

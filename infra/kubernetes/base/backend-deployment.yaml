@@ -53,8 +53,6 @@ spec:
             - name: REDIS_URL
               value: "redis://:$(REDIS_PASSWORD)@erp03-redis:6379/0"
           volumeMounts:
-            - name: erp-data
-              mountPath: /app/.local
             - name: tmp
               mountPath: /tmp
           startupProbe:
@@ -92,8 +90,5 @@ spec:
             capabilities:
               drop: ["ALL"]
       volumes:
-        - name: erp-data
-          persistentVolumeClaim:
-            claimName: erp-data-pvc
         - name: tmp
           emptyDir: {}
