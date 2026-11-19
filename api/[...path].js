@@ -1,4 +1,5 @@
 const { Readable } = require('node:stream');
+const { pipeline } = require('node:stream/promises');
 
 const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
 const TIMEOUT_MS = 30_000;
@@ -114,7 +115,7 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    Readable.fromWeb(upstream.body).pipe(res);
+    await pipeline(Readable.fromWeb(upstream.body), res);
   } catch (error) {
     const statusCode = Number.isInteger(error.statusCode)
       ? error.statusCode
