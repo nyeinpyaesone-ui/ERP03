@@ -70,8 +70,8 @@ jobs:
           STAGING_HOST: ${{ secrets.STAGING_SSH_HOST }}
           STAGING_USER: ${{ secrets.STAGING_SSH_USER }}
           STAGING_PORT: ${{ secrets.STAGING_SSH_PORT }}
-          GHCR_USERNAME: ${{ secrets.STAGING_GHCR_USERNAME }}
-          GHCR_READ_TOKEN: ${{ secrets.STAGING_GHCR_READ_TOKEN }}
+          GHCR_USERNAME: ${{ secrets.GHCR_READ_USERNAME }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
         run: |
           set -Eeuo pipefail
           test -n "$STAGING_HOST"
@@ -193,6 +193,8 @@ jobs:
           git checkout --detach "$source_sha"
 
           docker compose pull backend frontend
+          # The remote Docker credential is only needed for image pulls.
+          docker logout ghcr.io || true
           backend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$backend_image")"
           frontend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$frontend_image")"
           test "$backend_revision" = "$source_sha" || {
