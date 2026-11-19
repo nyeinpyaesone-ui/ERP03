@@ -29,8 +29,8 @@ echo "   Promotion halted"
 echo "==> [3/6] Executing rollback"
 if command -v kubectl &>/dev/null; then
     if [[ -n "$PREVIOUS_TAG" ]]; then
-        kubectl set image deployment/erp03-backend backend=docker.io/powerrangeranikg/erp03-backend:"$PREVIOUS_TAG" -n "$NAMESPACE"
-        kubectl set image deployment/erp03-frontend frontend=docker.io/powerrangeranikg/erp03-frontend:"$PREVIOUS_TAG" -n "$NAMESPACE"
+        kubectl set image deployment/erp03-backend backend=ghcr.io/nyeinpyaesone-ui/erp03-backend:"$PREVIOUS_TAG" -n "$NAMESPACE"
+        kubectl set image deployment/erp03-frontend frontend=ghcr.io/nyeinpyaesone-ui/erp03-frontend:"$PREVIOUS_TAG" -n "$NAMESPACE"
     else
         kubectl rollout undo deployment/erp03-backend -n "$NAMESPACE"
         kubectl rollout undo deployment/erp03-frontend -n "$NAMESPACE"
