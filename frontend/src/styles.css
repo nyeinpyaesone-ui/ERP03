@@ -5,26 +5,26 @@
 @layer base {
   :root {
     color-scheme: light;
-    font-family: "Noto Sans Myanmar", "Myanmar Text", Inter, system-ui, sans-serif;
+    font-family: "Noto Sans Myanmar", "Myanmar Text", "Padauk", Inter, system-ui, sans-serif;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
-    background: #F5F8F7;
-    color: #162B29;
+    background: #F4F7FA;
+    color: #172B3A;
   }
 
   html {
     min-width: 320px;
-    background: #F5F8F7;
+    background: #F4F7FA;
   }
 
   body {
     @apply min-h-screen antialiased;
     margin: 0;
-    font-family: "Noto Sans Myanmar", "Myanmar Text", Inter, system-ui, sans-serif;
+    font-family: "Noto Sans Myanmar", "Myanmar Text", "Padauk", Inter, system-ui, sans-serif;
     font-size: 1rem;
-    line-height: 1.6;
-    color: #162B29;
-    background: #F5F8F7;
+    line-height: 1.65;
+    color: #172B3A;
+    background: #F4F7FA;
   }
 
   button,
@@ -39,13 +39,13 @@
   input:focus-visible,
   select:focus-visible,
   textarea:focus-visible {
-    outline: 2px solid #0D6B63;
+    outline: 2px solid #087A73;
     outline-offset: 2px;
   }
 
   ::selection {
     color: #FFFFFF;
-    background: #0D6B63;
+    background: #087A73;
   }
 }
 
@@ -56,7 +56,7 @@
 
   .card {
     @apply rounded-lg border border-erp-border bg-erp-surface p-6;
-    box-shadow: 0 1px 2px rgba(22, 43, 41, 0.06);
+    box-shadow: 0 1px 2px rgba(23, 43, 58, 0.06);
   }
 
   .eyebrow {
