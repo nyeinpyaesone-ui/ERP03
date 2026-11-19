@@ -16,10 +16,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    environment: Docker1
     env:
-      # Docker Hub is an optional mirror. GHCR remains the primary registry
-      # and continues to publish through the short-lived GITHUB_TOKEN.
-      DOCKERHUB_ENABLED: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME || vars.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      DOCKERHUB_ENABLED: ${{ (secrets.DOCKERHUB_USERNAME != '' || vars.DOCKERHUB_USERNAME != '') && secrets.DOCKERHUB_TOKEN != '' }}
     permissions:
       contents: read
       packages: write
