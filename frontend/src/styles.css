@@ -1,27 +1,70 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: light;
+    font-family: "Noto Sans Myanmar", "Myanmar Text", "Padauk", Inter, system-ui, sans-serif;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    background: #F4F7FA;
+    color: #172B3A;
+  }
+
+  html {
+    min-width: 320px;
+    background: #F4F7FA;
+  }
+
   body {
-    @apply font-sans antialiased text-gray-900;
+    @apply min-h-screen antialiased;
+    margin: 0;
+    font-family: "Noto Sans Myanmar", "Myanmar Text", "Padauk", Inter, system-ui, sans-serif;
+    font-size: 1rem;
+    line-height: 1.65;
+    color: #172B3A;
+    background: #F4F7FA;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid #087A73;
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    color: #FFFFFF;
+    background: #087A73;
   }
 }
 
 @layer components {
   .shell {
-    @apply min-h-screen bg-gray-50;
+    @apply min-h-screen bg-erp-background;
   }
+
   .card {
-    @apply bg-white p-6 rounded-lg border border-gray-200 shadow-sm;
+    @apply rounded-lg border border-erp-border bg-erp-surface p-6;
+    box-shadow: 0 1px 2px rgba(23, 43, 58, 0.06);
   }
+
   .eyebrow {
-    @apply text-xs font-semibold tracking-wider text-blue-600 uppercase;
+    @apply text-xs font-semibold uppercase tracking-wider text-erp-primary;
   }
+
   .subtitle {
-    @apply text-gray-500 text-sm mt-1;
+    @apply mt-1 text-sm text-erp-foregroundMuted;
   }
 }
 

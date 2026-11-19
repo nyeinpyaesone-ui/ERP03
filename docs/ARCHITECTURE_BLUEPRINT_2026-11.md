@@ -1,8 +1,8 @@
 # ERP03 Architecture Blueprint — November 2026
 
 **Repository:** `nyeinpyaesone-ui/ERP03`  
-**Baseline inspected:** `main` at `716f305f27739c6f53dceac77126734795f2efa7` (2026-11-12)  
-**Assessment date:** 2026-11-16  
+**Source-code baseline inspected:** `fix/myanmar-operations-theme` at `b705086cf17f8c81286e73842a146a3be6fec9d6` (2026-11-20)  
+**Assessment date:** 2026-11-20  
 **Architecture:** modular monolith; one FastAPI application and one React/Vite frontend.
 
 > This document describes repository configuration inspected on the date above. It is not a production deployment certification. Runtime availability, database recovery and zero-downtime cutover require environment-specific evidence.
@@ -118,7 +118,7 @@ The manual `.github/workflows/deploy-staging.yml` workflow accepts a source SHA 
 
 The repository has a Kubernetes production overlay and `scripts/deploy-production.sh`, but the current script does not actually verify the supplied image digest, its image existence and endpoint health steps are placeholders, and the manifests still have digest placeholders. Do not use it for a production cutover until it is repaired and validated.
 
-At the inspected baseline, PRs #274 and #275 are open:
+At the 2026-11-20 repository recheck, PRs #274 and #275 remain open and are not part of the inspected source-code baseline:
 - #274 verifies JWT signatures and expiry before trusting tenant identity for rate limiting.
 - #275 reduces SQLAlchemy per-process pool sizing for the 10-pod HPA envelope.
 
@@ -139,7 +139,39 @@ The connected Railway account exposed a project named `erpnext`, containing a Fr
 7. **Secrets:** real runtime credentials must be created outside the repository. The placeholder secret file is retained only as a non-applied example.
 8. **Staging evidence:** execute restore, rollback, migration-compatibility, load and failure-injection drills. A green unit test does not prove zero downtime.
 
-## 9. Architecture rules
+## 9. Performance and capacity notes
+
+### Database and Redis connection budgets
+
+The effective connection ceiling is the product of pod count, application worker count and per-process pool configuration:
+
+`maximum backend pods × workers per pod × (pool_size + max_overflow)`
+
+At this inspected code baseline, production settings enforce at least 20 pooled plus 50 overflow PostgreSQL connections per process. With the production HPA maximum of 10 pods and one worker per pod, that is a theoretical 700 application connections before migrations, monitoring and operator access. The HPA and pool defaults must be treated as one capacity decision.
+
+PR #275 proposes a 4 + 2 per-process cap; it was still open in the GitHub state inspected on 2026-11-20. Do not assume that proposal is deployed or merged. Recalculate the budget if worker count, HPA maximum or PostgreSQL capacity changes.
+
+The Redis client separately allows up to 50 connections per process. At 10 one-worker pods, this can represent a theoretical 500 Redis client connections. Set a separate Redis capacity budget and monitor fail-open circuit events.
+
+### Transaction and query hot paths
+
+- POS sale creation is one SQLAlchemy transaction. It takes row locks on the branch, warehouse, optional customer and products, and then locks stock balances during inventory adjustments.
+- Invoice allocation currently calculates a branch/month `MAX(invoice_no)` and serialises allocation through the branch-row lock. Measure wait time before changing this behaviour; preserve the approved invoice-number policy and uniqueness.
+- Multi-line sales issue stock-balance lookups/updates for each product line. Batch only when query-count and latency evidence justifies the change and the transaction still prevents negative stock.
+- Catalog list functions run a count query and a page query. Search uses contains-style `ILIKE`; deep pages use offset pagination. Profile with representative tenant cardinalities before adding indexes, trigram extensions or keyset pagination.
+- Never trade tenant predicates, row locks, unique constraints, idempotency or transaction atomicity for a faster benchmark.
+
+### Observability and browser evidence
+
+The Prometheus client in `app/core/metrics.py` defines `erp03_http_requests_total`, `erp03_http_request_duration_seconds` and DB pool gauges. It does not establish DB query-duration, pool-checkout-wait or row-lock-wait metrics. OpenTelemetry helpers exist, but trace/metric initialisation must be verified in the application startup before reporting active trace coverage.
+
+Two Prometheus rule files exist with differing metric names. The checked-in `infra/prometheus.yml` references `infra/prometheus-rules.yml`; reconcile the active rule source and metric names before relying on its alerts.
+
+The Vercel preview build for the inspected frontend commit reported a 290.72 kB vendor chunk (92.20 kB gzip), 16.27 kB CSS (4.07 kB gzip), and separate lazy-loaded page chunks. This is build artifact evidence only; it does not measure real browser LCP, INP, CLS or low-bandwidth user experience.
+
+Follow [Engineering Roadmap](ROADMAP.md) and [Performance Optimisation Checklist](PERFORMANCE_OPTIMIZATION_CHECKLIST.md) for the evidence-based optimisation order and acceptance gates.
+
+## 10. Architecture rules
 
 - PostgreSQL is the source of truth for ERP business entities and transactional invariants.
 - Redis is an operational dependency for distributed throttling, not the accounting ledger or a substitute for database transactions.

@@ -54,6 +54,12 @@ npm run build
 npm run dev
 ```
 
+### Vercel frontend deployment
+
+The Vercel frontend uses the repository-level `api/[...path].js` function as a same-origin API proxy. Configure `ERP03_BACKEND_ORIGIN` in the Vercel project's Production, Preview and Development environments as the HTTPS origin of the deployed FastAPI service (origin only; no `/api/v1` path and no credentials). The proxy maps `/api/*` to the backend's `/api/v1/*`, forwards authentication and idempotency headers, disables response caching, and applies a 30-second upstream timeout and 4 MiB request-body limit.
+
+Do not commit the backend origin or credentials to the repository. A missing variable returns an explicit `503`; it does not silently route API calls to the frontend static host. Verify `GET /api/healthz` and an authenticated login flow on a Vercel Preview deployment before promoting it.
+
 ### Docker Compose
 
 ```bash
@@ -135,12 +141,16 @@ Provision runtime secrets outside Git before applying any environment. The place
 
 ## Documentation
 
+- [Engineering Roadmap](docs/ROADMAP.md)
+- [Performance Optimisation Checklist](docs/PERFORMANCE_OPTIMIZATION_CHECKLIST.md)
+- [Documentation Guidelines](docs/DOCUMENTATION_GUIDELINES.md)
 - [Architecture Blueprint — November 2026](docs/ARCHITECTURE_BLUEPRINT_2026-11.md)
 - [Zero-Downtime Deployment and Runtime Configuration](docs/ZERO_DOWNTIME_DEPLOYMENT_2026-11.md)
 - [Configuration & Credentials Setup](CONFIGURATION_SETUP.md)
 - [Deployment Runbook](docs/DEPLOY_RUNBOOK.md)
 - [Production Readiness Matrix](docs/PRODUCTION_READINESS_MATRIX.md)
-- [Remediation Tracker](docs/REMAINING_TASKS.md)
+- [Current Remediation Tracker](docs/TODO.md)
+- [Historical Remaining Tasks](docs/REMAINING_TASKS.md)
 - [Security Policy](SECURITY.md)
 - [Changelog](CHANGELOG.md)
 

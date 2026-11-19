@@ -1,77 +1,101 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet } from 'react-router-dom';
+import {
+  Box,
+  LayoutDashboard,
+  LogOut,
+  Package,
+  ShoppingCart,
+  Users,
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+
+const navItems = [
+  { name: 'ပင်မစာမျက်နှာ', href: '/', Icon: LayoutDashboard },
+  { name: 'အရောင်း / POS', href: '/sales', Icon: ShoppingCart },
+  { name: 'ကုန်ပစ္စည်း', href: '/products', Icon: Package },
+  { name: 'ဖောက်သည်များ', href: '/customers', Icon: Users },
+  { name: 'လက်ကျန်ကုန်ပစ္စည်း', href: '/inventory', Icon: Box },
+];
+
+const navLinkClass = ({ isActive }) =>
+  [
+    'flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors',
+    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-erp-primary',
+    isActive
+      ? 'bg-erp-surfaceMuted text-erp-primary'
+      : 'text-erp-foregroundMuted hover:bg-erp-surfaceMuted hover:text-erp-primary',
+  ].join(' ');
+
+function PrimaryNavigation({ mobile = false }) {
+  return (
+    <nav
+      aria-label="Primary navigation"
+      className={mobile ? 'flex gap-2 overflow-x-auto pb-2 lg:hidden' : 'flex flex-col gap-1'}
+    >
+      {navItems.map(({ name, href, Icon }) => (
+        <NavLink
+          key={href}
+          to={href}
+          end={href === '/'}
+          className={({ isActive }) =>
+            [
+              navLinkClass({ isActive }),
+              mobile ? 'shrink-0 whitespace-nowrap px-3 py-2' : '',
+            ].join(' ')
+          }
+        >
+          <Icon aria-hidden="true" size={18} strokeWidth={1.8} />
+          <span>{name}</span>
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
 
 export default function Layout() {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
-
-  const navItems = [
-    { name: 'Dashboard', href: '/', icon: 'layout-dashboard' },
-    { name: 'POS Sales', href: '/sales', icon: 'shopping-cart' },
-    { name: 'Products', href: '/products', icon: 'package' },
-    { name: 'Customers', href: '/customers', icon: 'users' },
-    { name: 'Inventory', href: '/inventory', icon: 'box' },
-  ];
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      {/* Top Bar */}
-      <header className="border-b border-gray-200 bg-white sticky top-0 z-10">
-        <div className="flex items-center justify-between px-6 py-3">
-          <Link to="/" className="flex items-center gap-2 font-bold text-xl tracking-tight text-blue-700">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            ERP03 Control Plane
+    <div className="min-h-screen bg-erp-background text-erp-foreground">
+      <header className="sticky top-0 z-20 border-b border-erp-border bg-erp-surface">
+        <div className="flex min-h-16 items-center justify-between gap-4 px-4 py-3 sm:px-6">
+          <Link
+            to="/"
+            className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-erp-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-erp-primary sm:text-xl"
+          >
+            <LayoutDashboard aria-hidden="true" size={22} />
+            <span className="truncate">ERP03 Control Plane</span>
           </Link>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-full bg-gray-100 text-xs font-medium text-gray-600">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              <span>Online</span>
+          <div className="flex shrink-0 items-center gap-3">
+            <div className="hidden text-right sm:block">
+              <p className="max-w-56 truncate text-sm font-medium">{user?.email}</p>
+              <p className="max-w-56 truncate text-xs text-erp-foregroundMuted">
+                {user?.business_id}
+              </p>
             </div>
-            <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium">{user?.email}</p>
-                <p className="text-xs text-gray-500">{user?.business_id}</p>
-              </div>
-              <button
-                onClick={logout}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-red-600 transition"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                Sign out
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={logout}
+              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-erp-foregroundMuted transition-colors hover:bg-erp-surfaceMuted hover:text-erp-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-erp-primary"
+              aria-label="Sign out"
+            >
+              <LogOut aria-hidden="true" size={17} />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
           </div>
         </div>
       </header>
 
-      {/* Sidebar */}
-      <aside className="hidden lg:flex lg:w-64 flex-col border-r border-gray-200 bg-white">
-        <div className="p-6">
-          <nav className="space-y-1">
-            {navItems.map((item) => (
-              <Link
-                key={item.name}
-                to={item.href}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all text-gray-700 hover:bg-blue-50 hover:text-blue-700"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                {item.name}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      </aside>
+      <div className="mx-auto flex w-full max-w-screen-2xl">
+        <aside className="hidden min-h-[calc(100vh-4rem)] w-64 shrink-0 border-r border-erp-border bg-erp-surface p-4 lg:block">
+          <PrimaryNavigation />
+        </aside>
 
-      {/* Main Content */}
-      <div className="lg:pl-64 p-6">
-        <Outlet />
+        <main id="main-content" className="min-w-0 flex-1 p-4 sm:p-6">
+          <PrimaryNavigation mobile />
+          <Outlet />
+        </main>
       </div>
     </div>
   );

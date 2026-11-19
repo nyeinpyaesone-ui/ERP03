@@ -1,7 +1,11 @@
 # ERP03 Remediation Tracker
 
-**Updated:** 2026-10-20 · **Source:** live verification session + full-repo re-audit
-**Supersedes the task lists in** `REMAINING_TASKS.md` (kept for history).
+**Last detailed implementation ledger:** 2026-10-20 · **Source:** historical live verification session + full-repo re-audit  
+**Current roadmap:** [docs/ROADMAP.md](ROADMAP.md)  
+**Performance acceptance:** [docs/PERFORMANCE_OPTIMIZATION_CHECKLIST.md](PERFORMANCE_OPTIMIZATION_CHECKLIST.md)  
+**Historical list:** `REMAINING_TASKS.md` (kept for history; do not use its old merge/issue-close sequence).
+
+This file preserves commit-level implementation evidence from its last detailed update. Its completed items are not a substitute for re-verifying the current branch/commit. Add new work only with a current commit SHA, reproducible evidence and a clearly defined acceptance test.
 
 ## How to work this list (methodology)
 
