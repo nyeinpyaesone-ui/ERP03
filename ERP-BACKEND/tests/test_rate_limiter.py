@@ -136,6 +136,7 @@ async def test_rate_limit_returns_429_after_threshold():
         await mw(scope, None, capture_send)
         assert 429 in statuses
 
+
 def _rate_limiter_with_mock_redis():
     mock_redis_instance = AsyncMock()
     mock_pipeline = MagicMock()
