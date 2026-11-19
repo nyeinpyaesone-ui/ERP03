@@ -92,6 +92,8 @@ jobs:
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
         run: |
           set -Eeuo pipefail
+          expected_platforms="linux/amd64,linux/arm64"
+          echo "Verifying required platforms: $expected_platforms"
           docker buildx imagetools inspect --raw "$IMAGE_REF@$DIGEST" |
             jq -e '[.manifests[].platform | select(.os == "linux" and (.architecture == "amd64" or .architecture == "arm64"))] | map(.architecture) | unique | length == 2' >/dev/null
 
