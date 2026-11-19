@@ -32,11 +32,11 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          set -euo pipefail
-          case "$VERSION" in
-            v[0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "Invalid release tag: $VERSION"; exit 1 ;;
-          esac
+          set -Eeuo pipefail
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || {
+            echo "::error::version must be a semantic version tag such as v1.0.0"
+            exit 1
+          }
 
       - name: Checkout immutable release
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -45,52 +45,151 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Configure SSH
+      - name: Configure pinned SSH host verification
         env:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           test -n "$SSH_PRIVATE_KEY"
-          test -n "$DEPLOY_HOST"
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          test -n "$SSH_KNOWN_HOSTS"
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
 
-      - name: Deploy immutable release
+      - name: Validate deployment inputs
         env:
-          VERSION: ${{ inputs.version }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          GHCR_USER: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_READ_USERNAME: ${{ secrets.GHCR_READ_USERNAME }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
+          test -n "$DEPLOY_HOST"
           test -n "$DEPLOY_USER"
           test -n "$DEPLOY_PATH"
-          test -n "$GHCR_USER"
-          test -n "$GHCR_TOKEN"
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/releases/$VERSION'"
-          tar --exclude=.git -czf - . | ssh "$DEPLOY_USER@$DEPLOY_HOST" "tar -xzf - -C '$DEPLOY_PATH/releases/$VERSION'"
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; cd '$DEPLOY_PATH/releases/$VERSION'; printf '%s' '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USER' --password-stdin; export BACKEND_IMAGE_TAG='$VERSION' FRONTEND_IMAGE_TAG='$VERSION'; docker compose -f docker-compose.yml pull --quiet; docker compose -f docker-compose.yml up -d --remove-orphans; docker compose -f docker-compose.yml ps"
+          test -n "$GHCR_READ_USERNAME"
+          test -n "$GHCR_READ_TOKEN"
+          [[ "$DEPLOY_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]] || {
+            echo "::error::DEPLOY_USER contains unsupported characters"
+            exit 1
+          }
+          [[ "$GHCR_READ_USERNAME" =~ ^[A-Za-z0-9-]+$ ]] || {
+            echo "::error::GHCR_READ_USERNAME contains unsupported characters"
+            exit 1
+          }
+          [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ && "$DEPLOY_PATH" != *".."* ]] || {
+            echo "::error::DEPLOY_PATH must be a safe absolute path without parent traversal"
+            exit 1
+          }
 
-      - name: Verify production health
+      - name: Create release directory and transfer source
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           VERSION: ${{ inputs.version }}
         run: |
-          set -euo pipefail
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; cd '$DEPLOY_PATH/releases/$VERSION'; docker compose -f docker-compose.yml ps --status running"
+          set -Eeuo pipefail
+          remote="$DEPLOY_USER@$DEPLOY_HOST"
+          printf -v remote_root '%q' "$DEPLOY_PATH"
+          printf -v remote_version '%q' "$VERSION"
+          remote_release="$remote_root/releases/$remote_version"
 
-      - name: Record deployed release
+          ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$remote" "install -d -m 0750 -- $remote_release"
+
+          tar --exclude=.git -czf - . |
+            ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes \
+              -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              "$remote" "tar -xzf - -C $remote_release"
+
+          ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$remote" "test -f $remote_root/shared/.env"
+
+      - name: Authenticate remote host to GHCR using read-only token
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          GHCR_READ_USERNAME: ${{ secrets.GHCR_READ_USERNAME }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          remote="$DEPLOY_USER@$DEPLOY_HOST"
+          printf '%s' "$GHCR_READ_TOKEN" |
+            ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes \
+              -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              "$remote" "docker login ghcr.io --username $GHCR_READ_USERNAME --password-stdin"
+
+      - name: Deploy release and verify container health
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           VERSION: ${{ inputs.version }}
         run: |
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "printf '%s\n' '$VERSION' > '$DEPLOY_PATH/current-release'"
+          set -Eeuo pipefail
+          remote="$DEPLOY_USER@$DEPLOY_HOST"
+          printf -v remote_args '%q %q' "$DEPLOY_PATH" "$VERSION"
+          ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$remote" "bash -s -- $remote_args" <<'REMOTE'
+          set -Eeuo pipefail
+          deploy_root="$1"
+          version="$2"
+          release_dir="$deploy_root/releases/$version"
+          shared_env="$deploy_root/shared/.env"
+
+          test -f "$shared_env"
+          test -f "$release_dir/docker-compose.yml"
+          ln -sfn "$shared_env" "$release_dir/.env"
+          cd "$release_dir"
+
+          export IMAGE_TAG="$version"
+          export ERP03_ENVIRONMENT=production
+          docker compose --profile full config --quiet
+          docker compose --profile full pull --quiet
+          # The token is removed from the remote Docker credential store after pulls.
+          docker logout ghcr.io >/dev/null 2>&1 || true
+
+          docker compose --profile full run --rm migrate
+          docker compose --profile full up -d --remove-orphans
+
+          for attempt in $(seq 1 36); do
+            unhealthy=0
+            for service in postgres redis backend frontend; do
+              container_id="$(docker compose ps -q "$service" | head -n 1)"
+              if [ -z "$container_id" ]; then
+                unhealthy=1
+                continue
+              fi
+              state="$(docker inspect --format '{{.State.Status}}' "$container_id")"
+              health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$container_id")"
+              if [ "$state" != "running" ] || [ "$health" != "healthy" ]; then
+                unhealthy=1
+                echo "$service state=$state health=$health (attempt $attempt/36)"
+              fi
+            done
+            if [ "$unhealthy" -eq 0 ]; then
+              docker compose --profile full ps
+              printf '%s\n' "$version" > "$deploy_root/current-release.tmp"
+              mv "$deploy_root/current-release.tmp" "$deploy_root/current-release"
+              exit 0
+            fi
+            sleep 5
+          done
+
+          docker compose --profile full ps
+          echo "Production deployment did not reach healthy status"
+          exit 1
+          REMOTE
+
+      - name: Clean up runner SSH material
+        if: always()
+        run: |
+          rm -f "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
