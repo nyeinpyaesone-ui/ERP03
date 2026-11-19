@@ -114,6 +114,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up Buildx for registry manifest inspection
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+
       - name: Verify image signatures, provenance identity, and platforms
         env:
           VERSION: ${{ inputs.version }}
@@ -283,14 +286,22 @@ jobs:
 
           previous_backend_id="$(docker compose --profile full ps -q backend | head -n 1)"
           previous_frontend_id="$(docker compose --profile full ps -q frontend | head -n 1)"
-          previous_backend_image=""
-          previous_frontend_image=""
-          if [ -n "$previous_backend_id" ] && [ -n "$previous_frontend_id" ]; then
-            previous_backend_image="$(docker inspect --format '{{.Config.Image}}' "$previous_backend_id")"
-            previous_frontend_image="$(docker inspect --format '{{.Config.Image}}' "$previous_frontend_id")"
-            docker image inspect "$previous_backend_image" >/dev/null
-            docker image inspect "$previous_frontend_image" >/dev/null
-          fi
+          test -n "$previous_backend_id" && test -n "$previous_frontend_id" || {
+            echo "No existing application release is running; use the separately approved bootstrap procedure"
+            exit 1
+          }
+          previous_backend_image="$(docker inspect --format '{{.Config.Image}}' "$previous_backend_id")"
+          previous_frontend_image="$(docker inspect --format '{{.Config.Image}}' "$previous_frontend_id")"
+          docker image inspect "$previous_backend_image" >/dev/null
+          docker image inspect "$previous_frontend_image" >/dev/null
+          for previous_container in "$previous_backend_id" "$previous_frontend_id"; do
+            previous_state="$(docker inspect --format '{{.State.Status}}' "$previous_container")"
+            previous_health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$previous_container")"
+            test "$previous_state" = "running" && test "$previous_health" = "healthy" || {
+              echo "Existing application release is not healthy; refusing replacement"
+              exit 1
+            }
+          done
 
           deployment_started=0
           wait_for_health() {
