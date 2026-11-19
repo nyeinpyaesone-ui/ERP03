@@ -6,11 +6,11 @@ resources:
 images:
   - name: ghcr.io/nyeinpyaesone-ui/erp03-backend
     newName: ghcr.io/nyeinpyaesone-ui/erp03-backend
-    newTag: "1.1.0"
+    newTag: "v1.1.0"
     digest: sha256:REPLACE_WITH_REAL_BACKEND_DIGEST
   - name: ghcr.io/nyeinpyaesone-ui/erp03-frontend
     newName: ghcr.io/nyeinpyaesone-ui/erp03-frontend
-    newTag: "1.1.0"
+    newTag: "v1.1.0"
     digest: sha256:REPLACE_WITH_REAL_FRONTEND_DIGEST
 namespace: erp03
 commonLabels:
