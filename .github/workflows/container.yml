@@ -233,3 +233,12 @@ jobs:
       - name: Log out from Docker Hub
         if: always() && env.DOCKERHUB_ENABLED == 'true'
         run: docker logout docker.io || true
+
+      - name: Report Docker1 credential readiness without exposing values
+        if: always()
+        run: |
+          if [[ "$DOCKERHUB_ENABLED" == "true" ]]; then
+            echo "- Docker1: Docker Hub namespace and token are present; authentication/push outcome is reported by the preceding steps." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Docker1: required Docker Hub namespace or token is missing; optional mirror was skipped." >> "$GITHUB_STEP_SUMMARY"
+          fi
