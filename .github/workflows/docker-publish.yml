@@ -188,8 +188,10 @@ jobs:
 
       - name: Log out from registries
         if: always() && github.event_name != 'pull_request'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
           docker logout ghcr.io || true
-          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+          if [ -n "$DOCKERHUB_USERNAME" ]; then
             docker logout docker.io || true
           fi
