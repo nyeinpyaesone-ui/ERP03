@@ -1,4 +1,4 @@
-import { Readable } from 'node:stream';
+const { Readable } = require('node:stream');
 
 const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
 const TIMEOUT_MS = 30_000;
@@ -78,7 +78,7 @@ async function readRequestBody(req) {
   return Buffer.concat(chunks);
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (!['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'].includes(req.method)) {
     res.setHeader('Allow', 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS');
     sendJson(res, 405, { detail: 'Method not allowed' });
