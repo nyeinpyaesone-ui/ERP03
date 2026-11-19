@@ -186,7 +186,10 @@ jobs:
             done
             if [ "$unhealthy" -eq 0 ]; then
               docker compose --profile full ps
-              printf '%s\n' "$version" > "$deploy_root/current-release.tmp"
+              {
+                printf 'version=%s\n' "$version"
+                printf 'backup_reference=%s\n' "$backup_reference"
+              } > "$deploy_root/current-release.tmp"
               mv "$deploy_root/current-release.tmp" "$deploy_root/current-release"
               exit 0
             fi
