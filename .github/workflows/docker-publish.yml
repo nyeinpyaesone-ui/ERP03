@@ -19,7 +19,7 @@ jobs:
     env:
       # Docker Hub is an optional mirror. GHCR remains the primary registry
       # and continues to publish through the short-lived GITHUB_TOKEN.
-      DOCKERHUB_ENABLED: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+      DOCKERHUB_ENABLED: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
     permissions:
       contents: read
       packages: write
@@ -53,7 +53,7 @@ jobs:
       - name: Validate Docker Hub credentials
         if: env.DOCKERHUB_ENABLED == 'true' && github.event_name != 'pull_request'
         env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
         run: |
           set -Eeuo pipefail
           [[ "$DOCKERHUB_USERNAME" =~ ^[a-z0-9]+([._-][a-z0-9]+)*$ ]] || {
@@ -66,8 +66,8 @@ jobs:
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
 
       - name: Extract GHCR Docker metadata
         id: meta-ghcr
@@ -86,7 +86,7 @@ jobs:
         if: env.DOCKERHUB_ENABLED == 'true'
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
         with:
-          images: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/erp03-backend
+          images: docker.io/${{ env.DOCKERHUB_USERNAME }}/erp03-backend
           tags: |
             type=ref,event=branch
             type=ref,event=tag
@@ -133,7 +133,7 @@ jobs:
       - name: Verify Docker Hub manifest architectures
         if: github.event_name != 'pull_request' && env.DOCKERHUB_ENABLED == 'true'
         env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
         run: |
           set -Eeuo pipefail
@@ -169,14 +169,14 @@ jobs:
       - name: Sign the Docker Hub mirror
         if: github.event_name != 'pull_request' && env.DOCKERHUB_ENABLED == 'true'
         env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
         run: cosign sign --yes "docker.io/$DOCKERHUB_USERNAME/erp03-backend@$DIGEST"
 
       - name: Verify keyless Docker Hub image signature
         if: github.event_name != 'pull_request' && env.DOCKERHUB_ENABLED == 'true'
         env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
           CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/docker-publish.yml@${{ github.ref }}
         run: |
@@ -189,7 +189,7 @@ jobs:
       - name: Log out from registries
         if: always() && github.event_name != 'pull_request'
         env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
         run: |
           docker logout ghcr.io || true
           if [ -n "$DOCKERHUB_USERNAME" ]; then
