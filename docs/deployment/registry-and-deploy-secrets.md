@@ -104,10 +104,15 @@ The workflow links that file into each immutable release directory. It uses a
 fixed Compose project name (`erp03`) so versioned release directories continue
 to use the same persistent PostgreSQL and Redis volumes. It deploys backend
 and frontend by verified OCI digest, checks image revision labels against the
-release source SHA, and attempts application-image rollback if health checks
-fail. Database migrations must therefore follow an expand/contract strategy:
-a migration must remain compatible with the previous application version
-until the new release has passed health checks.
+release source SHA, and requires a healthy running application baseline before
+replacement. If post-migration health checks fail, it attempts to restore the
+previous application images. It does not reverse database migrations or
+restore backups automatically. Database migrations must follow an
+expand/contract strategy: schema changes must remain compatible with the
+previous application version until the new release has passed health checks.
+The backup reference is an operator-provided identifier; the workflow does
+not connect to a backup provider to prove that the backup exists or is
+restorable.
 
 Enable required reviewers and prevent self-approval on the production
 Environment. Restrict deployment branches to protected release tags or the
