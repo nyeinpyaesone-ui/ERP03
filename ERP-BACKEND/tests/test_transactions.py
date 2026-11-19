@@ -371,3 +371,15 @@ def test_idempotency_fingerprint_ignores_metadata_key_order(tmp_path):
     )
     assert replay.transaction_id == first.transaction_id
     assert replay.idempotent_replay is True
+
+
+def test_production_disables_local_sqlite_transaction_journal(monkeypatch):
+    from fastapi import HTTPException
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "environment", "production")
+    with pytest.raises(HTTPException) as exc:
+        get_store()
+
+    assert exc.value.status_code == 503
+    assert exc.value.detail["code"] == "TRANSACTION_JOURNAL_UNAVAILABLE"
