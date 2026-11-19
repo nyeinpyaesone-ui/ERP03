@@ -7,21 +7,21 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Noto Sans Myanmar', 'Myanmar Text', 'Inter', 'system-ui', 'sans-serif'],
+        sans: ['Noto Sans Myanmar', 'Myanmar Text', 'Padauk', 'Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
         erp: {
-          background: '#F5F8F7',
+          background: '#F4F7FA',
           surface: '#FFFFFF',
-          surfaceMuted: '#EAF1EF',
-          foreground: '#162B29',
-          foregroundMuted: '#475F5B',
-          primary: '#0D6B63',
+          surfaceMuted: '#EAF0F5',
+          foreground: '#172B3A',
+          foregroundMuted: '#465B6B',
+          primary: '#087A73',
           primaryForeground: '#FFFFFF',
-          secondary: '#D8E8E4',
-          secondaryForeground: '#163E39',
-          accent: '#A7660F',
-          border: '#788B87',
+          secondary: '#18344D',
+          secondaryForeground: '#FFFFFF',
+          accent: '#B76E16',
+          border: '#738394',
         },
       },
     },
