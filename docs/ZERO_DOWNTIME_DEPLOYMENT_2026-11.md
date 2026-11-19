@@ -1,7 +1,7 @@
 # ERP03 Zero-Downtime Deployment and Runtime Configuration
 
 **Scope:** existing single-host staging path and Kubernetes production target  
-**Repository baseline:** `main` at `716f305f` (2026-11-12)  
+**Repository baseline:** `main` at `9a2a2340` (2026-11-19)  
 **Status:** deployment configuration is being hardened; production zero downtime is **not yet qualified**.
 
 > Rolling application Deployments prevent avoidable pod-replacement gaps. They cannot make a single-instance PostgreSQL database, a ReadWriteOnce SQLite journal, or a single-host Compose staging service highly available. Do not use this runbook for production cutover until all hard gates pass.
@@ -84,7 +84,7 @@ GitHub image publishing needs `GITHUB_TOKEN`; the manual staging deploy workflow
 3. Capture the exact image digest for each image from its successful workflow summary.
 4. Set each target overlay to the exact digest; do not use `latest` for production.
 5. Confirm the backend/frontend digest contains both `linux/amd64` and `linux/arm64` manifests.
-6. Resolve all infrastructure image digest placeholders before applying the Kubernetes base: PostgreSQL 15, Redis 7.4 and optional Ollama 0.5.4.
+6. Infrastructure image references are now pinned to Docker Hub multi-platform index digests (verified 2026-11-20): PostgreSQL `15.20-alpine3.24`, Redis `7.4.12-alpine3.22`, and Ollama `0.5.4`. PostgreSQL runs with the image's Alpine UID/GID 70 rather than an unrelated UID. Re-verify upstream digests during planned image updates; never replace them with mutable tags.
 
 Useful inspection commands:
 
@@ -93,7 +93,7 @@ docker buildx imagetools inspect ghcr.io/nyeinpyaesone-ui/erp03-backend:<tag>
 docker buildx imagetools inspect ghcr.io/nyeinpyaesone-ui/erp03-frontend:<tag>
 ```
 
-Never invent or reuse a digest from an earlier build. A digest identifies exact image content, not a release label.
+Infrastructure image references are pinned to multi-platform index digests, not platform-specific child manifests. Source records: [PostgreSQL 15.20 Alpine index](https://hub.docker.com/layers/library/postgres/15.20-alpine3.24/images/sha256-36dd0a523ce9ab5d4be69d79c116bbfe3af83ed1f708233d491d2884ca7d8a02), [Redis 7.4.12 Alpine index](https://hub.docker.com/layers/library/redis/7-alpine/), and [Ollama 0.5.4 index](https://hub.docker.com/layers/ollama/ollama/0.5.4/images/sha256-7a8dad8885de03cfcfce8fd15fe7c45128098152b4e811d4f32cee64e6208efa). Never invent or reuse a digest from an earlier build. A digest identifies exact image content, not a release label.
 
 ## 5. Pre-deployment gates
 

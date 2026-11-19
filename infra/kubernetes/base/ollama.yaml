@@ -23,7 +23,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: ollama
-          image: ollama/ollama:0.5.4@sha256:REPLACE_WITH_REAL_DIGEST
+          image: ollama/ollama:0.5.4@sha256:18bfb1d605604fd53dcad20d0556df4c781e560ebebcd923454d627c994a0e37
           ports:
             - containerPort: 11434
               name: http
