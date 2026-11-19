@@ -132,7 +132,7 @@ npm ci && npm run build
 
 ## Environment Variables
 
-See `.env.example` for all available configuration options. Key variables:
+See [docs/ENVIRONMENT_CONFIG.md](docs/ENVIRONMENT_CONFIG.md) for separate backend and Compose configuration. Key backend variables:
 
 - `SECRET_KEY` — ≥32 characters (production)
 - `DATABASE_URL` — PostgreSQL for production, SQLite for dev
