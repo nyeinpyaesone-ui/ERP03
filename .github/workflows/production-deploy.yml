@@ -158,10 +158,10 @@ jobs:
 
           export IMAGE_TAG="$version"
           export ERP03_ENVIRONMENT=production
+          # Remove the temporary registry credential even if a later command fails.
+          trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
           docker compose --profile full config --quiet
           docker compose --profile full pull --quiet
-          # The token is removed from the remote Docker credential store after pulls.
-          docker logout ghcr.io >/dev/null 2>&1 || true
 
           # Start dependencies first, then run the migration exactly once, and
           # finally replace the application containers without restarting DBs.
