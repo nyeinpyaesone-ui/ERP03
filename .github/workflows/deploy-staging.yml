@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: erp03-staging-deploy
@@ -65,13 +66,13 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Authenticate staging host to GHCR with read-only credentials
+      - name: Authenticate staging host to GHCR with short-lived workflow token
         env:
           STAGING_HOST: ${{ secrets.STAGING_SSH_HOST }}
           STAGING_USER: ${{ secrets.STAGING_SSH_USER }}
           STAGING_PORT: ${{ secrets.STAGING_SSH_PORT }}
-          GHCR_USERNAME: ${{ secrets.GHCR_READ_USERNAME }}
-          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_READ_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -Eeuo pipefail
           test -n "$STAGING_HOST"
