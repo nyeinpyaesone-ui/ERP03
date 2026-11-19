@@ -55,7 +55,9 @@ secrets**:
 | `STAGING_SSH_HOST` | Staging host DNS name or IP |
 | `STAGING_SSH_USER` | Restricted deployment account |
 | `STAGING_SSH_PORT` | SSH port; optional, defaults to 22 |
-| *(none)* | GHCR authentication uses the workflow's short-lived `GITHUB_TOKEN` |
+
+GHCR pulls use the workflow's short-lived `GITHUB_TOKEN` with `packages: read`;
+no GHCR environment secret is required.
 
 Configure this **environment variable**:
 
@@ -63,8 +65,8 @@ Configure this **environment variable**:
 | --- | --- |
 | `STAGING_DEPLOY_PATH` | Absolute path to the staging Compose checkout |
 
-The staging workflow logs the remote host out of GHCR after pulling images so
-the read token is not left in its Docker credential store.
+The staging workflow removes its temporary GHCR workflow-token credential
+from the remote Docker credential store after the image pull.
 
 ## Production environment
 
@@ -78,7 +80,9 @@ secrets**:
 | `DEPLOY_HOST` | Production host DNS name or IP |
 | `DEPLOY_USER` | Restricted deployment account |
 | `DEPLOY_PATH` | Absolute production release root |
-| *(none)* | GHCR authentication uses the workflow's short-lived `GITHUB_TOKEN` |
+
+GHCR pulls use the workflow's short-lived `GITHUB_TOKEN` with `packages: read`;
+no GHCR environment secret is required.
 
 The production host must have its server-managed runtime configuration at
 `$DEPLOY_PATH/shared/.env`. This file must be provisioned out of band with
