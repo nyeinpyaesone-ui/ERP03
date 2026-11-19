@@ -34,8 +34,11 @@ class Settings(BaseSettings):
     database_path: str = "./.local/erp03.sqlite3"
 
     # --- Database pool (auto-tuned by environment) ---
-    db_pool_size: int = Field(default=10, ge=1, le=500)
-    db_max_overflow: int = Field(default=20, ge=0, le=1000)
+    # Kubernetes HPA permits up to 10 API pods. Keep each process at <=6
+    # connections (4 pooled + 2 overflow) to cap API demand at 60 and reserve
+    # headroom in PostgreSQL max_connections for migrations and operations.
+    db_pool_size: int = Field(default=4, ge=1, le=500)
+    db_max_overflow: int = Field(default=2, ge=0, le=1000)
     db_pool_recycle: int = Field(default=1800, ge=60)
     db_pool_timeout: int = Field(default=30, ge=1, le=300)
     db_echo: bool = False
@@ -142,16 +145,16 @@ class Settings(BaseSettings):
         """Auto-tune pool sizing based on environment tier."""
         env = self.environment.lower()
         if env in {"production", "prod"}:
-            self.db_pool_size = max(self.db_pool_size, 20)
-            self.db_max_overflow = max(self.db_max_overflow, 50)
+            self.db_pool_size = min(self.db_pool_size, 4)
+            self.db_max_overflow = min(self.db_max_overflow, 2)
             self.db_pool_recycle = max(self.db_pool_recycle, 3600)
         elif env in {"staging", "stage"}:
-            self.db_pool_size = max(self.db_pool_size, 10)
-            self.db_max_overflow = max(self.db_max_overflow, 30)
+            self.db_pool_size = min(self.db_pool_size, 4)
+            self.db_max_overflow = min(self.db_max_overflow, 2)
             self.db_pool_recycle = max(self.db_pool_recycle, 1800)
         else:
-            self.db_pool_size = min(self.db_pool_size, 5)
-            self.db_max_overflow = min(self.db_max_overflow, 10)
+            self.db_pool_size = min(self.db_pool_size, 4)
+            self.db_max_overflow = min(self.db_max_overflow, 2)
             self.db_pool_recycle = min(self.db_pool_recycle, 900)
         return self
 
