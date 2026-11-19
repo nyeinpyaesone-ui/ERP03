@@ -4,7 +4,23 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Immutable release tag to deploy (for example v1.0.0)"
+        description: "Immutable release tag (for example v1.0.0)"
+        required: true
+        type: string
+      source_sha:
+        description: "Full source commit SHA used to build both images"
+        required: true
+        type: string
+      backend_digest:
+        description: "Verified backend OCI digest (sha256:...)"
+        required: true
+        type: string
+      frontend_digest:
+        description: "Verified frontend OCI digest (sha256:...)"
+        required: true
+        type: string
+      backup_reference:
+        description: "Pre-deployment backup identifier; operator must verify it is restorable"
         required: true
         type: string
       confirm:
@@ -18,79 +34,364 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   deploy:
-    name: Deploy immutable release
+    name: Verify signed images and deploy immutable release
     if: ${{ inputs.confirm == 'DEPLOY-PRODUCTION' }}
     runs-on: ubuntu-latest
     environment:
       name: production
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
-      - name: Validate release ref
+      - name: Validate release and immutable image references
         env:
           VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BACKEND_DIGEST: ${{ inputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
+          BACKUP_REFERENCE: ${{ inputs.backup_reference }}
+        shell: bash
         run: |
-          set -euo pipefail
-          case "$VERSION" in
-            v[0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "Invalid release tag: $VERSION"; exit 1 ;;
-          esac
+          set -Eeuo pipefail
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || {
+            echo "::error::version must be a semantic version tag such as v1.0.0"
+            exit 1
+          }
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::source_sha must be a full lowercase commit SHA"
+            exit 1
+          }
+          [[ "$BACKEND_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::backend_digest must be a sha256 OCI digest"
+            exit 1
+          }
+          [[ "$FRONTEND_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::frontend_digest must be a sha256 OCI digest"
+            exit 1
+          }
+          [[ "$BACKUP_REFERENCE" =~ ^[A-Za-z0-9][A-Za-z0-9._:/-]{2,255}$ ]] || {
+            echo "::error::backup_reference contains unsupported characters"
+            exit 1
+          }
+          {
+            echo "## Production deployment preflight"
+            echo
+            echo "- Release: $VERSION"
+            echo "- Source commit: $SOURCE_SHA"
+            echo "- Backend and frontend supplied as immutable OCI digests"
+            echo "- Backup reference supplied; operator attestation is required"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Checkout immutable release
+      - name: Checkout immutable release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ inputs.version }}
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Configure SSH
+      - name: Verify checked-out source commit
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -Eeuo pipefail
+          actual_source_sha="$(git rev-parse HEAD)"
+          test "$actual_source_sha" = "$EXPECTED_SOURCE_SHA" || {
+            echo "::error::Release tag does not resolve to the supplied source SHA"
+            exit 1
+          }
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20
+        with:
+          cosign-release: 'v2.2.4'
+
+      - name: Authenticate runner to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Buildx for registry manifest inspection
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+
+      - name: Verify image signatures, provenance identity, and platforms
+        env:
+          VERSION: ${{ inputs.version }}
+          BACKEND_DIGEST: ${{ inputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
+          BACKEND_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/docker-publish.yml@refs/tags/${{ inputs.version }}
+          FRONTEND_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/container.yml@refs/tags/${{ inputs.version }}
+        run: |
+          set -Eeuo pipefail
+          backend_image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/erp03-backend"
+          frontend_image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/erp03-frontend"
+
+          cosign verify \
+            --certificate-identity "$BACKEND_IDENTITY" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$backend_image@$BACKEND_DIGEST"
+
+          cosign verify \
+            --certificate-identity "$FRONTEND_IDENTITY" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$frontend_image@$FRONTEND_DIGEST"
+
+          for image in "$backend_image@$BACKEND_DIGEST" "$frontend_image@$FRONTEND_DIGEST"; do
+            docker buildx imagetools inspect --raw "$image" |
+              jq -e '[.manifests[].platform | select(.os == "linux" and (.architecture == "amd64" or .architecture == "arm64"))] | map(.architecture) | unique | length == 2' >/dev/null
+          done
+
+      - name: Configure pinned production SSH host verification
         env:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           test -n "$SSH_PRIVATE_KEY"
-          test -n "$DEPLOY_HOST"
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          test -n "$SSH_KNOWN_HOSTS"
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
 
-      - name: Deploy immutable release
+      - name: Validate production host configuration
         env:
-          VERSION: ${{ inputs.version }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          GHCR_USER: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
+          test -n "$DEPLOY_HOST"
           test -n "$DEPLOY_USER"
           test -n "$DEPLOY_PATH"
-          test -n "$GHCR_USER"
-          test -n "$GHCR_TOKEN"
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/releases/$VERSION'"
-          tar --exclude=.git -czf - . | ssh "$DEPLOY_USER@$DEPLOY_HOST" "tar -xzf - -C '$DEPLOY_PATH/releases/$VERSION'"
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; cd '$DEPLOY_PATH/releases/$VERSION'; printf '%s' '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USER' --password-stdin; export BACKEND_IMAGE_TAG='$VERSION' FRONTEND_IMAGE_TAG='$VERSION'; docker compose -f docker-compose.yml pull --quiet; docker compose -f docker-compose.yml up -d --remove-orphans; docker compose -f docker-compose.yml ps"
+          [[ "$DEPLOY_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]] || {
+            echo "::error::DEPLOY_USER contains unsupported characters"
+            exit 1
+          }
+          [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ && "$DEPLOY_PATH" != *".."* ]] || {
+            echo "::error::DEPLOY_PATH must be a safe absolute path without parent traversal"
+            exit 1
+          }
+          port="${DEPLOY_SSH_PORT:-22}"
+          [[ "$port" =~ ^[0-9]{1,5}$ ]] && (( port >= 1 && port <= 65535 )) || {
+            echo "::error::DEPLOY_SSH_PORT must be between 1 and 65535"
+            exit 1
+          }
 
-      - name: Verify production health
+      - name: Transfer immutable release source
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
           VERSION: ${{ inputs.version }}
         run: |
-          set -euo pipefail
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; cd '$DEPLOY_PATH/releases/$VERSION'; docker compose -f docker-compose.yml ps --status running"
+          set -Eeuo pipefail
+          remote="$DEPLOY_USER@$DEPLOY_HOST"
+          port="${DEPLOY_SSH_PORT:-22}"
+          printf -v remote_root '%q' "$DEPLOY_PATH"
+          printf -v remote_version '%q' "$VERSION"
+          remote_release="$remote_root/releases/$remote_version"
 
-      - name: Record deployed release
+          ssh -i "$HOME/.ssh/id_ed25519" -p "$port" -o BatchMode=yes \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$remote" "install -d -m 0750 -- $remote_release"
+
+          tar --exclude=.git --exclude=.env --exclude='*/.env' -czf - . |
+            ssh -i "$HOME/.ssh/id_ed25519" -p "$port" -o BatchMode=yes \
+              -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              "$remote" "tar -xzf - -C $remote_release"
+
+          ssh -i "$HOME/.ssh/id_ed25519" -p "$port" -o BatchMode=yes \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$remote" "test -f $remote_root/shared/.env"
+
+      - name: Authenticate production host to GHCR with short-lived workflow token
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_READ_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          remote="$DEPLOY_USER@$DEPLOY_HOST"
+          port="${DEPLOY_SSH_PORT:-22}"
+          printf '%s' "$GHCR_READ_TOKEN" |
+            ssh -i "$HOME/.ssh/id_ed25519" -p "$port" -o BatchMode=yes \
+              -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              "$remote" "docker login ghcr.io --username $GHCR_USERNAME --password-stdin"
+
+      - name: Deploy immutable images with stable persistent Compose project
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
           VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BACKEND_DIGEST: ${{ inputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
+          BACKUP_REFERENCE: ${{ inputs.backup_reference }}
         run: |
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "printf '%s\n' '$VERSION' > '$DEPLOY_PATH/current-release'"
+          set -Eeuo pipefail
+          remote="$DEPLOY_USER@$DEPLOY_HOST"
+          port="${DEPLOY_SSH_PORT:-22}"
+          printf -v remote_args '%q %q %q %q %q %q' \
+            "$DEPLOY_PATH" "$VERSION" "$SOURCE_SHA" "$BACKEND_DIGEST" "$FRONTEND_DIGEST" "$BACKUP_REFERENCE"
+
+          ssh -i "$HOME/.ssh/id_ed25519" -p "$port" -o BatchMode=yes \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$remote" "bash -s -- $remote_args" <<'REMOTE'
+          set -Eeuo pipefail
+          deploy_root="$1"
+          version="$2"
+          source_sha="$3"
+          backend_digest="$4"
+          frontend_digest="$5"
+          backup_reference="$6"
+          release_dir="$deploy_root/releases/$version"
+          shared_env="$deploy_root/shared/.env"
+
+          test -f "$shared_env"
+          test -f "$release_dir/docker-compose.yml"
+          ln -sfn "$shared_env" "$release_dir/.env"
+          cd "$release_dir"
+
+          # Compose project identity must not depend on the versioned release path.
+          # This keeps PostgreSQL, Redis, and application volumes stable across releases.
+          export COMPOSE_PROJECT_NAME=erp03
+          export ERP03_ENVIRONMENT=production
+          export ERP03_BACKEND_IMAGE="ghcr.io/nyeinpyaesone-ui/erp03-backend@$backend_digest"
+          export ERP03_FRONTEND_IMAGE="ghcr.io/nyeinpyaesone-ui/erp03-frontend@$frontend_digest"
+
+          docker compose --profile full config --quiet
+          docker compose --profile full pull --quiet
+
+          backend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$ERP03_BACKEND_IMAGE")"
+          frontend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$ERP03_FRONTEND_IMAGE")"
+          test "$backend_revision" = "$source_sha" || {
+            echo "Backend image revision does not match the release source SHA"
+            exit 1
+          }
+          test "$frontend_revision" = "$source_sha" || {
+            echo "Frontend image revision does not match the release source SHA"
+            exit 1
+          }
+
+          previous_backend_id="$(docker compose --profile full ps -q backend | head -n 1)"
+          previous_frontend_id="$(docker compose --profile full ps -q frontend | head -n 1)"
+          test -n "$previous_backend_id" && test -n "$previous_frontend_id" || {
+            echo "No existing application release is running; use the separately approved bootstrap procedure"
+            exit 1
+          }
+          previous_backend_image="$(docker inspect --format '{{.Config.Image}}' "$previous_backend_id")"
+          previous_frontend_image="$(docker inspect --format '{{.Config.Image}}' "$previous_frontend_id")"
+          docker image inspect "$previous_backend_image" >/dev/null
+          docker image inspect "$previous_frontend_image" >/dev/null
+          for previous_container in "$previous_backend_id" "$previous_frontend_id"; do
+            previous_state="$(docker inspect --format '{{.State.Status}}' "$previous_container")"
+            previous_health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$previous_container")"
+            test "$previous_state" = "running" && test "$previous_health" = "healthy" || {
+              echo "Existing application release is not healthy; refusing replacement"
+              exit 1
+            }
+          done
+
+          deployment_started=0
+          wait_for_health() {
+            for attempt in $(seq 1 36); do
+              all_healthy=1
+              for service in postgres redis backend frontend; do
+                container_id="$(docker compose --profile full ps -q "$service" | head -n 1)"
+                if [ -z "$container_id" ]; then
+                  all_healthy=0
+                  continue
+                fi
+                state="$(docker inspect --format '{{.State.Status}}' "$container_id")"
+                health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$container_id")"
+                if [ "$state" != "running" ] || [ "$health" != "healthy" ]; then
+                  all_healthy=0
+                  echo "$service state=$state health=$health (attempt $attempt/36)"
+                fi
+              done
+              if [ "$all_healthy" -eq 1 ]; then
+                return 0
+              fi
+              sleep 5
+            done
+            return 1
+          }
+
+          rollback_on_exit() {
+            result=$?
+            trap - EXIT
+            if [ "$result" -ne 0 ] && [ "$deployment_started" -eq 1 ]; then
+              echo "Deployment failed; attempting application rollback to the previous images"
+              if [ -n "$previous_backend_image" ] && [ -n "$previous_frontend_image" ]; then
+                set +e
+                export ERP03_BACKEND_IMAGE="$previous_backend_image"
+                export ERP03_FRONTEND_IMAGE="$previous_frontend_image"
+                docker compose --profile full up -d --no-deps --no-build backend frontend
+                if wait_for_health; then
+                  echo "Previous application images restored and healthy"
+                else
+                  echo "ERROR: automatic application rollback did not restore healthy status"
+                fi
+                set -e
+              else
+                echo "No known-good running application release was available for automatic rollback"
+              fi
+            fi
+            exit "$result"
+          }
+          trap rollback_on_exit EXIT
+
+          deployment_started=1
+          docker compose --profile full up -d postgres redis
+          docker compose --profile full run --rm migrate
+          docker compose --profile full up -d --no-deps --no-build backend frontend
+
+          wait_for_health || {
+            docker compose --profile full ps
+            echo "Production deployment did not reach healthy status"
+            exit 1
+          }
+
+          {
+            printf 'version=%s\n' "$version"
+            printf 'source_sha=%s\n' "$source_sha"
+            printf 'backend_image=%s\n' "$ERP03_BACKEND_IMAGE"
+            printf 'frontend_image=%s\n' "$ERP03_FRONTEND_IMAGE"
+            printf 'backup_reference=%s\n' "$backup_reference"
+          } > "$deploy_root/current-release.tmp"
+          mv "$deploy_root/current-release.tmp" "$deploy_root/current-release"
+          deployment_started=0
+          docker compose --profile full ps
+          REMOTE
+
+      - name: Clear remote GHCR credentials
+        if: always()
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+        run: |
+          set -Eeuo pipefail
+          if [ -f "$HOME/.ssh/id_ed25519" ] && [ -n "$DEPLOY_HOST" ] && [ -n "$DEPLOY_USER" ]; then
+            port="${DEPLOY_SSH_PORT:-22}"
+            ssh -i "$HOME/.ssh/id_ed25519" -p "$port" -o BatchMode=yes \
+              -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              "$DEPLOY_USER@$DEPLOY_HOST" "docker logout ghcr.io >/dev/null 2>&1 || true" || true
+          fi
+
+      - name: Clear runner registry credentials and SSH material
+        if: always()
+        run: |
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          rm -f "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
