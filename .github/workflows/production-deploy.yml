@@ -22,6 +22,7 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   deploy:
@@ -68,21 +69,13 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          GHCR_READ_USERNAME: ${{ secrets.GHCR_READ_USERNAME }}
-          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
         run: |
           set -Eeuo pipefail
           test -n "$DEPLOY_HOST"
           test -n "$DEPLOY_USER"
           test -n "$DEPLOY_PATH"
-          test -n "$GHCR_READ_USERNAME"
-          test -n "$GHCR_READ_TOKEN"
           [[ "$DEPLOY_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]] || {
             echo "::error::DEPLOY_USER contains unsupported characters"
-            exit 1
-          }
-          [[ "$GHCR_READ_USERNAME" =~ ^[A-Za-z0-9-]+$ ]] || {
-            echo "::error::GHCR_READ_USERNAME contains unsupported characters"
             exit 1
           }
           [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ && "$DEPLOY_PATH" != *".."* ]] || {
@@ -120,15 +113,19 @@ jobs:
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          GHCR_READ_USERNAME: ${{ secrets.GHCR_READ_USERNAME }}
-          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_READ_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -Eeuo pipefail
           remote="$DEPLOY_USER@$DEPLOY_HOST"
+          [[ "$GHCR_USERNAME" =~ ^[A-Za-z0-9-]+$ ]] || {
+            echo "::error::Invalid GitHub actor username for GHCR login"
+            exit 1
+          }
           printf '%s' "$GHCR_READ_TOKEN" |
             ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes \
               -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-              "$remote" "docker login ghcr.io --username $GHCR_READ_USERNAME --password-stdin"
+              "$remote" "docker login ghcr.io --username $GHCR_USERNAME --password-stdin"
 
       - name: Deploy release and verify container health
         env:
