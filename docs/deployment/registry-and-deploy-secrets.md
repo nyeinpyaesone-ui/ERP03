@@ -12,9 +12,9 @@ ERP03 GitHub Actions workflows. It intentionally contains no credential values.
   the mirror only when both `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` exist.
   If either is absent, GHCR publishing continues and Docker Hub is skipped.
 - Development/devcontainer images remain GHCR-only.
-- Staging and production deployment pull from GHCR with a separate
-  read-only machine identity. Do not reuse the Docker Hub publishing token or
-  a GHCR publishing credential for deployment.
+- Staging and production deployment pull from GHCR with each workflow's
+  short-lived `GITHUB_TOKEN`, limited to `packages: read`. No long-lived GHCR
+  pull token is stored as an Actions secret.
 
 ## Repository Actions secrets
 
@@ -55,8 +55,7 @@ secrets**:
 | `STAGING_SSH_HOST` | Staging host DNS name or IP |
 | `STAGING_SSH_USER` | Restricted deployment account |
 | `STAGING_SSH_PORT` | SSH port; optional, defaults to 22 |
-| `GHCR_READ_USERNAME` | Machine identity allowed to pull ERP03 packages |
-| `GHCR_READ_TOKEN` | Read-only GHCR package token |
+| *(none)* | GHCR authentication uses the workflow's short-lived `GITHUB_TOKEN` |
 
 Configure this **environment variable**:
 
@@ -79,8 +78,7 @@ secrets**:
 | `DEPLOY_HOST` | Production host DNS name or IP |
 | `DEPLOY_USER` | Restricted deployment account |
 | `DEPLOY_PATH` | Absolute production release root |
-| `GHCR_READ_USERNAME` | Machine identity allowed to pull ERP03 packages |
-| `GHCR_READ_TOKEN` | Read-only GHCR package token |
+| *(none)* | GHCR authentication uses the workflow's short-lived `GITHUB_TOKEN` |
 
 The production host must have its server-managed runtime configuration at
 `$DEPLOY_PATH/shared/.env`. This file must be provisioned out of band with
@@ -91,17 +89,20 @@ Enable required reviewers and prevent self-approval on the production
 Environment. Restrict deployment branches to protected release tags or the
 approved release branch according to the repository release policy.
 
-## GHCR token policy
+## GHCR workflow-token policy
 
-For private packages, use a dedicated machine identity and a token with only
-`read:packages`; grant that identity access to the two ERP03 packages.
-Prefer package-level read access and avoid `write:packages`, `delete:packages`,
-or broad repository administration. If the packages are public, anonymous
-pulls are possible, but retaining a dedicated read-only deployment identity
-provides consistent behavior if visibility changes.
+The staging and production workflows request only `packages: read` and
+authenticate the remote host with the job's short-lived `GITHUB_TOKEN`. The
+token is passed through SSH standard input, not a command-line argument, and
+the remote Docker credential is removed after the pull (including failure
+paths). No persistent GHCR token is required in either GitHub Environment.
 
-GHCR publishing itself must continue to use the job's `GITHUB_TOKEN` and
-`packages: write`. Do not store a personal GHCR write token in Actions secrets.
+In each GHCR package's **Package settings → Manage Actions access**, grant the
+`nyeinpyaesone-ui/ERP03` repository the minimum role required to pull. If a
+package is already linked to this repository, verify the inherited permissions.
+For publishing, the workflows use `GITHUB_TOKEN` with `packages: write`;
+for deployment, they use `packages: read`. Do not store a personal GHCR
+write token in Actions secrets.
 
 ## Host key and SSH handling
 
@@ -118,7 +119,8 @@ administrative channel, verify it independently, then store the matching
 - [ ] Repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are set.
 - [ ] GHCR package Actions access permits the repo workflow to publish.
 - [ ] Staging and production environments have separate SSH keys and host-key pins.
-- [ ] Each environment's GHCR machine identity can pull both required packages but cannot publish or delete them.
+- [ ] GHCR package settings grant the ERP03 repository Actions access to pull the backend and frontend packages.
+- [ ] Staging and production workflows receive only `packages: read` for GHCR pulls.
 - [ ] Production host has a protected `shared/.env` file with correct runtime values.
 - [ ] Production Environment requires an independent approval and restricts deployment refs.
 - [ ] A trusted push/tag workflow verifies both registry manifests and signatures before deployment.
