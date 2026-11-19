@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from app.core.config import settings
 from app.main import RedisRateLimitMiddleware
 
 
@@ -107,3 +108,13 @@ async def test_rate_limit_returns_429_after_threshold():
         statuses.clear()
         await mw(scope, None, capture_send)
         assert 429 in statuses
+
+
+def test_redis_client_uses_configured_connection_limit(monkeypatch):
+    monkeypatch.setattr(settings, "redis_max_connections", 7)
+    with patch("redis.asyncio.from_url") as mock_redis:
+        RedisRateLimitMiddleware(_noop_app, redis_url="redis://localhost:6379/0")
+        assert mock_redis.call_args.kwargs["max_connections"] == 7
+        assert mock_redis.call_args.kwargs["socket_connect_timeout"] == 2.0
+        assert mock_redis.call_args.kwargs["socket_timeout"] == 2.0
+        assert mock_redis.call_args.kwargs["health_check_interval"] == 30
