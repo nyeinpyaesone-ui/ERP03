@@ -25,14 +25,14 @@ Run from repo root unless noted.
 | Full setup (dev env) | `./scripts/setup.sh` |
 | Full gate (completion) | `bash scripts/agent/verify.sh` |
 | Lint + format | `cd ERP-BACKEND && ruff check app tests alembic && ruff format --check app tests alembic` |
-| Tests | `cd ERP-BACKEND && pytest -q` (57 passed, 1 skipped — PG-only concurrency test skips on SQLite) |
+| Tests | `cd ERP-BACKEND && pytest -q` (76 passed, 1 skipped — PG-only concurrency test skips on SQLite) |
 | Single test | `cd ERP-BACKEND && .venv/bin/pytest tests/test_api.py -k <name> -q` |
 | Alembic head | `cd ERP-BACKEND && .venv/bin/alembic heads` (single head expected — currently `0009_invoice_numbering_index`) |
 | Migrate | `cd ERP-BACKEND && DATABASE_URL=<url> .venv/bin/alembic upgrade head` (before backend start) |
-| Frontend build | `./scripts/build-frontend.sh` (Vite 5.4.11) |
+| Frontend build | `./scripts/build-frontend.sh` (Vite 8.x) |
 | Start backend | `cd ERP-BACKEND && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000` |
 
-CI uses Python 3.12 / Node 22; local Python may be 3.14 (asyncpg 0.32.0 works on 3.14). Frontend is Vite 5.4.11 (not Vite 7).
+CI uses Python 3.12 / Node 22; local Python may be 3.14 (asyncpg 0.32.0 works on 3.14). Frontend is Vite 8.x (`^8.3.6` in `frontend/package.json`).
 
 ## Critical invariants (verify before changes)
 

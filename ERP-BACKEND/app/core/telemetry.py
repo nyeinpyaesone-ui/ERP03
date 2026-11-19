@@ -30,7 +30,7 @@ def init_telemetry(service_name: str = "erp03-backend") -> None:
     resource = Resource(
         attributes={
             "service.name": service_name,
-            "service.version": "1.1.0",
+            "service.version": "1.0.0",
             "deployment.environment": "production",
         }
     )

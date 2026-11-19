@@ -7,7 +7,7 @@
 
 ## Stack
 - Runtime: Python 3.12.13, Node 22
-- Framework: FastAPI 0.116.1, Uvicorn, SQLAlchemy 2.0, Alembic, React 19, Vite 7
+- Framework: FastAPI 0.162, Uvicorn, SQLAlchemy 2.1, Alembic 1.20, React 19, Vite 8
 - Database: PostgreSQL 15 (production), SQLite (dev/journal fallback)
 - Container: Docker Compose, non-root app user
 
@@ -16,7 +16,7 @@
 - `cd ERP-BACKEND && ruff format --check app tests alembic`
 - `cd ERP-BACKEND && python -m compileall -q app alembic`
 - `cd ERP-BACKEND && alembic upgrade head` (fresh DB)
-- `cd ERP-BACKEND && pytest -q` (49 passed, 1 PG-only skip)
+- `cd ERP-BACKEND && pytest -q` (76 passed, 1 PG-only skip)
 - `cd frontend && npm ci --no-audit --no-fund && npm run build`
 - `docker compose -f docker-compose.yml config --quiet`
 - `docker compose -f docker-compose.dev.yml config --quiet`

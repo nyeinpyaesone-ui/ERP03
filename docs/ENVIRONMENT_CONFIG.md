@@ -1,89 +1,86 @@
 # ERP03 Environment Configuration
 
-This document describes the current repository layout. For production rollout details, use [the zero-downtime deployment runbook](ZERO_DOWNTIME_DEPLOYMENT_2026-11.md).
+Keep backend settings and Docker Compose interpolation variables separate. The backend uses
+Pydantic Settings with `extra="forbid"`; do not put Compose-only values in
+`ERP-BACKEND/.env`.
 
-## Local setup
+## Backend development environment
 
-### Backend-only development
+From the repository root:
 
 ```bash
 cd ERP-BACKEND
 cp .env.example .env
-mkdir -p .local
-# Point Alembic at the writable local SQLite file before migrating:
-sed -i 's|^DATABASE_URL=.*|DATABASE_URL=sqlite+aiosqlite:///./.local/erp03.sqlite3|' .env
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt -r dev-requirements.txt
-alembic upgrade head
-uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Only use keys declared in `ERP-BACKEND/app/core/config.py`; unknown keys are rejected by settings validation.
+Edit `ERP-BACKEND/.env`. The checked-in template uses a repository-relative SQLite URL
+(`sqlite+aiosqlite:///./.local/erp03.sqlite3`) suitable for host-side Alembic and Uvicorn
+commands run from `ERP-BACKEND/`. Use only fields declared in
+`ERP-BACKEND/app/core/config.py`.
 
-### Full Docker Compose stack
+## Docker Compose environment
 
-Compose variable substitution reads the repository-root `.env`. Create that file locally (never commit it) with:
-
-```ini
-POSTGRES_DB=erp03
-POSTGRES_USER=erp03
-# Single-quote raw passwords containing '$' to prevent Compose interpolation.
-POSTGRES_PASSWORD='local-password'
-SECRET_KEY=<random-secret-at-least-32-characters>
-# Local-only: permits the localhost CORS origins below.
-ERP03_ENVIRONMENT=development
-# URL-encode reserved characters in the password; its decoded value must equal POSTGRES_PASSWORD.
-DATABASE_URL=postgresql+asyncpg://erp03:<url-encoded-password>@postgres:5432/erp03
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173
-REDIS_PASSWORD='local-redis-password'
-```
-
-The Compose `migrate` and `backend` services consume the same `DATABASE_URL`. The raw `POSTGRES_PASSWORD` is used by the PostgreSQL container; its decoded value must match the password encoded in the URL. Single-quoted values in the Compose `.env` file prevent dollar-sign interpolation. The Compose services default to `ENVIRONMENT=production`; set `ERP03_ENVIRONMENT=development` only in this local development file. Keep production/staging CORS origins HTTPS-only.
-
-Then start the full profile:
+From the repository root, copy the root template to the Compose-specific filename:
 
 ```bash
-docker compose --profile full up --build
+cp .env.example .env.compose
 ```
 
-## Container registry and staging delivery
+Set the Compose values in `.env.compose` (never commit it):
 
-The publishing workflows push to GHCR:
+```ini
+ERP03_ENVIRONMENT=development
+SECRET_KEY=<generated-secret-at-least-32-characters>
+POSTGRES_DB=erp03
+POSTGRES_USER=erp03
+POSTGRES_PASSWORD=<raw-postgres-password>
+REDIS_PASSWORD=<redis-password>
+DATABASE_URL=postgresql+asyncpg://erp03:<url-encoded-postgres-password>@postgres:5432/erp03
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+```
+
+The password in `DATABASE_URL` must be URL-encoded (for example, `@` becomes `%40`,
+`:` becomes `%3A`, and `%` becomes `%25`). Its decoded value must exactly match
+`POSTGRES_PASSWORD`. The migration and backend services consume this same URL, avoiding
+independent URL construction and password parsing differences.
+
+Start the full stack:
+
+```bash
+docker compose --env-file .env.compose --profile full up --build -d
+```
+
+For production, set `ERP03_ENVIRONMENT=production`, use a strong unique signing key,
+HTTPS-only CORS origins, and production database credentials. Do not reuse development
+credentials.
+
+## Container registry
+
+The checked-in publishing workflows publish multi-architecture images to GHCR:
+
 - `ghcr.io/nyeinpyaesone-ui/erp03-backend`
 - `ghcr.io/nyeinpyaesone-ui/erp03-frontend`
 
-They use the scoped GitHub Actions `GITHUB_TOKEN`, not `DOCKERHUB_TOKEN`. The backend and frontend images are built for AMD64 and ARM64.
+They authenticate with the workflow-scoped `GITHUB_TOKEN` and
+`packages: write`; no Docker Hub token or broad repository Actions permissions are needed
+for these workflows.
 
-The manual `.github/workflows/deploy-staging.yml` workflow accepts a source SHA plus backend and frontend digests and deploys those immutable images over SSH to a Docker Compose staging host. It runs the migration service, checks container health and attempts to restore the prior images if deployment fails. Configure the SSH and read-only GHCR Environment secrets listed in [CONFIGURATION_SETUP.md](../CONFIGURATION_SETUP.md). This is not a multi-replica or zero-downtime deployment.
+## Kubernetes runtime secrets
 
-## Runtime secret management
+The Kustomize base intentionally does not create `erp03-secrets`. Provision a Secret with
+the required keys (`SECRET_KEY`, `POSTGRES_PASSWORD`, and `REDIS_PASSWORD`) in each target
+namespace through the cluster's secret manager or the approved secure bootstrap procedure.
+`infra/kubernetes/base/erp03-secrets.example.yaml` is documentation only and must not be
+applied. Never commit real credentials or apply placeholder values.
 
-Kubernetes namespaces require an externally provisioned `erp03-secrets` Secret with `SECRET_KEY`, `POSTGRES_PASSWORD` and `REDIS_PASSWORD`. The example manifest is not part of the applied Kustomize resources. Use a cluster secret manager or the controlled process in the zero-downtime runbook.
-
-## Health endpoints
-
-- `GET /api/v1/healthz` — process liveness.
-- `GET /api/v1/readyz` — checks PostgreSQL connectivity and that an Alembic revision exists. It does **not** compare the recorded revision with the current migration head; a ready response does not prove migrations are current.
-- `GET /` — frontend Nginx health.
-
-Redis is not part of `readyz` because the current rate limiter has a fail-open circuit breaker. The Redis client uses the configured `REDIS_MAX_CONNECTIONS` (default 50 per process), 2-second connection/operation timeouts and a 30-second health check; it closes its pool on graceful shutdown. Monitor Redis degradation and connection-pool exhaustion separately.
-
-## Local qualification
+## Verification
 
 ```bash
-cd ERP-BACKEND
-ruff check app tests alembic
-ruff format --check app tests alembic
-python -m compileall -q app alembic
-alembic upgrade head
-pytest -q
-
-cd ../frontend
-npm ci
-npm run build
+docker compose --env-file .env.compose config --quiet
+kubectl kustomize infra/kubernetes/overlays/dev
+kubectl kustomize infra/kubernetes/overlays/staging
+kubectl kustomize infra/kubernetes/overlays/production
 ```
 
-## Important production limitation
-
-The backend journal still uses SQLite on a ReadWriteOnce PVC, while the production overlay uses multiple backend replicas and an HPA. The checked-in PostgreSQL and Redis Kubernetes resources are single-instance. The production deployment script is not fully wired to the supplied image digest and still has placeholder verification steps. These are unresolved availability constraints; rolling application settings alone do not make the whole ERP zero-downtime.
+Do not apply production manifests until real runtime Secrets exist and the production image
+digests have been copied from successful, verified GHCR publications.

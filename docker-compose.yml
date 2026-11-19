@@ -47,9 +47,9 @@ services:
   migrate:
     image: ${ERP03_BACKEND_IMAGE:-ghcr.io/nyeinpyaesone-ui/erp03-backend:${IMAGE_TAG:-latest}}
     environment:
-      ENVIRONMENT: ${ERP03_ENVIRONMENT:-production}
+      ENVIRONMENT: ${ERP03_ENVIRONMENT:-development}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set to the same URL-encoded PostgreSQL URL used by backend}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set to the PostgreSQL URL}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
     depends_on:
       postgres:
@@ -63,7 +63,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      ENVIRONMENT: ${ERP03_ENVIRONMENT:-production}
+      ENVIRONMENT: ${ERP03_ENVIRONMENT:-development}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set to a postgresql+asyncpg:// URL}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
