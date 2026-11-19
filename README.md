@@ -141,12 +141,16 @@ Provision runtime secrets outside Git before applying any environment. The place
 
 ## Documentation
 
+- [Engineering Roadmap](docs/ROADMAP.md)
+- [Performance Optimisation Checklist](docs/PERFORMANCE_OPTIMIZATION_CHECKLIST.md)
+- [Documentation Guidelines](docs/DOCUMENTATION_GUIDELINES.md)
 - [Architecture Blueprint — November 2026](docs/ARCHITECTURE_BLUEPRINT_2026-11.md)
 - [Zero-Downtime Deployment and Runtime Configuration](docs/ZERO_DOWNTIME_DEPLOYMENT_2026-11.md)
 - [Configuration & Credentials Setup](CONFIGURATION_SETUP.md)
 - [Deployment Runbook](docs/DEPLOY_RUNBOOK.md)
 - [Production Readiness Matrix](docs/PRODUCTION_READINESS_MATRIX.md)
-- [Remediation Tracker](docs/REMAINING_TASKS.md)
+- [Current Remediation Tracker](docs/TODO.md)
+- [Historical Remaining Tasks](docs/REMAINING_TASKS.md)
 - [Security Policy](SECURITY.md)
 - [Changelog](CHANGELOG.md)
 
