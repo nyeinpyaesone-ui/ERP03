@@ -3,10 +3,10 @@ kind: Kustomization
 resources:
   - ../../base
 images:
-  - name: docker.io/nyeinpyaesone-ui/erp03-backend
+  - name: ghcr.io/nyeinpyaesone-ui/erp03-backend
     newName: docker.io/nyeinpyaesone-ui/erp03-backend
-    newTag: "1.1.0-rc"
-  - name: docker.io/nyeinpyaesone-ui/erp03-frontend
+    newTag: "v1.1.0-rc"
+  - name: ghcr.io/nyeinpyaesone-ui/erp03-frontend
     newName: docker.io/nyeinpyaesone-ui/erp03-frontend
     newTag: "1.1.0-rc"
 namespace: erp03-staging
