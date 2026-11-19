@@ -3,12 +3,12 @@ import threading
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
 from app.api.transactions import get_store, reset_store
 from app.core.config import settings
 from app.core.security import current_claims
 from app.core.transaction_store import TransactionStore
 from app.main import app
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 pytestmark = (
