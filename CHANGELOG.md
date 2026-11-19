@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-18
+
 ### Added
 - Redis-backed rate limiter (`RedisRateLimitMiddleware`) with ZSET sliding window
 - Devcontainer with Docker Compose (app + PostgreSQL + Redis)
