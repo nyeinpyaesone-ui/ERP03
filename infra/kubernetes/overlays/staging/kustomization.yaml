@@ -4,11 +4,11 @@ resources:
   - ../../base
 images:
   - name: ghcr.io/nyeinpyaesone-ui/erp03-backend
-    newName: docker.io/nyeinpyaesone-ui/erp03-backend
+    newName: ghcr.io/nyeinpyaesone-ui/erp03-backend
     newTag: "v1.1.0-rc"
   - name: ghcr.io/nyeinpyaesone-ui/erp03-frontend
-    newName: docker.io/nyeinpyaesone-ui/erp03-frontend
-    newTag: "1.1.0-rc"
+    newName: ghcr.io/nyeinpyaesone-ui/erp03-frontend
+    newTag: "v1.1.0-rc"
 namespace: erp03-staging
 commonLabels:
   environment: staging
