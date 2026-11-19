@@ -23,12 +23,21 @@ Configure these under **Settings → Secrets and variables → Actions → Repos
 | Name | Purpose | Minimum access |
 | --- | --- | --- |
 | `DOCKERHUB_USERNAME` | Docker Hub user or organization namespace | Namespace identifier; not a password |
-| `DOCKERHUB_TOKEN` | Push backend/frontend mirror images | Dedicated Docker Hub access token with Read & Write only for the two ERP03 repositories, where repository-scoped tokens are supported |
+| `DOCKERHUB_TOKEN` | Push backend/frontend mirror images | Dedicated Docker Hub Organization Access Token (OAT), restricted to Image Push on the two ERP03 repositories, when using an organization namespace. For a personal namespace, use a separate publishing account if possible; a Personal Access Token's repository permission applies across all repositories that account can access. |
 
 Create the Docker Hub repositories `erp03-backend` and `erp03-frontend`
 under the selected namespace before enabling the mirror. The workflow publishes
 multi-platform `linux/amd64` and `linux/arm64` images and verifies the manifest
 and keyless Cosign signature in each registry.
+
+Docker Hub distinguishes Personal Access Tokens (PATs) from Organization
+Access Tokens (OATs). A PAT's repository permission applies across every
+repository the account can access; it cannot be restricted to just the two
+ERP03 repositories. For an organization namespace, prefer an OAT with Image
+Push granted only to `erp03-backend` and `erp03-frontend`. For a personal
+namespace, prefer a dedicated publishing account rather than granting a
+personal account-wide Repo Read & Write token to CI. No delete or repository
+administration scope is required.
 
 The Docker Hub token must be rotated if it has ever been pasted into chat,
 committed, logged, or otherwise exposed. Never put the token in workflow YAML,
