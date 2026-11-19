@@ -201,6 +201,19 @@ jobs:
           exit 1
           REMOTE
 
+      - name: Clear remote GHCR credential
+        if: always()
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -Eeuo pipefail
+          if [ -f "$HOME/.ssh/id_ed25519" ] && [ -n "$DEPLOY_HOST" ] && [ -n "$DEPLOY_USER" ]; then
+            ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes \
+              -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              "$DEPLOY_USER@$DEPLOY_HOST" "docker logout ghcr.io >/dev/null 2>&1 || true" || true
+          fi
+
       - name: Clean up runner SSH material
         if: always()
         run: |
