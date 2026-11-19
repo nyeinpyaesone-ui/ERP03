@@ -24,7 +24,7 @@ ERP03 is a production-focused AI ERP modular monolith built with FastAPI (backen
 
 ### Prerequisites
 - Python ≥ 3.12
-- Node.js ≥ 18
+- Node.js ≥ 20.19 (or ≥ 22.12; CI uses Node 22)
 - Docker (optional, for full stack)
 
 ### Automated Setup
