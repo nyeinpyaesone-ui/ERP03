@@ -16,19 +16,31 @@ ERP03 GitHub Actions workflows. It intentionally contains no credential values.
   short-lived `GITHUB_TOKEN`, limited to `packages: read`. No long-lived GHCR
   pull token is stored as an Actions secret.
 
-## Repository Actions secrets
+## Existing Docker1 environment
 
-Configure these under **Settings → Secrets and variables → Actions → Repository secrets**:
+The backend and frontend publishing jobs use the existing GitHub Environment
+named `Docker1`; they do not create or depend on new repository-level
+credentials. Configure or retain the existing values under
+**Settings → Environments → Docker1**:
 
-| Name | Purpose | Minimum access |
+| Name | GitHub setting | Purpose |
 | --- | --- | --- |
-| `DOCKERHUB_USERNAME` | Docker Hub user or organization namespace | Namespace identifier; not a password |
-| `DOCKERHUB_TOKEN` | Push backend/frontend mirror images | Dedicated Docker Hub Organization Access Token (OAT), restricted to Image Push on the two ERP03 repositories, when using an organization namespace. For a personal namespace, use a separate publishing account if possible; a Personal Access Token's repository permission applies across all repositories that account can access. |
+| `DOCKERHUB_USERNAME` | Environment secret or variable | Docker Hub user/organization namespace |
+| `DOCKERHUB_TOKEN` | Environment secret | Push backend/frontend mirror images |
 
-Create the Docker Hub repositories `erp03-backend` and `erp03-frontend`
-under the selected namespace before enabling the mirror. The workflow publishes
-multi-platform `linux/amd64` and `linux/arm64` images and verifies the manifest
-and keyless Cosign signature in each registry.
+The workflow reads the username from the environment secret first and falls
+back to an environment variable of the same name. The token must be an
+environment secret, never a variable. The workflow uses only these existing
+names; if the current Docker1 entries use different names, align the workflow
+references to those actual names rather than creating duplicates.
+
+The existing Docker Hub repositories `erp03-backend` and `erp03-frontend`
+must exist under the namespace supplied by `DOCKERHUB_USERNAME`. The workflow
+publishes multi-platform `linux/amd64` and `linux/arm64` images and verifies
+the manifest and keyless Cosign signature in each registry. Prefer an
+Organization Access Token limited to Image Push on these two repositories.
+A personal access token's repository permission applies to all repositories
+the account can access.
 
 Docker Hub distinguishes Personal Access Tokens (PATs) from Organization
 Access Tokens (OATs). A PAT's repository permission applies across every
@@ -80,6 +92,7 @@ secrets**:
 | `DEPLOY_HOST` | Production host DNS name or IP |
 | `DEPLOY_USER` | Restricted deployment account |
 | `DEPLOY_PATH` | Absolute production release root |
+| `DEPLOY_SSH_PORT` | Optional SSH port; defaults to 22 |
 
 GHCR pulls use the workflow's short-lived `GITHUB_TOKEN` with `packages: read`;
 no GHCR environment secret is required.
@@ -87,7 +100,14 @@ no GHCR environment secret is required.
 The production host must have its server-managed runtime configuration at
 `$DEPLOY_PATH/shared/.env`. This file must be provisioned out of band with
 production-only values and must not be committed or uploaded by the workflow.
-The workflow links that file into each immutable release directory.
+The workflow links that file into each immutable release directory. It uses a
+fixed Compose project name (`erp03`) so versioned release directories continue
+to use the same persistent PostgreSQL and Redis volumes. It deploys backend
+and frontend by verified OCI digest, checks image revision labels against the
+release source SHA, and attempts application-image rollback if health checks
+fail. Database migrations must therefore follow an expand/contract strategy:
+a migration must remain compatible with the previous application version
+until the new release has passed health checks.
 
 Enable required reviewers and prevent self-approval on the production
 Environment. Restrict deployment branches to protected release tags or the
@@ -120,7 +140,7 @@ administrative channel, verify it independently, then store the matching
 ## Validation checklist
 
 - [ ] Docker Hub repositories exist and the token can push only those images.
-- [ ] Repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are set.
+- [ ] Existing `Docker1` environment exposes `DOCKERHUB_USERNAME` as a secret or variable and `DOCKERHUB_TOKEN` as a secret.
 - [ ] GHCR package Actions access permits the repo workflow to publish.
 - [ ] Staging and production environments have separate SSH keys and host-key pins.
 - [ ] GHCR package settings grant the ERP03 repository Actions access to pull the backend and frontend packages.
