@@ -54,6 +54,13 @@ function getBackendUrl(req) {
   return target;
 }
 
+function sendJson(res, statusCode, payload) {
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.end(JSON.stringify(payload));
+}
+
 async function readRequestBody(req) {
   if (req.method === 'GET' || req.method === 'HEAD') return undefined;
 
@@ -74,7 +81,7 @@ async function readRequestBody(req) {
 export default async function handler(req, res) {
   if (!['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'].includes(req.method)) {
     res.setHeader('Allow', 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.status(405).json({ detail: 'Method not allowed' });
+    sendJson(res, 405, { detail: 'Method not allowed' });
     return;
   }
 
@@ -116,7 +123,7 @@ export default async function handler(req, res) {
         : 502;
 
     if (!res.headersSent) {
-      res.status(statusCode).json({
+      sendJson(res, statusCode, {
         detail:
           statusCode === 503 || statusCode === 500 || statusCode === 413
             ? error.message
