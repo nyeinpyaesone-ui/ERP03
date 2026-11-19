@@ -54,6 +54,12 @@ npm run build
 npm run dev
 ```
 
+### Vercel frontend deployment
+
+The Vercel frontend uses the repository-level `api/[...path].js` function as a same-origin API proxy. Configure `ERP03_BACKEND_ORIGIN` in the Vercel project's Production, Preview and Development environments as the HTTPS origin of the deployed FastAPI service (origin only; no `/api/v1` path and no credentials). The proxy maps `/api/*` to the backend's `/api/v1/*`, forwards authentication and idempotency headers, disables response caching, and applies a 30-second upstream timeout and 4 MiB request-body limit.
+
+Do not commit the backend origin or credentials to the repository. A missing variable returns an explicit `503`; it does not silently route API calls to the frontend static host. Verify `GET /api/healthz` and an authenticated login flow on a Vercel Preview deployment before promoting it.
+
 ### Docker Compose
 
 ```bash
