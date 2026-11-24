@@ -4,8 +4,6 @@ import asyncio
 from uuid import uuid4
 
 import pytest
-
-from app.core.postgres_transaction_store import PostgresTransactionStore
 from fastapi.testclient import TestClient
 
 from app.api.transactions import get_db_session
@@ -171,13 +169,13 @@ def test_staging_transaction_api_uses_shared_postgres_journal(monkeypatch):
         async with SessionFactory() as session:
             yield session
 
+    business_id = f"staging-business-{uuid4()}"
     app.dependency_overrides[get_db_session] = session_override
     app.dependency_overrides[current_claims] = lambda: {
         "sub": "staging-test-user",
-        "business_id": f"staging-business-{uuid4()}",
+        "business_id": business_id,
     }
     try:
-        business_id = app.dependency_overrides[current_claims]()["business_id"]
         key = f"staging-key-{uuid4()}"
         with TestClient(app) as client:
             created = client.post(
@@ -197,7 +195,6 @@ def test_staging_transaction_api_uses_shared_postgres_journal(monkeypatch):
         assert loaded.status_code == 200
         assert loaded.json()["status"] == "accepted"
         assert loaded.json()["transaction_id"] == created.json()["transaction_id"]
-        assert business_id
     finally:
         app.dependency_overrides.pop(get_db_session, None)
         app.dependency_overrides.pop(current_claims, None)
