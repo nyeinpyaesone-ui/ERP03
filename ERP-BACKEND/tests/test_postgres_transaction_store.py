@@ -185,9 +185,7 @@ async def test_staging_transaction_api_uses_shared_postgres_journal(monkeypatch)
                 },
             )
             assert created.status_code == 201, created.text
-            loaded = await client.get(
-                f"/api/v1/transactions/{created.json()['transaction_id']}"
-            )
+            loaded = await client.get(f"/api/v1/transactions/{created.json()['transaction_id']}")
 
         assert loaded.status_code == 200
         assert loaded.json()["status"] == "accepted"
