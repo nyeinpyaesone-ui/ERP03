@@ -4,7 +4,6 @@ import asyncio
 from uuid import uuid4
 
 import pytest
-
 from app.api.transactions import get_db_session
 from app.core.config import settings
 from app.core.postgres_transaction_store import PostgresTransactionStore
