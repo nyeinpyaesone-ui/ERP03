@@ -6,8 +6,15 @@ from uuid import uuid4
 import pytest
 
 from app.core.postgres_transaction_store import PostgresTransactionStore
+from fastapi.testclient import TestClient
+
+from app.api.transactions import get_db_session
+from app.core.config import settings
+from app.core.postgres_transaction_store import PostgresTransactionStore
+from app.core.security import current_claims
 from app.core.transaction_store import IdempotencyConflict
 from app.db.session import SessionFactory, engine
+from app.main import app
 from app.models.transaction_journal import TransactionJournal
 
 pytestmark = pytest.mark.requires_database
@@ -150,3 +157,47 @@ async def test_concurrent_shared_journal_requests_create_one_record():
 
     assert len(transaction_ids) == 1
     assert sum(result.idempotent_replay for result in results) == 7
+
+
+@pytest.mark.skipif(
+    engine.dialect.name != "postgresql",
+    reason="Staging API routing requires the PostgreSQL CI database",
+)
+def test_staging_transaction_api_uses_shared_postgres_journal(monkeypatch):
+    monkeypatch.setattr(settings, "environment", "staging")
+    monkeypatch.setattr(settings, "database_url", "postgresql+asyncpg://test-target")
+
+    async def session_override():
+        async with SessionFactory() as session:
+            yield session
+
+    app.dependency_overrides[get_db_session] = session_override
+    app.dependency_overrides[current_claims] = lambda: {
+        "sub": "staging-test-user",
+        "business_id": f"staging-business-{uuid4()}",
+    }
+    try:
+        business_id = app.dependency_overrides[current_claims]()["business_id"]
+        key = f"staging-key-{uuid4()}"
+        with TestClient(app) as client:
+            created = client.post(
+                "/api/v1/transactions",
+                headers={"X-Idempotency-Key": key},
+                json={
+                    "operation": "invoice.create",
+                    "amount": "10.00",
+                    "currency": "MMK",
+                },
+            )
+            assert created.status_code == 201, created.text
+            loaded = client.get(
+                f"/api/v1/transactions/{created.json()['transaction_id']}"
+            )
+
+        assert loaded.status_code == 200
+        assert loaded.json()["status"] == "accepted"
+        assert loaded.json()["transaction_id"] == created.json()["transaction_id"]
+        assert business_id
+    finally:
+        app.dependency_overrides.pop(get_db_session, None)
+        app.dependency_overrides.pop(current_claims, None)
