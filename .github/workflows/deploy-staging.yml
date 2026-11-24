@@ -89,21 +89,6 @@ jobs:
             "$STAGING_USER@$STAGING_HOST" \
             "docker login ghcr.io --username $GHCR_USERNAME --password-stdin"
 
-      - name: Clear remote GHCR credential
-        if: always()
-        env:
-          STAGING_HOST: ${{ secrets.STAGING_SSH_HOST }}
-          STAGING_USER: ${{ secrets.STAGING_SSH_USER }}
-          STAGING_PORT: ${{ secrets.STAGING_SSH_PORT }}
-        run: |
-          set -Eeuo pipefail
-          if [ -f "$HOME/.ssh/id_ed25519" ] && [ -n "$STAGING_HOST" ] && [ -n "$STAGING_USER" ]; then
-            port="${STAGING_PORT:-22}"
-            ssh -i "$HOME/.ssh/id_ed25519" -p "$port" \
-              -o BatchMode=yes -o StrictHostKeyChecking=yes \
-              "$STAGING_USER@$STAGING_HOST" "docker logout ghcr.io >/dev/null 2>&1 || true" || true
-          fi
-
       - name: Deploy immutable images, verify runtime health, and rollback on failure
         env:
           STAGING_HOST: ${{ secrets.STAGING_SSH_HOST }}
@@ -124,7 +109,6 @@ jobs:
             -o BatchMode=yes -o StrictHostKeyChecking=yes \
             "$STAGING_USER@$STAGING_HOST" "bash -s -- $remote_args" <<'REMOTE'
           set -Eeuo pipefail
-          trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
           deploy_path="$1"
           source_sha="$2"
           backend_digest="$3"
@@ -228,3 +212,19 @@ jobs:
           trap - EXIT
           echo "Staging deployment completed; backend and frontend health checks are healthy"
           REMOTE
+
+      - name: Clear remote GHCR credential
+        if: always()
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_SSH_USER }}
+          STAGING_PORT: ${{ secrets.STAGING_SSH_PORT }}
+        run: |
+          set -Eeuo pipefail
+          if [ -f "$HOME/.ssh/id_ed25519" ] && [ -n "$STAGING_HOST" ] && [ -n "$STAGING_USER" ]; then
+            port="${STAGING_PORT:-22}"
+            ssh -i "$HOME/.ssh/id_ed25519" -p "$port" \
+              -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              "$STAGING_USER@$STAGING_HOST" "docker logout ghcr.io >/dev/null 2>&1 || true" || true
+          fi
+
