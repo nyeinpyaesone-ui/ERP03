@@ -10,7 +10,7 @@ This matrix maps the repository implementation checklist to verified repository 
 | CI/CD | CI + Qualification + Quality + Security + Container + IaC workflows present; runners switched to ubuntu-latest; path filters added; CI green | PASS |
 | Containerization | Non-root backend, health checks, pinned runtime images, Dockerfile deps-path fixed | PASS |
 | Local bootstrap | Compose + env configuration present; devcontainer with PostgreSQL + Redis services | PASS |
-| Devcontainer | Docker Compose-based devcontainer with pre-built dependencies; Docker Hub push workflow | PASS |
+| Devcontainer | Docker Compose-based devcontainer with pre-built dependencies; GHCR image build/publish workflow | PASS |
 | Infrastructure as Code | Terraform contract + validation workflow + artifact upload | PASS |
 | Kubernetes | Base manifests, probes, resources, overlays, Redis, PostgreSQL, Ollama, ingress, RBAC, NetworkPolicy, PDB, security contexts, production/staging overlays | PASS |
 | Security | Dependency audit + CodeQL + container scanning; alerts added; security audit script; non-root containers; NetworkPolicy | PASS |
