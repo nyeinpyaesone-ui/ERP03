@@ -31,7 +31,9 @@ _REQUIRED_COLUMNS = {
 
 def _normalize_legacy_row(row: sqlite3.Row, columns: set[str]) -> dict:
     stored_key = str(row["idempotency_key"])
-    business_id = str(row["business_id"]).strip() if "business_id" in columns else ""
+    business_id = (
+        str(row["business_id"] or "").strip() if "business_id" in columns else ""
+    )
     if not business_id and ":" in stored_key:
         business_id, _separator, _raw_key = stored_key.partition(":")
     if not business_id:
@@ -71,10 +73,14 @@ def _legacy_batches(source: Path, batch_size: int):
     connection = sqlite3.connect(uri, uri=True)
     connection.row_factory = sqlite3.Row
     try:
-        columns = {str(column["name"]) for column in connection.execute("PRAGMA table_info(transactions)")}
+        columns = {
+            str(column["name"])
+            for column in connection.execute("PRAGMA table_info(transactions)")
+        }
         missing = _REQUIRED_COLUMNS - columns
         if missing:
-            raise ValueError(f"Legacy journal is missing required columns: {', '.join(sorted(missing))}")
+            missing_names = ", ".join(sorted(missing))
+            raise ValueError(f"Legacy journal is missing required columns: {missing_names}")
 
         cursor = connection.execute(
             "SELECT * FROM transactions ORDER BY created_at, transaction_id"
