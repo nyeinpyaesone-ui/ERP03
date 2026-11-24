@@ -3,7 +3,7 @@
 ## Implemented
 
 - Durable SQLite transaction journal with WAL mode for local development and standalone use.
-- Shared PostgreSQL transaction journal for staging and production, using the transaction_journal table from Alembic revision 0008_postgres_transaction_journal.
+- Shared PostgreSQL transaction journal for staging and production, using the `transaction_journal` table created by Alembic revision `0010_txn_journal` (down revision: `0009_invoice_numbering_index`).
 - Database-enforced tenant-scoped idempotency uniqueness in PostgreSQL on business_id and the raw idempotency key.
 - Atomic SQLite BEGIN IMMEDIATE transaction boundary for the local journal.
 - PostgreSQL savepoint handling for concurrent idempotency-key insert races.
@@ -74,7 +74,7 @@ The target is the configured PostgreSQL DATABASE_URL. The script preserves trans
 Migration/cutover requirements:
 
 1. Take and retain a verified backup of the legacy journal and its containing volume.
-2. Apply Alembic revision 0008_postgres_transaction_journal to the target database.
+2. Apply Alembic migrations through revision `0010_txn_journal` to the target database; it follows `0009_invoice_numbering_index`.
 3. Freeze legacy journal writes and create a consistent read-only source copy.
 4. Run the backfill without --apply; review counts and conflict output.
 5. Run the backfill with --apply during the approved migration window.
