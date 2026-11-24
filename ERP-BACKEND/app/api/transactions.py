@@ -7,11 +7,14 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.validation import validate_idempotency_key
 from app.core.config import settings
+from app.core.postgres_transaction_store import PostgresTransactionStore
 from app.core.security import current_claims
 from app.core.transaction_store import IdempotencyConflict, TransactionResult, TransactionStore
+from app.db.session import get_db_session
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -19,16 +22,26 @@ _store: TransactionStore | None = None
 _store_lock = threading.Lock()
 
 
+def _requires_shared_journal() -> bool:
+    """Staging and production must use the shared database journal."""
+    return settings.environment.lower() in {"staging", "stage", "production", "prod"}
+
+
+def _uses_postgres_journal() -> bool:
+    """Return whether the configured async database is PostgreSQL."""
+    return settings.database_url.lower().startswith("postgresql")
+
+
 def get_store() -> TransactionStore:
-    """Return the process-wide local journal; production requires a shared DB journal."""
-    if settings.environment.lower() in {"production", "prod"}:
+    """Return the local SQLite journal; never expose it in shared environments."""
+    if _requires_shared_journal():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
                 "code": "TRANSACTION_JOURNAL_UNAVAILABLE",
                 "message": (
-                    "The SQLite transaction journal is disabled in production. "
-                    "Configure the shared PostgreSQL journal before enabling this endpoint."
+                    "Staging and production require the shared PostgreSQL "
+                    "transaction journal; local SQLite is disabled."
                 ),
             },
         )
@@ -42,7 +55,7 @@ def get_store() -> TransactionStore:
 
 
 def reset_store(database_path: str | None = None) -> TransactionStore:
-    """Replace the process-wide store (used by tests for hermetic isolation)."""
+    """Replace the process-wide local store (used by tests for isolation)."""
     global _store
     with _store_lock:
         _store = TransactionStore(database_path or settings.database_path)
@@ -102,13 +115,22 @@ def _business_id(claims: dict[str, Any]) -> str:
     return value.strip()
 
 
+def _raise_idempotency_conflict(exc: IdempotencyConflict) -> None:
+    code = getattr(exc, "code", "IDEMPOTENCY_KEY_REUSED")
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={"code": code, "message": str(exc)},
+    ) from exc
+
+
 @router.post("", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
-def create_transaction(
+async def create_transaction(
     payload: TransactionRequest,
     claims: dict[str, Any] = Depends(current_claims),
     x_idempotency_key: str | None = Header(default=None),
+    session: AsyncSession = Depends(get_db_session),
 ) -> TransactionResponse:
-    """Accept a journal entry or replay it; this endpoint does not run the domain operation."""
+    """Accept a journal entry or replay it; this does not execute the domain operation."""
     idempotency_key = validate_idempotency_key(x_idempotency_key)
 
     try:
@@ -119,33 +141,57 @@ def create_transaction(
         raise HTTPException(status_code=422, detail="Amount must be at least 0.01")
 
     business_id = _business_id(claims)
+    transaction_id = uuid4().hex
     try:
-        result = get_store().execute(
-            transaction_id=uuid4().hex,
-            idempotency_key=f"{business_id}:{idempotency_key}",
-            business_id=business_id,
-            operation=payload.operation,
-            amount=str(amount),
-            currency=payload.currency,
-            metadata=payload.metadata,
-        )
+        if _requires_shared_journal():
+            if not _uses_postgres_journal():
+                get_store()  # Raises 503; never fall back to local SQLite.
+            result = await PostgresTransactionStore(session).execute(
+                transaction_id=transaction_id,
+                business_id=business_id,
+                idempotency_key=idempotency_key,
+                operation=payload.operation,
+                amount=str(amount),
+                currency=payload.currency,
+                metadata=payload.metadata,
+            )
+            await session.commit()
+        else:
+            result = get_store().execute(
+                transaction_id=transaction_id,
+                idempotency_key=f"{business_id}:{idempotency_key}",
+                business_id=business_id,
+                operation=payload.operation,
+                amount=str(amount),
+                currency=payload.currency,
+                metadata=payload.metadata,
+            )
     except IdempotencyConflict as exc:
-        code = getattr(exc, "code", "IDEMPOTENCY_KEY_REUSED")
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"code": code, "message": str(exc)},
-        ) from exc
+        if _requires_shared_journal():
+            await session.rollback()
+        _raise_idempotency_conflict(exc)
+
     return _to_response(result)
 
 
 @router.get("/{transaction_id}", response_model=TransactionResponse)
-def get_transaction(
+async def get_transaction(
     transaction_id: str,
     claims: dict[str, Any] = Depends(current_claims),
+    session: AsyncSession = Depends(get_db_session),
 ) -> TransactionResponse:
     """Return a journal entry owned by the authenticated caller's business."""
     business_id = _business_id(claims)
-    result = get_store().get(transaction_id, business_id=business_id)
+    if _requires_shared_journal():
+        if not _uses_postgres_journal():
+            get_store()
+        result = await PostgresTransactionStore(session).get(
+            transaction_id,
+            business_id=business_id,
+        )
+    else:
+        result = get_store().get(transaction_id, business_id=business_id)
+
     if result is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return _to_response(result)
