@@ -1,73 +1,55 @@
-# GitHub Repository Secrets Configuration — ERP03
+# GitHub Actions secrets and environments — ERP03
 
-Configure these in GitHub: **Settings → Secrets and variables → Actions**
+Configure deployment credentials in **Settings → Environments**. Keep staging and production credentials separate. Do not store runtime application secrets in source control.
 
-## Required Repository Secrets
+## Container publishing
 
-| Secret Name | Description | Required For |
-|-------------|-------------|--------------|
-| `DOCKERHUB_USERNAME` | Docker Hub username (e.g., `nyeinpyaesone-ui`) | Container build & push to Docker Hub |
-| `DOCKERHUB_TOKEN` | Docker Hub personal access token | Container push to Docker Hub |
-| `POSTGRES_PASSWORD` | PostgreSQL database password | docker-compose / CI services |
-| `SECRET_KEY` | Application secret key (min 32 chars in production) | Backend / docker-compose / production |
-| `DATABASE_URL` | SQLAlchemy async database URL | Backend / CI tests |
+The active image workflows publish to GitHub Container Registry (GHCR):
 
-## Container Registry — Docker Hub
+- `ghcr.io/nyeinpyaesone-ui/erp03-backend`
+- `ghcr.io/nyeinpyaesone-ui/erp03-frontend`
 
-ERP03 publishes container images to Docker Hub:
+GitHub Actions authenticates with its automatically provided `GITHUB_TOKEN` and explicit `packages: write` permission. **No Docker Hub username or PAT is required.** Pull requests build images without logging into GHCR or publishing packages. Main/tag workflows publish immutable digests and attach provenance/SBOM; backend images are signed with cosign.
 
-- Backend: `nyeinpyaesone-ui/erp03-backend`
-- Frontend: `nyeinpyaesone-ui/erp03-frontend`
+## Staging environment
 
-### Authentication
+The `deploy-staging.yml` workflow requires the following secrets in the GitHub `staging` environment:
 
-Docker Hub credentials must be configured as repository secrets:
-- `DOCKERHUB_USERNAME` — your Docker Hub username
-- `DOCKERHUB_TOKEN` — Docker Hub access token (not password)
+| Name | Purpose |
+|---|---|
+| `STAGING_SSH_PRIVATE_KEY` | Restricted SSH deployment key |
+| `STAGING_SSH_KNOWN_HOSTS` | Pinned staging host key(s) |
+| `STAGING_SSH_HOST` | Staging server hostname |
+| `STAGING_SSH_USER` | Restricted deployment account |
+| `STAGING_SSH_PORT` | SSH port; optional, defaults to 22 |
+| `STAGING_GHCR_USERNAME` | GHCR account/user for remote pulls |
+| `STAGING_GHCR_READ_TOKEN` | Read-only GHCR token with `read:packages` |
 
-For local docker pushes to Docker Hub:
+Configure `STAGING_DEPLOY_PATH` as an environment variable (not a secret). The workflow is manually dispatched from `main`, validates source SHA and OCI digests, deploys those exact digests, verifies backend/frontend health, and restores the previous images on failure.
 
-```bash
-# Log in to Docker Hub locally
-echo $DOCKERHUB_TOKEN | docker login docker.io -u $DOCKERHUB_USERNAME --password-stdin
+## Production environment
 
-# Push an image
-docker push nyeinpyaesone-ui/erp03-backend:latest
-```
+The `production-deploy.yml` workflow requires these secrets in the GitHub `production` environment:
 
-### Required Permission Settings
+| Name | Purpose |
+|---|---|
+| `DEPLOY_SSH_PRIVATE_KEY` | Restricted production SSH deployment key |
+| `DEPLOY_HOST` | Production server hostname |
+| `DEPLOY_USER` | Restricted deployment account |
+| `DEPLOY_PATH` | Release directory on the host |
+| `GHCR_USERNAME` | GHCR account/user for remote pulls |
+| `GHCR_TOKEN` | Read-only GHCR token with `read:packages` |
 
-In the repository, ensure:
+Production deployment is a separate manually dispatched workflow and requires the explicit `DEPLOY-PRODUCTION` confirmation input plus environment protection approval.
 
-1. **Settings → Actions → General → Workflow permissions** → "Read and write permissions" (enables `${{ github.token }}` for any workflow needs)
-2. **Settings → Actions → General → Fork pull request workflows** → as needed
+## Release publishing
 
-## Docker Compose Local Development
+- `PYPI_TOKEN`: PyPI publishing token used only by the release workflow.
 
-### Minimal profile (default — SQLite journal)
+## Runtime application secrets
 
-```bash
-docker compose up -d
-```
+Keep `SECRET_KEY`, database credentials, Redis credentials, and `DATABASE_URL` in the target environment's secret manager or protected host-side environment file. They are not GHCR credentials and should not be copied into GitHub workflow variables unless a workflow explicitly requires them.
 
-### Full profile (PostgreSQL)
+## Rotation
 
-```bash
-POSTGRES_PASSWORD=your-secure-password \
-SECRET_KEY=your-32-char-secret \
-CORS_ORIGINS=https://your-domain.com \
-docker compose --profile full up -d
-```
-
-### Environment variables for compose
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `POSTGRES_DB` | `erp03` | PostgreSQL database name |
-| `POSTGRES_USER` | `erp03` | PostgreSQL username |
-| `POSTGRES_PASSWORD` | *(required)* | PostgreSQL password |
-| `SECRET_KEY` | *(required)* | App secret key |
-| `DATABASE_URL` | `sqlite+aiosqlite:///data/erp03.sqlite3` | Backend DB URL |
-| `CORS_ORIGINS` | *(required)* | Comma-separated allowed CORS origins |
-| `DATABASE_PATH` | `/data/erp03.sqlite3` | SQLite journal path |
-| `ENVIRONMENT` | `production` | App environment |
+Any token or private key pasted into chat, logs, or a repository must be considered exposed and rotated. Use least-privilege, environment-scoped credentials; never reuse a personal account token for deployment automation.
