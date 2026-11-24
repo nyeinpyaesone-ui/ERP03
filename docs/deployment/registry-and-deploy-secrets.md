@@ -77,8 +77,7 @@ Configure this **environment variable**:
 | --- | --- |
 | `STAGING_DEPLOY_PATH` | Absolute path to the staging Compose checkout |
 
-The staging workflow removes its temporary GHCR workflow-token credential
-from the remote Docker credential store after the image pull.
+Before opening an SSH connection, the staging workflow verifies both Cosign signatures against the exact protected `main` publisher workflow identities, confirms each immutable OCI digest contains `linux/amd64` and `linux/arm64`, and checks that each pulled image's revision label matches `source_sha`. It then deploys only those verified digests. The workflow removes its temporary GHCR workflow-token credential from the remote Docker credential store after the deployment attempt and clears the runner's temporary registry and SSH credentials.
 
 ## Production environment
 
