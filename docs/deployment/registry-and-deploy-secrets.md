@@ -96,6 +96,15 @@ secrets**:
 GHCR pulls use the workflow's short-lived `GITHUB_TOKEN` with `packages: read`;
 no GHCR environment secret is required.
 
+The production Compose file pins its stateful infrastructure images by multi-platform OCI index digest:
+
+| Service | Image reference |
+| --- | --- |
+| PostgreSQL | `postgres:15.20-alpine3.24@sha256:e18480a22d6e48f4d816a6696769b1ec09ac73a824c5649e49c7d8b684913f3d` |
+| Redis | `redis:7.4.12-alpine3.22@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe` |
+
+The references use the official Docker Hub multi-platform index digests, not an architecture-specific child manifest. The backend test suite includes a contract check so the Compose deployment cannot silently revert these services to mutable tags. Re-verify upstream images and qualify upgrades before changing either reference.
+
 The production host must have its server-managed runtime configuration at
 `$DEPLOY_PATH/shared/.env`. This file must be provisioned out of band with
 production-only values and must not be committed or uploaded by the workflow.
