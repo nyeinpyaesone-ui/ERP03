@@ -4,7 +4,6 @@ import asyncio
 from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.api.transactions import get_db_session
 from app.core.config import settings
@@ -14,6 +13,7 @@ from app.core.transaction_store import IdempotencyConflict
 from app.db.session import SessionFactory, engine
 from app.main import app
 from app.models.transaction_journal import TransactionJournal
+from fastapi.testclient import TestClient
 
 pytestmark = pytest.mark.requires_database
 
