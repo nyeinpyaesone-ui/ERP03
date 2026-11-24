@@ -4,6 +4,8 @@ import asyncio
 from uuid import uuid4
 
 import pytest
+from httpx import ASGITransport, AsyncClient
+
 from app.api.transactions import get_db_session
 from app.core.config import settings
 from app.core.postgres_transaction_store import PostgresTransactionStore
@@ -12,7 +14,6 @@ from app.core.transaction_store import IdempotencyConflict
 from app.db.session import SessionFactory, engine
 from app.main import app
 from app.models.transaction_journal import TransactionJournal
-from fastapi.testclient import TestClient
 
 pytestmark = pytest.mark.requires_database
 
@@ -156,11 +157,8 @@ async def test_concurrent_shared_journal_requests_create_one_record():
     assert sum(result.idempotent_replay for result in results) == 7
 
 
-@pytest.mark.skipif(
-    engine.dialect.name != "postgresql",
-    reason="Staging API routing requires the PostgreSQL CI database",
-)
-def test_staging_transaction_api_uses_shared_postgres_journal(monkeypatch):
+@pytest.mark.asyncio
+async def test_staging_transaction_api_uses_shared_postgres_journal(monkeypatch):
     monkeypatch.setattr(settings, "environment", "staging")
     monkeypatch.setattr(settings, "database_url", "postgresql+asyncpg://test-target")
 
@@ -176,8 +174,9 @@ def test_staging_transaction_api_uses_shared_postgres_journal(monkeypatch):
     }
     try:
         key = f"staging-key-{uuid4()}"
-        with TestClient(app) as client:
-            created = client.post(
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            created = await client.post(
                 "/api/v1/transactions",
                 headers={"X-Idempotency-Key": key},
                 json={
@@ -187,7 +186,9 @@ def test_staging_transaction_api_uses_shared_postgres_journal(monkeypatch):
                 },
             )
             assert created.status_code == 201, created.text
-            loaded = client.get(f"/api/v1/transactions/{created.json()['transaction_id']}")
+            loaded = await client.get(
+                f"/api/v1/transactions/{created.json()['transaction_id']}"
+            )
 
         assert loaded.status_code == 200
         assert loaded.json()["status"] == "accepted"
