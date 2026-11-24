@@ -143,7 +143,7 @@ jobs:
           }
           port="${STAGING_PORT:-22}"
           printf '%s' "$GHCR_READ_TOKEN" | ssh -i "$HOME/.ssh/id_ed25519" \
-            -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             "$STAGING_USER@$STAGING_HOST" \
             "docker login ghcr.io --username $GHCR_USERNAME --password-stdin"
 
@@ -164,7 +164,7 @@ jobs:
           printf -v remote_args '%q %q %q %q' "$DEPLOY_PATH" "$SOURCE_SHA" "$BACKEND_DIGEST" "$FRONTEND_DIGEST"
           port="${STAGING_PORT:-22}"
           ssh -i "$HOME/.ssh/id_ed25519" -p "$port" \
-            -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             "$STAGING_USER@$STAGING_HOST" "bash -s -- $remote_args" <<'REMOTE'
           set -Eeuo pipefail
           deploy_path="$1"
@@ -282,7 +282,7 @@ jobs:
           if [ -f "$HOME/.ssh/id_ed25519" ] && [ -n "$STAGING_HOST" ] && [ -n "$STAGING_USER" ]; then
             port="${STAGING_PORT:-22}"
             ssh -i "$HOME/.ssh/id_ed25519" -p "$port" \
-              -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
               "$STAGING_USER@$STAGING_HOST" "docker logout ghcr.io >/dev/null 2>&1 || true" || true
           fi
           docker logout ghcr.io >/dev/null 2>&1 || true
