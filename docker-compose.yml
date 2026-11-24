@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:15.14
+    image: postgres:15.20-alpine3.24@sha256:e18480a22d6e48f4d816a6696769b1ec09ac73a824c5649e49c7d8b684913f3d
     profiles: ["full"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-erp03}
@@ -23,7 +23,7 @@ services:
           memory: 512M
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.12-alpine3.22@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
     profiles: ["full"]
     command: redis-server --requirepass ${REDIS_PASSWORD}
     environment:
