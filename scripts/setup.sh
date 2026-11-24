@@ -181,7 +181,6 @@ declare -A SECRET_SPECS=(
   ["SECRET_KEY"]="Application secret key|token_urlsafe(48)|all"
   ["POSTGRES_PASSWORD"]="PostgreSQL password|token_hex(24)|production,compose"
   ["REDIS_PASSWORD"]="Redis password|token_hex(24)|compose"
-  ["DOCKERHUB_TOKEN"]="Docker Hub PAT|from_github|ci,production"
   ["DB_PASSWORD"]="Production DB password|from_github|production"
   ["DB_HOST"]="Production DB host|from_github|production"
   ["REDIS_USER"]="Redis username|default:default|compose"
@@ -404,11 +403,9 @@ REDIS_URL=redis://:${redis_pass}@redis:6379/0
 REDIS_ACCOUNT_NUMBER=${SECRETS[REDIS_ACCOUNT_NUMBER]}
 API_REDIS_KEY=${SECRETS[API_REDIS_KEY]}
 
-# Docker Hub (for container.yml CI)
-DOCKERHUB_USERNAME=powerrangeranikg
-DOCKERHUB_TOKEN=${SECRETS[DOCKERHUB_TOKEN]}
-DOCKERHUB_IMAGE_BACKEND=powerrangeranikg/erp03-backend
-DOCKERHUB_IMAGE_FRONTEND=powerrangeranikg/erp03-frontend
+# GHCR images (publishing is authenticated by GitHub Actions GITHUB_TOKEN)
+ERP03_BACKEND_IMAGE=ghcr.io/nyeinpyaesone-ui/erp03-backend:${IMAGE_TAG:-latest}
+ERP03_FRONTEND_IMAGE=ghcr.io/nyeinpyaesone-ui/erp03-frontend:${IMAGE_TAG:-latest}
 IMAGE_TAG=${IMAGE_TAG:-latest}
 
 # Backend (production uses pre-built images; dev uses this for build-time)
