@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "3.10.0",
+    "@vercel/speed-insights": "^2.1.0",
     "axios": "1.8.4",
     "clsx": "2.1.1",
     "lucide-react": "0.475.0",
