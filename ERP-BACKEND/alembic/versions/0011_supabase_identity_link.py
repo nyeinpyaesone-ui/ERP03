@@ -15,9 +15,9 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.add_column("users", sa.Column("supabase_user_id", GUID(), nullable=True))
-    op.create_unique_constraint("uq_users_supabase_user_id", "users", ["supabase_user_id"])
+    op.create_index("uq_users_supabase_user_id", "users", ["supabase_user_id"], unique=True)
 
 
 def downgrade() -> None:
-    op.drop_constraint("uq_users_supabase_user_id", "users", type_="unique")
+    op.drop_index("uq_users_supabase_user_id", table_name="users")
     op.drop_column("users", "supabase_user_id")
