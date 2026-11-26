@@ -14,8 +14,8 @@ from pydantic import SecretStr
 
 @pytest.mark.asyncio
 async def test_supabase_verification_fails_closed_when_not_configured(monkeypatch):
-    monkeypatch.setattr(security.security.settings, "supabase_url", None)
-    monkeypatch.setattr(security.security.settings, "supabase_publishable_key", None)
+    monkeypatch.setattr(security.settings, "supabase_url", None)
+    monkeypatch.setattr(security.settings, "supabase_publishable_key", None)
     with pytest.raises(HTTPException) as exc:
         await security.verify_supabase_access_token("some-token")
     assert exc.value.status_code == 401
@@ -23,8 +23,8 @@ async def test_supabase_verification_fails_closed_when_not_configured(monkeypatc
 
 @pytest.mark.asyncio
 async def test_supabase_verification_requires_confirmed_email(monkeypatch):
-    monkeypatch.setattr(security.security.settings, "supabase_url", "https://example.supabase.co")
-    monkeypatch.setattr(security.security.settings, "supabase_publishable_key", SecretStr("public-key"))
+    monkeypatch.setattr(security.settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(security.settings, "supabase_publishable_key", SecretStr("public-key"))
     transport = httpx.MockTransport(
         lambda request: httpx.Response(
             200,
@@ -48,8 +48,8 @@ async def test_supabase_verification_requires_confirmed_email(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_supabase_verification_accepts_confirmed_identity(monkeypatch):
-    monkeypatch.setattr(security.security.settings, "supabase_url", "https://example.supabase.co")
-    monkeypatch.setattr(security.security.settings, "supabase_publishable_key", SecretStr("public-key"))
+    monkeypatch.setattr(security.settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(security.settings, "supabase_publishable_key", SecretStr("public-key"))
     transport = httpx.MockTransport(
         lambda request: httpx.Response(
             200,
@@ -81,7 +81,7 @@ async def test_supabase_claims_are_derived_from_linked_erp_user(monkeypatch):
         display_name="ERP User",
     )
     session = SimpleNamespace(scalar=AsyncMock(return_value=user))
-    monkeypatch.setattr(security.security.settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(security.settings, "supabase_url", "https://example.supabase.co")
     monkeypatch.setattr(
         security,
         "decode_access_token",
