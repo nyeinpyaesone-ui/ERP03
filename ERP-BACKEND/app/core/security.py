@@ -98,28 +98,21 @@ async def current_claims(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
         )
-    token = credentials.credentials
-    try:
-        return decode_access_token(token)
-    except HTTPException as erp_error:
-        # Route to Supabase only when the untrusted issuer claim matches this
-        # configured project. Signature validity is still checked by /auth/v1/user.
-        try:
-            unverified = jwt.decode(
-                token,
-                options={"verify_signature": False, "verify_exp": False},
-                algorithms=["HS256", "ES256", "RS256"],
-            )
-        except jwt.PyJWTError:
-            raise erp_error
-        expected_issuer = (
-            f"{settings.supabase_url.rstrip('/')}/auth/v1"
-            if settings.supabase_url
-            else None
-        )
-        if not expected_issuer or unverified.get("iss") != expected_issuer:
-            raise erp_error
 
+    token = credentials.credentials
+    expected_issuer = (
+        f"{settings.supabase_url.rstrip('/')}/auth/v1" if settings.supabase_url else None
+    )
+    try:
+        unverified = jwt.decode(
+            token,
+            options={"verify_signature": False, "verify_exp": False},
+            algorithms=["HS256", "ES256", "RS256"],
+        )
+    except jwt.PyJWTError:
+        unverified = {}
+
+    if expected_issuer and unverified.get("iss") == expected_issuer:
         identity = await verify_supabase_access_token(token)
         try:
             supabase_user_id = UUID(identity["id"])
@@ -146,3 +139,5 @@ async def current_claims(
             "display_name": user.display_name,
             "auth_provider": "supabase",
         }
+
+    return decode_access_token(token)
