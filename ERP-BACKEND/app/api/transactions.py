@@ -6,6 +6,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -157,7 +158,9 @@ async def create_transaction(
             )
             await session.commit()
         else:
-            result = get_store().execute(
+            store = await run_in_threadpool(get_store)
+            result = await run_in_threadpool(
+                store.execute,
                 transaction_id=transaction_id,
                 idempotency_key=f"{business_id}:{idempotency_key}",
                 business_id=business_id,
@@ -190,7 +193,12 @@ async def get_transaction(
             business_id=business_id,
         )
     else:
-        result = get_store().get(transaction_id, business_id=business_id)
+        store = await run_in_threadpool(get_store)
+        result = await run_in_threadpool(
+            store.get,
+            transaction_id,
+            business_id=business_id,
+        )
 
     if result is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
