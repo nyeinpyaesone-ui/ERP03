@@ -119,7 +119,7 @@ jobs:
           version: 3.2.0
       - name: Start isolated local Supabase Auth stack
         run: |
-          supabase start -x studio,imgproxy,storage-api,realtime,postgrest,edge-runtime,logflare,vector,postgres-meta,supavisor,mailpit
+          supabase start -x studio,imgproxy,storage-api,realtime,postgrest,edge-runtime,logflare,vector,postgres-meta,supavisor
       - name: Export only local Auth URL and publishable key
         shell: bash
         run: |
