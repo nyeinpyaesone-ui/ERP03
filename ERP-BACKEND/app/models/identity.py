@@ -88,7 +88,7 @@ class User(Base):
     __table_args__ = (
         UniqueConstraint("business_id", "email", name="uq_users_business_email"),
         Index("ix_users_business_active", "business_id", "active"),
-        UniqueConstraint("supabase_user_id", name="uq_users_supabase_user_id"),
+        Index("uq_users_supabase_user_id", "supabase_user_id", unique=True),
     )
 
     id: Mapped[UUID] = uuid_pk()
