@@ -5,7 +5,6 @@ from uuid import UUID
 import httpx
 import jwt
 import pytest
-
 from app.core import security
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
