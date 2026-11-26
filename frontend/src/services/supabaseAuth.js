@@ -1,6 +1,7 @@
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 const SESSION_KEY = 'erp03_supabase_session';
+let refreshInFlight = null;
 
 export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_KEY);
 
@@ -38,7 +39,7 @@ export function saveSupabaseSession(session) {
   try {
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
   } catch {
-    throw new Error('This browser cannot store the Supabase session securely for this tab.');
+    throw new Error('This browser cannot store the Supabase session for this tab.');
   }
 }
 
@@ -62,19 +63,26 @@ export async function getSupabaseAccessToken() {
   if (Number(session.expires_at || 0) > Math.floor(Date.now() / 1000) + 60) {
     return session.access_token;
   }
-  try {
-    const refreshed = await authRequest('token?grant_type=refresh_token', {
-      refresh_token: session.refresh_token,
-    });
-    saveSupabaseSession({
-      ...refreshed,
-      expires_at: refreshed.expires_at || Math.floor(Date.now() / 1000) + refreshed.expires_in,
-    });
-    return refreshed.access_token;
-  } catch {
-    clearSupabaseSession();
-    return null;
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      try {
+        const refreshed = await authRequest('token?grant_type=refresh_token', {
+          refresh_token: session.refresh_token,
+        });
+        saveSupabaseSession({
+          ...refreshed,
+          expires_at: refreshed.expires_at || Math.floor(Date.now() / 1000) + refreshed.expires_in,
+        });
+        return refreshed.access_token;
+      } catch {
+        clearSupabaseSession();
+        return null;
+      } finally {
+        refreshInFlight = null;
+      }
+    })();
   }
+  return refreshInFlight;
 }
 
 export async function signOutSupabase() {
