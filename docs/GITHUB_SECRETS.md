@@ -48,7 +48,7 @@ Production deployment is a separate manually dispatched workflow and requires th
 
 ## Runtime application secrets
 
-Keep `SECRET_KEY`, database credentials, Redis credentials, and `DATABASE_URL` in the target environment's secret manager or protected host-side environment file. They are not GHCR credentials and should not be copied into GitHub workflow variables unless a workflow explicitly requires them.
+Keep `SECRET_KEY`, database credentials, Redis credentials, and `DATABASE_URL` in the target environment's secret manager or protected host-side environment file. When enabling the optional Supabase Auth bridge, configure `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` in the backend runtime and provide the same public values to the frontend build. Docker Compose passes these values to the backend and frontend build arguments. The publishable key is browser-safe; never provide `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_JWT_SECRET` to the frontend. These are not GHCR credentials and should not be copied into GitHub workflow variables unless a workflow explicitly requires them.
 
 ## Rotation
 
