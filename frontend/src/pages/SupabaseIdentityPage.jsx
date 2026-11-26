@@ -9,16 +9,17 @@ export default function SupabaseIdentityPage() {
 
   const handleLink = async (event) => {
     event.preventDefault();
+    const formNode = event.currentTarget;
     setError('');
     setMessage('');
     setLoading(true);
     try {
-      const form = new FormData(event.currentTarget);
+      const form = new FormData(formNode);
       const session = await signInWithSupabase(form.get('email'), form.get('password'));
       await api.linkSupabase(session.access_token);
       saveSupabaseSession(session);
       setMessage('Supabase identity linked. New API requests can now use this verified identity.');
-      event.currentTarget.reset();
+      formNode.reset();
     } catch (err) {
       setError(err.message || 'Unable to link Supabase identity.');
     } finally {
