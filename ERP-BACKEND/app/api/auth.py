@@ -23,6 +23,7 @@ from app.schemas.auth import (
     RegisterRequest,
     RegisterResponse,
 )
+from app.services.supabase_identity import link_supabase_identity as link_identity
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -91,37 +92,20 @@ async def link_supabase_identity(
         select(User).where(User.id == erp_user_id, User.active.is_(True))
     )
     if erp_user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="ERP user is inactive")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="ERP user is inactive"
+        )
 
     identity = await verify_supabase_access_token(payload.access_token)
-    if identity["email"].strip().casefold() != erp_user.email.strip().casefold():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Supabase email must match the authenticated ERP03 user's email",
-        )
     try:
         supabase_user_id = UUID(identity["id"])
-    except (TypeError, ValueError) as exc:
+        supabase_email = identity["email"]
+    except (KeyError, TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Supabase identity"
         ) from exc
 
-    existing = await session.scalar(
-        select(User).where(User.supabase_user_id == supabase_user_id)
-    )
-    if existing is not None and existing.id != erp_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Supabase identity is already linked to another ERP03 user",
-        )
-    if erp_user.supabase_user_id not in (None, supabase_user_id):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This ERP03 user already has a different Supabase identity linked",
-        )
-
-    erp_user.supabase_user_id = supabase_user_id
-    await session.commit()
+    await link_identity(session, erp_user, supabase_user_id, supabase_email)
     return {"status": "linked", "user_id": str(erp_user.id)}
 
 
