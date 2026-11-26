@@ -55,12 +55,14 @@ def decode_access_token(token: str) -> dict:
 
 async def verify_supabase_access_token(token: str) -> dict:
     """Validate a Supabase session using the Auth server, not a shared JWT secret."""
-    if not settings.supabase_auth_enabled:
+    supabase_url = settings.supabase_url
+    publishable_key = settings.supabase_publishable_key
+    if not supabase_url or not publishable_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired access token"
         )
-    url = settings.supabase_url.rstrip("/")
-    key = settings.supabase_publishable_key.get_secret_value()
+    url = supabase_url.rstrip("/")
+    key = publishable_key.get_secret_value()
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=2.0)) as client:
             response = await client.get(
