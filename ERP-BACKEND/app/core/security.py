@@ -74,9 +74,19 @@ async def verify_supabase_access_token(token: str) -> dict:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Supabase identity verification is temporarily unavailable",
         ) from exc
-    if response.status_code != status.HTTP_200_OK:
+    if response.status_code in {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN}:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired Supabase session"
+        )
+    if response.status_code == status.HTTP_429_TOO_MANY_REQUESTS or response.status_code >= 500:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase identity verification is temporarily unavailable",
+        )
+    if response.status_code != status.HTTP_200_OK:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Supabase returned an unexpected identity-verification response",
         )
     identity = response.json()
     if (
