@@ -2,7 +2,11 @@
  * API Client — ERP JWT remains supported; a linked Supabase session may also
  * authenticate requests. The backend maps Supabase subjects to ERP users.
  */
-import { getSupabaseAccessToken, hasSupabaseSession } from './supabaseAuth';
+import {
+  getActiveAuthProvider,
+  getSupabaseAccessToken,
+  hasSupabaseSession,
+} from './supabaseAuth';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -19,9 +23,13 @@ async function request(path, options = {}) {
   const { authToken, preferErpToken = false, ...fetchOptions } = options;
   let token = authToken || null;
   if (!token && !preferErpToken) {
-    // A stored Supabase identity is the selected provider. Refresh failures must
-    // not silently fall back to an unrelated ERP credential.
-    if (hasSupabaseSession()) {
+    const activeProvider = getActiveAuthProvider();
+    const useSupabase = activeProvider === 'supabase'
+      || (!activeProvider && hasSupabaseSession());
+
+    if (useSupabase) {
+      // Keep the selected provider even after explicit rejection clears its
+      // session, so no unrelated ERP credential can silently take over.
       token = await getSupabaseAccessToken();
     } else if (typeof localStorage !== 'undefined') {
       token = localStorage.getItem('erp03_token');
