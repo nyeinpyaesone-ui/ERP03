@@ -8,7 +8,6 @@ from app.core.errors import ConflictError, ForbiddenError
 from app.services.supabase_identity import link_supabase_identity
 
 
-
 @pytest.mark.asyncio
 async def test_link_supabase_identity_requires_matching_verified_email():
     user = SimpleNamespace(id=uuid4(), email="erp@example.test", supabase_user_id=None)
