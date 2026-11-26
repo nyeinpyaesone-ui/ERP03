@@ -3,9 +3,9 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import { ProtectedRoute, GuestRoute } from './components/ProtectedRoute';
+import SupabaseIdentityPage from './pages/SupabaseIdentityPage';
 
-// Lazy-load page components for code splitting — pages are only fetched
-// when the user navigates to their route.
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const SalesPage = lazy(() => import('./pages/SalesPage'));
 const ProductsPage = lazy(() => import('./pages/ProductsPage'));
@@ -14,23 +14,26 @@ const InventoryPage = lazy(() => import('./pages/InventoryPage'));
 
 const router = createBrowserRouter([
   {
-    path: '/',
-    element: <Layout />,
+    element: <ProtectedRoute />,
+    children: [{
+      path: '/',
+      element: <Layout />,
+      children: [
+        { index: true, element: <DashboardPage /> },
+        { path: 'sales', element: <SalesPage /> },
+        { path: 'products', element: <ProductsPage /> },
+        { path: 'customers', element: <CustomersPage /> },
+        { path: 'inventory', element: <InventoryPage /> },
+        { path: 'settings/authentication', element: <SupabaseIdentityPage /> },
+      ],
+    }],
+  },
+  {
+    element: <GuestRoute />,
     children: [
-      { index: true, element: <DashboardPage /> },
-      { path: 'sales', element: <SalesPage /> },
-      { path: 'products', element: <ProductsPage /> },
-      { path: 'customers', element: <CustomersPage /> },
-      { path: 'inventory', element: <InventoryPage /> },
+      { path: '/login', element: <LoginPage /> },
+      { path: '/register', element: <RegisterPage /> },
     ],
-  },
-  {
-    path: '/login',
-    element: <LoginPage />,
-  },
-  {
-    path: '/register',
-    element: <RegisterPage />,
   },
 ]);
 
