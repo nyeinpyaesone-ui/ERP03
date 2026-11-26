@@ -96,7 +96,7 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}\n        VITE_SUPABASE_URL: ${SUPABASE_URL:-}\n        VITE_SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
     ports:
       - "3000:8080"
     depends_on:
