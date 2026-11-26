@@ -39,10 +39,14 @@ Unlinked Supabase users are denied. No automatic email-based account linking occ
 
 ## Operations and safety
 
-- Apply Alembic revision `0010_supabase_identity_link` through the normal reviewed deployment migration process.
-- Do not apply migrations to the connected Supabase project: the column belongs to ERP03's existing application database.
+- Apply Alembic revision `0011_supabase_identity_link` after `0010_txn_journal` through the normal reviewed ERP03 database migration process.
+- Do not apply this migration to the connected Supabase project: the column belongs to ERP03's existing application database.
 - Keep Supabase Auth redirect/site URLs restricted to approved ERP03 origins in the Supabase dashboard.
 - Enable email confirmation and configure SMTP before enabling production Supabase sign-in.
 - The frontend keeps its session in tab-scoped `sessionStorage`; refresh tokens are rotated through Supabase Auth.
 - Auth verification depends on the Supabase Auth API; temporary provider outages fail closed with HTTP 503.
 - Unlinking, account deletion, and identity reassignment require a separately reviewed administrative workflow.
+
+## Validation status
+
+The migration and feature are present on the draft ERP03 feature branch. CI, staging Auth-flow tests, and migration rollback validation must pass before production activation.
