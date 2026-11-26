@@ -14,7 +14,7 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY index.html ./
 COPY vite.config.js ./
 COPY src ./src
-RUN VITE_API_BASE_URL=${VITE_API_BASE_URL} \\\n    VITE_SUPABASE_URL=${VITE_SUPABASE_URL} \\\n    VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY} npm run build
+RUN VITE_API_BASE_URL=${VITE_API_BASE_URL} VITE_SUPABASE_URL=${VITE_SUPABASE_URL} VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY} npm run build
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
 
