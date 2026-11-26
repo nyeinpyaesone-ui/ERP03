@@ -48,7 +48,7 @@ Production deployment is a separate manually dispatched workflow and requires th
 
 ## Runtime application secrets
 
-Keep `SECRET_KEY`, database credentials, Redis credentials, and `DATABASE_URL` in the target environment's secret manager or protected host-side environment file. They are not GHCR credentials and should not be copied into GitHub workflow variables unless a workflow explicitly requires them.
+Keep `SECRET_KEY`, database credentials, Redis credentials, `DATABASE_URL`, and (when enabling the optional Supabase bridge) `SUPABASE_URL` plus `SUPABASE_PUBLISHABLE_KEY` in the target environment's secret manager or protected host-side environment file. The publishable key is intended for browser use; the backend uses it only to call Supabase Auth's user-verification endpoint. Never provide `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_JWT_SECRET` to the frontend. They are not GHCR credentials and should not be copied into GitHub workflow variables unless a workflow explicitly requires them.
 
 ## Rotation
 
