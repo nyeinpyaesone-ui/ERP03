@@ -92,16 +92,28 @@ SQLITE_URL="sqlite+aiosqlite:////tmp/erp03-qualify.sqlite3"
 probe_postgres() {
   local url="$1"
   [[ "$url" == postgresql+asyncpg://* ]] || return 1
-  python3 - <<EOF >/dev/null 2>&1
-import asyncio, asyncpg, sys
+  QUALIFY_PROBE_DATABASE_URL="$url" python3 - <<'PY' >/dev/null 2>&1
+import asyncio
+import os
+import asyncpg
+from sqlalchemy.engine import make_url
+
 async def main():
     try:
-        conn = await asyncpg.connect("${url}", timeout=2)
+        # DATABASE_URL is a SQLAlchemy URL. asyncpg accepts the native
+        # PostgreSQL scheme, so remove only the SQLAlchemy driver suffix.
+        sqlalchemy_url = make_url(os.environ["QUALIFY_PROBE_DATABASE_URL"])
+        native_url = sqlalchemy_url.set(drivername="postgresql")
+        conn = await asyncpg.connect(
+            dsn=native_url.render_as_string(hide_password=False),
+            timeout=2,
+        )
         await conn.close()
     except Exception:
         raise SystemExit(1)
+
 asyncio.run(main())
-EOF
+PY
 }
 
 USE_PG=false
