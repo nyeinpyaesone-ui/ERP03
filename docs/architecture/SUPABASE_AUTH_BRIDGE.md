@@ -39,7 +39,7 @@ Unlinked Supabase users are denied. No automatic email-based account linking occ
 
 ## Operations and safety
 
-- Apply Alembic revision `0010_supabase_identity_link` through the normal reviewed deployment migration process.
+- Apply Alembic revision `0011_supabase_identity_link` through the normal reviewed deployment migration process.
 - Do not apply migrations to the connected Supabase project: the column belongs to ERP03's existing application database.
 - Keep Supabase Auth redirect/site URLs restricted to approved ERP03 origins in the Supabase dashboard.
 - Enable email confirmation and configure SMTP before enabling production Supabase sign-in.
