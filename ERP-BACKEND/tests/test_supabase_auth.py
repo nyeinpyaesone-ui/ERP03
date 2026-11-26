@@ -1,11 +1,11 @@
 from unittest.mock import AsyncMock, patch
 
-from fastapi import HTTPException
 import httpx
 import pytest
 
 from app.core.config import settings
 from app.core.security import verify_supabase_access_token
+from fastapi import HTTPException
 
 
 @pytest.mark.asyncio
