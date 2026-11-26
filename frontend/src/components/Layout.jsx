@@ -3,8 +3,6 @@ import { useAuth } from '../contexts/AuthContext';
 
 export default function Layout() {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
-
   const navItems = [
     { name: 'Dashboard', href: '/', icon: 'layout-dashboard' },
     { name: 'POS Sales', href: '/sales', icon: 'shopping-cart' },
