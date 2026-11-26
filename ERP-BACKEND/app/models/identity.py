@@ -9,35 +9,14 @@ from app.db.base import GUID, Base, utcnow, uuid_pk
 user_roles = Table(
     "user_roles",
     Base.metadata,
-    Column(
-        "user_id",
-        GUID(),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
-    Column(
-        "role_id",
-        GUID(),
-        ForeignKey("roles.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
+    Column("user_id", GUID(), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("role_id", GUID(), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
 )
-
 role_permissions = Table(
     "role_permissions",
     Base.metadata,
-    Column(
-        "role_id",
-        GUID(),
-        ForeignKey("roles.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
-    Column(
-        "permission_id",
-        GUID(),
-        ForeignKey("permissions.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
+    Column("role_id", GUID(), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    Column("permission_id", GUID(), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
 )
 
 
@@ -52,13 +31,10 @@ class Business(Base):
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Asia/Yangon")
     locale: Mapped[str] = mapped_column(String(16), nullable=False, default="my-MM")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
     )
-
     branches: Mapped[list["Branch"]] = relationship(
         back_populates="business", cascade="all, delete-orphan"
     )
@@ -79,13 +55,10 @@ class Branch(Base):
     code: Mapped[str] = mapped_column(String(64), nullable=False)
     address: Mapped[str | None] = mapped_column(String(500))
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
     )
-
     business: Mapped[Business] = relationship(back_populates="branches")
 
 
@@ -115,6 +88,7 @@ class User(Base):
     __table_args__ = (
         UniqueConstraint("business_id", "email", name="uq_users_business_email"),
         Index("ix_users_business_active", "business_id", "active"),
+        UniqueConstraint("supabase_user_id", name="uq_users_supabase_user_id"),
     )
 
     id: Mapped[UUID] = uuid_pk()
@@ -127,5 +101,6 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    supabase_user_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     roles: Mapped[list[Role]] = relationship(secondary=user_roles)
