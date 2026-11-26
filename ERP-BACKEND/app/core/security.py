@@ -8,11 +8,10 @@ from argon2.exceptions import Argon2Error
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.db.session import get_db_session
-from app.models.identity import User
+from app.db.session import SessionFactory
+from app.models.identity import Business, User
 
 password_hasher = PasswordHasher()
 bearer = HTTPBearer(auto_error=False)
@@ -59,12 +58,17 @@ async def verify_supabase_access_token(token: str) -> dict:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired access token"
         )
-    url = settings.supabase_url.rstrip("/")
-    key = settings.supabase_publishable_key.get_secret_value()
+    url = settings.supabase_url
+    publishable_key = settings.supabase_publishable_key
+    if not url or publishable_key is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Supabase Auth is not configured"
+        )
+    key = publishable_key.get_secret_value()
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=2.0)) as client:
             response = await client.get(
-                f"{url}/auth/v1/user",
+                f"{url.rstrip('/')}/auth/v1/user",
                 headers={"apikey": key, "Authorization": f"Bearer {token}"},
             )
     except httpx.HTTPError as exc:
@@ -77,6 +81,10 @@ async def verify_supabase_access_token(token: str) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired Supabase session"
         )
     identity = response.json()
+    if not isinstance(identity, dict):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Supabase identity response"
+        )
     if not identity.get("id") or not identity.get("email") or not identity.get("email_confirmed_at"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -87,7 +95,6 @@ async def verify_supabase_access_token(token: str) -> dict:
 
 async def current_claims(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
-    session: AsyncSession = Depends(get_db_session),
 ) -> dict:
     if credentials is None:
         raise HTTPException(
@@ -104,12 +111,16 @@ async def current_claims(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Supabase identity"
             ) from exc
-        user = await session.scalar(
-            select(User).where(
-                User.supabase_user_id == supabase_user_id,
-                User.active.is_(True),
+        async with SessionFactory() as session:
+            user = await session.scalar(
+                select(User)
+                .join(Business, Business.id == User.business_id)
+                .where(
+                    User.supabase_user_id == supabase_user_id,
+                    User.active.is_(True),
+                    Business.active.is_(True),
+                )
             )
-        )
         if user is None:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
