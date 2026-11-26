@@ -6,6 +6,7 @@ import {
   getActiveAuthProvider,
   getSupabaseAccessToken,
   hasSupabaseSession,
+  selectSupabaseProvider,
 } from './supabaseAuth';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
@@ -28,8 +29,9 @@ async function request(path, options = {}) {
       || (!activeProvider && hasSupabaseSession());
 
     if (useSupabase) {
-      // Keep the selected provider even after explicit rejection clears its
-      // session, so no unrelated ERP credential can silently take over.
+      // Persist legacy session provider choice before refresh can reject and
+      // clear its credentials; never switch silently to a stored ERP token.
+      if (activeProvider !== 'supabase') selectSupabaseProvider();
       token = await getSupabaseAccessToken();
     } else if (typeof localStorage !== 'undefined') {
       token = localStorage.getItem('erp03_token');
