@@ -67,6 +67,8 @@ services:
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set to a postgresql+asyncpg:// URL}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
       DATABASE_PATH: /app/.local/erp03.sqlite3
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -96,7 +98,9 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}\n        VITE_SUPABASE_URL: ${SUPABASE_URL:-}\n        VITE_SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_SUPABASE_URL: ${SUPABASE_URL:-}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}\n        VITE_SUPABASE_URL: ${SUPABASE_URL:-}\n        VITE_SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
     ports:
       - "3000:8080"
     depends_on:
