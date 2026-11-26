@@ -1,8 +1,7 @@
 import pytest
-from pydantic import ValidationError
 
 from app.core.config import Settings
-
+from pydantic import ValidationError
 
 def make_settings(**overrides):
     values = {
