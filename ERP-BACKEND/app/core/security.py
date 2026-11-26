@@ -112,7 +112,11 @@ async def current_claims(
             )
         except jwt.PyJWTError:
             raise erp_error
-        expected_issuer = f"{settings.supabase_url.rstrip('/')}/auth/v1" if settings.supabase_url else None
+        expected_issuer = (
+            f"{settings.supabase_url.rstrip('/')}/auth/v1"
+            if settings.supabase_url
+            else None
+        )
         if not expected_issuer or unverified.get("iss") != expected_issuer:
             raise erp_error
 
