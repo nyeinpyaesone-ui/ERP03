@@ -49,9 +49,7 @@ async def login(
     )
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     return LoginResponse(
         access_token=create_access_token(user.id, user.business_id, user.branch_id),
         user=AuthenticatedUser(
@@ -92,9 +90,7 @@ async def link_supabase_identity(
         select(User).where(User.id == erp_user_id, User.active.is_(True))
     )
     if erp_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="ERP user is inactive"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="ERP user is inactive")
 
     identity = await verify_supabase_access_token(payload.access_token)
     if identity["email"].strip().casefold() != erp_user.email.strip().casefold():
@@ -109,9 +105,7 @@ async def link_supabase_identity(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Supabase identity"
         ) from exc
 
-    existing = await session.scalar(
-        select(User).where(User.supabase_user_id == supabase_user_id)
-    )
+    existing = await session.scalar(select(User).where(User.supabase_user_id == supabase_user_id))
     if existing is not None and existing.id != erp_user.id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -150,9 +144,7 @@ async def register(
         )
     existing_user = await session.scalar(select(User).where(User.email == payload.email.lower()))
     if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
     async with session.begin():
         business = Business(
