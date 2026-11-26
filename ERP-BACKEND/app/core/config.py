@@ -112,6 +112,11 @@ class Settings(BaseSettings):
             is_loopback_http = (
                 parsed.scheme == "http"
                 and host in {"localhost", "127.0.0.1"}
+                and parsed.username is None
+                and parsed.password is None
+                and parsed.path in {"", "/"}
+                and not parsed.query
+                and not parsed.fragment
                 and env not in {"production", "prod"}
             )
             is_secure_https = (
