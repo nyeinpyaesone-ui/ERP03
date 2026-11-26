@@ -9,7 +9,6 @@ from fastapi import status
 from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
 from starlette.responses import JSONResponse
 
-from app.core.security import decode_access_token
 
 REQUEST_COUNT = Counter(
     "erp03_http_requests_total",
@@ -54,6 +53,8 @@ def _metrics_auth_middleware(app):
                 return
             token = auth_header.split(" ", 1)[1]
             try:
+                from app.core.security import decode_access_token
+
                 decode_access_token(token)
             except Exception:
                 response = JSONResponse(
