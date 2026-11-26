@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     supabase_url: str | None = Field(default=None)
     supabase_publishable_key: SecretStr | None = Field(default=None)
 
+    @field_validator("supabase_url", "supabase_publishable_key", mode="before")
+    @classmethod
+    def parse_optional_supabase_config(cls, value: Any) -> Any:
+        if value is None or value == "":
+            return None
+        return value
+
     @field_validator("typesafe_api_key", mode="before")
     @classmethod
     def _parse_typesafe_api_key(cls, value: Any) -> Any:
