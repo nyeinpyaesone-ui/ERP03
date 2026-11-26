@@ -1,6 +1,13 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api, ApiError } from '../services/api';
-import { clearSupabaseSession, saveSupabaseSession, signOutSupabase } from '../services/supabaseAuth';
+import {
+  clearActiveAuthProvider,
+  clearSupabaseSession,
+  saveSupabaseSession,
+  selectErpProvider,
+  selectSupabaseProvider,
+  signOutSupabase,
+} from '../services/supabaseAuth';
 
 const AuthContext = createContext(null);
 
@@ -31,6 +38,7 @@ export function AuthProvider({ children }) {
     clearSupabaseSession();
     const data = await api.login(credentials);
     localStorage.setItem('erp03_token', data.access_token);
+    selectErpProvider();
     setUser(data.user);
     setProbeError(false);
     return data;
@@ -39,6 +47,7 @@ export function AuthProvider({ children }) {
   const loginWithSupabase = async (session) => {
     const data = await api.me({ authToken: session.access_token });
     saveSupabaseSession(session);
+    selectSupabaseProvider();
     localStorage.removeItem('erp03_token');
     setUser(data);
     setProbeError(false);
@@ -48,6 +57,7 @@ export function AuthProvider({ children }) {
   const logout = useCallback(() => {
     const revocation = signOutSupabase();
     clearSupabaseSession();
+    clearActiveAuthProvider();
     localStorage.removeItem('erp03_token');
     setUser(null);
     setProbeError(false);
