@@ -15,11 +15,13 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.add_column("users", sa.Column("supabase_user_id", GUID(), nullable=True))
-    op.create_unique_constraint(
-        "uq_users_supabase_user_id", "users", ["supabase_user_id"]
-    )
+    with op.batch_alter_table("users") as batch_op:
+        batch_op.create_unique_constraint(
+            "uq_users_supabase_user_id", ["supabase_user_id"]
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint("uq_users_supabase_user_id", "users", type_="unique")
-    op.drop_column("users", "supabase_user_id")
+    with op.batch_alter_table("users") as batch_op:
+        batch_op.drop_constraint("uq_users_supabase_user_id", type_="unique")
+        batch_op.drop_column("supabase_user_id")
