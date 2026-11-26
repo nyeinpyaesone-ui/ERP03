@@ -5,12 +5,12 @@ from uuid import UUID
 import httpx
 import jwt
 import pytest
-from fastapi import HTTPException
-from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import SecretStr
 
 from app.core import security
 from app.core.config import settings
+from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
+from pydantic import SecretStr
 
 
 @pytest.mark.asyncio
