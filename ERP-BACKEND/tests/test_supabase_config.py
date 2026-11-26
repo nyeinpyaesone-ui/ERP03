@@ -3,6 +3,7 @@ import pytest
 from app.core.config import Settings
 from pydantic import ValidationError
 
+
 def make_settings(**overrides):
     values = {
         "environment": "test",
