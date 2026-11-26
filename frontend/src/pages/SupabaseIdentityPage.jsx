@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { api } from '../services/api';
-import { isSupabaseConfigured, saveSupabaseSession, signInWithSupabase } from '../services/supabaseAuth';
+import {
+  isSupabaseConfigured,
+  saveSupabaseSession,
+  selectSupabaseProvider,
+  signInWithSupabase,
+} from '../services/supabaseAuth';
 
 export default function SupabaseIdentityPage() {
   const [error, setError] = useState('');
@@ -18,6 +23,8 @@ export default function SupabaseIdentityPage() {
       const session = await signInWithSupabase(form.get('email'), form.get('password'));
       await api.linkSupabase(session.access_token);
       saveSupabaseSession(session);
+      selectSupabaseProvider();
+      localStorage.removeItem('erp03_token');
       setMessage('Supabase identity linked. New API requests can now use this verified identity.');
       formNode.reset();
     } catch (err) {
