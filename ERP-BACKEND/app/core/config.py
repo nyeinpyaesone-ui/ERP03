@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 from typing import Any
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -105,8 +106,28 @@ class Settings(BaseSettings):
             raise ValueError(
                 "SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY must be configured together"
             )
-        if self.supabase_url and not self.supabase_url.startswith("https://"):
-            raise ValueError("SUPABASE_URL must use HTTPS")
+        if self.supabase_url:
+            parsed = urlsplit(self.supabase_url)
+            host = parsed.hostname
+            is_loopback_http = (
+                parsed.scheme == "http"
+                and host in {"localhost", "127.0.0.1"}
+                and env not in {"production", "prod"}
+            )
+            is_secure_https = (
+                parsed.scheme == "https"
+                and bool(host)
+                and parsed.username is None
+                and parsed.password is None
+                and parsed.path in {"", "/"}
+                and not parsed.query
+                and not parsed.fragment
+            )
+            if not (is_loopback_http or is_secure_https):
+                raise ValueError(
+                    "SUPABASE_URL must use HTTPS, except for localhost/127.0.0.1 "
+                    "in non-production environments"
+                )
         if env in {"production", "prod"}:
             secret = self.secret_key.get_secret_value()
             if (
