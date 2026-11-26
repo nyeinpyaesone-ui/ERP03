@@ -2,7 +2,7 @@
  * API Client — ERP JWT remains supported; a linked Supabase session may also
  * authenticate requests. The backend maps Supabase subjects to ERP users.
  */
-import { getSupabaseAccessToken } from './supabaseAuth';
+import { getSupabaseAccessToken, hasSupabaseSession } from './supabaseAuth';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -17,15 +17,24 @@ class ApiError extends Error {
 
 async function request(path, options = {}) {
   const { authToken, preferErpToken = false, ...fetchOptions } = options;
-  const supabaseToken = preferErpToken ? null : await getSupabaseAccessToken();
-  const erpToken = typeof localStorage !== 'undefined' ? localStorage.getItem('erp03_token') : null;
-  const token = authToken || supabaseToken || erpToken;
+  let token = authToken || null;
+  if (!token && !preferErpToken) {
+    // A stored Supabase identity is the selected provider. Refresh failures must
+    // not silently fall back to an unrelated ERP credential.
+    if (hasSupabaseSession()) {
+      token = await getSupabaseAccessToken();
+    } else if (typeof localStorage !== 'undefined') {
+      token = localStorage.getItem('erp03_token');
+    }
+  } else if (!token && preferErpToken && typeof localStorage !== 'undefined') {
+    token = localStorage.getItem('erp03_token');
+  }
+
   const headers = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...fetchOptions.headers,
   };
-
   const res = await fetch(`${API_BASE}${path}`, { ...fetchOptions, headers });
   const contentType = res.headers.get('content-type') || '';
   const data = contentType.includes('application/json')
