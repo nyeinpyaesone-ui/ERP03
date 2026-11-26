@@ -13,17 +13,12 @@ logger = logging.getLogger("erp03.config")
 
 
 class Settings(BaseSettings):
-    """Canonical settings with environment-driven auto-tuning.
-
-    Database pool sizing scales with environment tier (development/staging/production)
-    so operators only need to set ENVIRONMENT; pool parameters follow automatically.
-    """
+    """Canonical settings with environment-driven auto-tuning."""
 
     model_config = SettingsConfigDict(
         env_file=".env", env_prefix="", extra="forbid", case_sensitive=False
     )
 
-    # --- Core ---
     secret_key: SecretStr = SecretStr("development-only-change-me")
     app_name: str = "ERP03 API"
     version: str = "1.1.0"
@@ -33,59 +28,49 @@ class Settings(BaseSettings):
     database_url: str = Field(default="sqlite+aiosqlite:////app/.local/erp03.sqlite3")
     database_path: str = "./.local/erp03.sqlite3"
 
-    # --- Database pool (auto-tuned by environment) ---
     db_pool_size: int = Field(default=10, ge=1, le=500)
     db_max_overflow: int = Field(default=20, ge=0, le=1000)
     db_pool_recycle: int = Field(default=1800, ge=60)
     db_pool_timeout: int = Field(default=30, ge=1, le=300)
     db_echo: bool = False
 
-    # --- TypeSafe System One ---
     typesafe_enabled: bool = Field(default=False)
     typesafe_api_key: SecretStr | None = Field(default=None)
 
-    # --- JWT ---
     jwt_expiry_minutes: int = Field(default=480, ge=1, le=44640)
-
-    # --- Redis (optional, for caching/sessions/rate-limiting) ---
     redis_url: str | None = Field(default=None)
     redis_password: str | None = Field(default=None)
     redis_db: int = Field(default=0)
     redis_max_connections: int = Field(default=50, ge=1, le=1000)
 
-    # --- API metadata ---
     api_v1_prefix: str = Field(default="/api/v1")
     api_title: str = Field(default="ERP03 API")
     api_version: str = Field(default="1.1.0")
     api_docs_url: str = Field(default="/docs")
     api_redoc_url: str = Field(default="/redoc")
 
-    # --- Auth ---
     access_token_expire_minutes: int = Field(default=30, ge=1, le=1440)
     refresh_token_expire_days: int = Field(default=7, ge=1, le=365)
     password_min_length: int = Field(default=12, ge=4, le=128)
     bcrypt_rounds: int = Field(default=12, ge=4, le=31)
 
-    # --- Idempotency ---
     idempotency_ttl_hours: int = Field(default=24, ge=1, le=168)
     idempotency_cleanup_interval: int = Field(default=3600, ge=60)
-
-    # --- Rate limiting ---
     rate_limit_enabled: bool = Field(default=True)
     rate_limit_requests: int = Field(default=100, ge=1)
     rate_limit_window: int = Field(default=60, ge=1)
     trusted_proxies: str = Field(default="")
 
-    # --- Webhooks ---
     webhook_secret: SecretStr | None = Field(default=None)
     webhook_timeout: int = Field(default=30, ge=1, le=300)
-
-    # --- Observability ---
     otel_enabled: bool = Field(default=False)
     otel_exporter_otlp_endpoint: str | None = Field(default=None)
-
-    # --- Debug ---
     debug: bool = Field(default=False)
+
+    # Optional Supabase Auth bridge. The publishable key is public; never add
+    # service-role, secret API, or JWT signing keys to frontend configuration.
+    supabase_url: str | None = Field(default=None)
+    supabase_publishable_key: SecretStr | None = Field(default=None)
 
     @field_validator("typesafe_api_key", mode="before")
     @classmethod
@@ -116,6 +101,10 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_security(self) -> Settings:
         env = self.environment.lower()
+        if bool(self.supabase_url) != bool(self.supabase_publishable_key):
+            raise ValueError("SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY must be configured together")
+        if self.supabase_url and not self.supabase_url.startswith("https://"):
+            raise ValueError("SUPABASE_URL must use HTTPS")
         if env in {"production", "prod"}:
             secret = self.secret_key.get_secret_value()
             if (
@@ -123,8 +112,7 @@ class Settings(BaseSettings):
                 or len(secret) < 32
             ):
                 raise ValueError(
-                    "SECRET_KEY must be explicitly configured with at least "
-                    "32 characters in production"
+                    "SECRET_KEY must be explicitly configured with at least 32 characters in production"
                 )
             if any(
                 o.startswith(("http://localhost", "http://127.0.0.1"))
@@ -139,7 +127,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def auto_tune_pool(self) -> Settings:
-        """Auto-tune pool sizing based on environment tier."""
         env = self.environment.lower()
         if env in {"production", "prod"}:
             self.db_pool_size = max(self.db_pool_size, 20)
@@ -163,10 +150,13 @@ class Settings(BaseSettings):
     def redis_url_parsed(self) -> str | None:
         return self.redis_url
 
+    @property
+    def supabase_auth_enabled(self) -> bool:
+        return bool(self.supabase_url and self.supabase_publishable_key)
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Resolve settings once per process (cached)."""
     try:
         return Settings()
     except Exception as exc:
