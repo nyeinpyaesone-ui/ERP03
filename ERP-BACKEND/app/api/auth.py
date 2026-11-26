@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import Claims
@@ -91,7 +92,9 @@ async def link_supabase_identity(
         select(User).where(User.id == erp_user_id, User.active.is_(True))
     )
     if erp_user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="ERP user is inactive")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="ERP user is inactive"
+        )
 
     identity = await verify_supabase_access_token(payload.access_token)
     if identity["email"].strip().casefold() != erp_user.email.strip().casefold():
@@ -121,7 +124,14 @@ async def link_supabase_identity(
         )
 
     erp_user.supabase_user_id = supabase_user_id
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Supabase identity was linked concurrently to another ERP03 user",
+        ) from exc
     return {"status": "linked", "user_id": str(erp_user.id)}
 
 
