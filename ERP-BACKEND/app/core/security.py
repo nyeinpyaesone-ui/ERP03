@@ -54,7 +54,7 @@ def decode_access_token(token: str) -> dict:
 
 
 async def verify_supabase_access_token(token: str) -> dict:
-    """Ask Supabase Auth to validate the bearer token (works with current signing keys)."""
+    """Validate a Supabase session using the Auth server, not a shared JWT secret."""
     if not settings.supabase_auth_enabled:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired access token"
@@ -77,7 +77,12 @@ async def verify_supabase_access_token(token: str) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired Supabase session"
         )
     identity = response.json()
-    if not identity.get("id") or not identity.get("email") or not identity.get("email_confirmed_at"):
+    if (
+        not isinstance(identity, dict)
+        or not identity.get("id")
+        or not identity.get("email")
+        or not identity.get("email_confirmed_at")
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="A verified Supabase email identity is required",
@@ -96,11 +101,25 @@ async def current_claims(
     token = credentials.credentials
     try:
         return decode_access_token(token)
-    except HTTPException:
+    except HTTPException as erp_error:
+        # Route to Supabase only when the untrusted issuer claim matches this
+        # configured project. Signature validity is still checked by /auth/v1/user.
+        try:
+            unverified = jwt.decode(
+                token,
+                options={"verify_signature": False, "verify_exp": False},
+                algorithms=["HS256", "ES256", "RS256"],
+            )
+        except jwt.PyJWTError:
+            raise erp_error
+        expected_issuer = f"{settings.supabase_url.rstrip('/')}/auth/v1" if settings.supabase_url else None
+        if not expected_issuer or unverified.get("iss") != expected_issuer:
+            raise erp_error
+
         identity = await verify_supabase_access_token(token)
         try:
             supabase_user_id = UUID(identity["id"])
-        except (TypeError, ValueError) as exc:
+        except (KeyError, TypeError, ValueError) as exc:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Supabase identity"
             ) from exc
@@ -119,5 +138,7 @@ async def current_claims(
             "sub": str(user.id),
             "business_id": str(user.business_id),
             "branch_id": str(user.branch_id) if user.branch_id else None,
+            "email": user.email,
+            "display_name": user.display_name,
             "auth_provider": "supabase",
         }
