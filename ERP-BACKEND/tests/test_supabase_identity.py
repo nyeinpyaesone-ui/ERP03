@@ -13,9 +13,7 @@ async def test_link_supabase_identity_requires_matching_verified_email():
     session = SimpleNamespace(scalar=AsyncMock(return_value=None), commit=AsyncMock())
 
     with pytest.raises(ForbiddenError):
-        await link_supabase_identity(
-            session, user, uuid4(), "different@example.test"
-        )
+        await link_supabase_identity(session, user, uuid4(), "different@example.test")
 
     session.commit.assert_not_awaited()
 
@@ -23,9 +21,7 @@ async def test_link_supabase_identity_requires_matching_verified_email():
 @pytest.mark.asyncio
 async def test_link_supabase_identity_persists_matching_identity():
     supabase_id = uuid4()
-    user = SimpleNamespace(
-        id=uuid4(), email=" ERP@Example.test ", supabase_user_id=None
-    )
+    user = SimpleNamespace(id=uuid4(), email=" ERP@Example.test ", supabase_user_id=None)
     session = SimpleNamespace(scalar=AsyncMock(return_value=None), commit=AsyncMock())
 
     await link_supabase_identity(session, user, supabase_id, "erp@example.test")
@@ -49,9 +45,7 @@ async def test_supabase_identity_cannot_be_linked_to_another_erp_user():
 
 @pytest.mark.asyncio
 async def test_erp_user_cannot_replace_an_existing_supabase_identity():
-    user = SimpleNamespace(
-        id=uuid4(), email="erp@example.test", supabase_user_id=uuid4()
-    )
+    user = SimpleNamespace(id=uuid4(), email="erp@example.test", supabase_user_id=uuid4())
     session = SimpleNamespace(scalar=AsyncMock(return_value=None), commit=AsyncMock())
 
     with pytest.raises(ConflictError):
