@@ -87,6 +87,17 @@ class Settings(BaseSettings):
     # --- Debug ---
     debug: bool = Field(default=False)
 
+    # Optional Supabase Auth bridge. Only the publishable key is required.
+    supabase_url: str | None = Field(default=None)
+    supabase_publishable_key: SecretStr | None = Field(default=None)
+
+    @field_validator("supabase_url", "supabase_publishable_key", mode="before")
+    @classmethod
+    def parse_optional_supabase_config(cls, value: Any) -> Any:
+        if value is None or value == "":
+            return None
+        return value
+
     @field_validator("typesafe_api_key", mode="before")
     @classmethod
     def _parse_typesafe_api_key(cls, value: Any) -> Any:
@@ -116,6 +127,12 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_security(self) -> Settings:
         env = self.environment.lower()
+        if bool(self.supabase_url) != bool(self.supabase_publishable_key):
+            raise ValueError(
+                "SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY must be configured together"
+            )
+        if self.supabase_url and not self.supabase_url.startswith("https://"):
+            raise ValueError("SUPABASE_URL must use HTTPS")
         if env in {"production", "prod"}:
             secret = self.secret_key.get_secret_value()
             if (
@@ -162,6 +179,10 @@ class Settings(BaseSettings):
     @property
     def redis_url_parsed(self) -> str | None:
         return self.redis_url
+
+    @property
+    def supabase_auth_enabled(self) -> bool:
+        return bool(self.supabase_url and self.supabase_publishable_key)
 
 
 @lru_cache(maxsize=1)

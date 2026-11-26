@@ -115,6 +115,7 @@ class User(Base):
     __table_args__ = (
         UniqueConstraint("business_id", "email", name="uq_users_business_email"),
         Index("ix_users_business_active", "business_id", "active"),
+        Index("uq_users_supabase_user_id", "supabase_user_id", unique=True),
     )
 
     id: Mapped[UUID] = uuid_pk()
@@ -127,5 +128,6 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    supabase_user_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     roles: Mapped[list[Role]] = relationship(secondary=user_roles)
