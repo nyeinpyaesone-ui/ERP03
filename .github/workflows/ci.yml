@@ -124,17 +124,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          supabase status --env --output-format text > "$RUNNER_TEMP/supabase.env"
-          set -a
-          source "$RUNNER_TEMP/supabase.env"
-          set +a
-          test -n "${API_URL:-}"
-          test -n "${PUBLISHABLE_KEY:-}"
+          status_json="$(supabase status --env --output-format json)"
+          api_url="$(jq -r '.API_URL // empty' <<< "$status_json")"
+          publishable_key="$(jq -r '.PUBLISHABLE_KEY // empty' <<< "$status_json")"
+          test -n "$api_url"
+          test -n "$publishable_key"
           {
-            echo "SUPABASE_URL=$API_URL"
-            echo "SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY"
-            echo "SUPABASE_AUTH_INTEGRATION=true"
+            printf 'SUPABASE_URL=%s\n' "$api_url"
+            printf 'SUPABASE_PUBLISHABLE_KEY=%s\n' "$publishable_key"
+            printf 'SUPABASE_AUTH_INTEGRATION=true\n'
           } >> "$GITHUB_ENV"
+          unset status_json publishable_key
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: "3.12"
