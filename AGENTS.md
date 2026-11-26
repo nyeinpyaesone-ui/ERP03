@@ -27,19 +27,19 @@ Run from repo root unless noted.
 | Lint + format | `cd ERP-BACKEND && ruff check app tests alembic && ruff format --check app tests alembic` |
 | Tests | `cd ERP-BACKEND && pytest -q` (57 passed, 1 skipped — PG-only concurrency test skips on SQLite) |
 | Single test | `cd ERP-BACKEND && .venv/bin/pytest tests/test_api.py -k <name> -q` |
-| Alembic head | `cd ERP-BACKEND && .venv/bin/alembic heads` (single head expected — currently `0009_invoice_numbering_index`) |
+| Alembic head | `cd ERP-BACKEND && .venv/bin/alembic heads` (single head expected — currently `0011_supabase_identity_link`) |
 | Migrate | `cd ERP-BACKEND && DATABASE_URL=<url> .venv/bin/alembic upgrade head` (before backend start) |
-| Frontend build | `./scripts/build-frontend.sh` (Vite 5.4.11) |
+| Frontend build | `./scripts/build-frontend.sh` (Vite 8.3.6) |
 | Start backend | `cd ERP-BACKEND && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000` |
 
-CI uses Python 3.12 / Node 22; local Python may be 3.14 (asyncpg 0.32.0 works on 3.14). Frontend is Vite 5.4.11 (not Vite 7).
+CI uses Python 3.12 / Node 22; local Python may be 3.14 (asyncpg 0.32.0 works on 3.14). Frontend is Vite 8.3.6 (not Vite 7).
 
 ## Critical invariants (verify before changes)
 
 | Invariant | How to check |
 |-----------|--------------|
 | GitHub Actions pinned to full commit SHAs | `python scripts/pin-github-actions.py --check` must PASS (`sha_pinning_required=true`; 23 refs) |
-| Single Alembic head | `alembic heads` returns one revision (`0009_invoice_numbering_index`) |
+| Single Alembic head | `alembic heads` returns one revision (`0011_supabase_identity_link`) |
 | `Settings.extra == "forbid"` | Any undeclared env var → startup crash (`app/core/config.py`) |
 | Production rejects SQLite | `ENVIRONMENT=production` + SQLite URL → `ValueError` (`app/core/config.py`) |
 | Ruff config in `pyproject.toml` | target-version py312, line-length 100, excludes `alembic/versions` from src but `ruff check` still scans `alembic/` dir |
@@ -48,8 +48,8 @@ CI uses Python 3.12 / Node 22; local Python may be 3.14 (asyncpg 0.32.0 works on
 
 Two `.env` files — never mix:
 
-- `ERP-BACKEND/.env` — backend runtime (`SECRET_KEY`, `DATABASE_URL`, `CORS_ORIGINS`, `REDIS_URL`)
-- `.env.compose` — Docker Compose only (`POSTGRES_PASSWORD`, `ERP03_BACKEND_IMAGE`, `ERP03_FRONTEND_IMAGE`, `SECRET_KEY`)
+- `ERP-BACKEND/.env` — backend runtime (`SECRET_KEY`, `DATABASE_URL`, `CORS_ORIGINS`, `REDIS_URL`, optional `SUPABASE_URL` + `SUPABASE_PUBLISHABLE_KEY`)
+- `.env.compose` — Docker Compose only (`POSTGRES_PASSWORD`, `ERP03_BACKEND_IMAGE`, `ERP03_FRONTEND_IMAGE`, `SECRET_KEY`, optional Supabase URL/publishable key)
 
 The compose file is **not** read by the backend (Settings uses `extra="forbid"`).
 
