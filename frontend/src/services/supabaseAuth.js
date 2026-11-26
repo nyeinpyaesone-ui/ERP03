@@ -1,8 +1,41 @@
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 const SESSION_KEY = 'erp03_supabase_session';
+const ACTIVE_PROVIDER_KEY = 'erp03_active_auth_provider';
 
 export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_KEY);
+
+export function getActiveAuthProvider() {
+  try {
+    return sessionStorage.getItem(ACTIVE_PROVIDER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function selectSupabaseProvider() {
+  try {
+    sessionStorage.setItem(ACTIVE_PROVIDER_KEY, 'supabase');
+  } catch {
+    // The session store remains the fallback provider marker.
+  }
+}
+
+export function selectErpProvider() {
+  try {
+    sessionStorage.setItem(ACTIVE_PROVIDER_KEY, 'erp');
+  } catch {
+    // ERP credentials remain usable when tab storage is unavailable.
+  }
+}
+
+export function clearActiveAuthProvider() {
+  try {
+    sessionStorage.removeItem(ACTIVE_PROVIDER_KEY);
+  } catch {
+    // Storage may be unavailable in privacy-restricted browser contexts.
+  }
+}
 
 async function authRequest(path, body) {
   if (!isSupabaseConfigured) {
