@@ -22,6 +22,7 @@ export function AuthProvider({ children }) {
 
   const login = async (credentials) => {
     clearSupabaseSession();
+    localStorage.removeItem('erp03_token');
     const data = await api.login(credentials);
     localStorage.setItem('erp03_token', data.access_token);
     setUser(data.user);
