@@ -1,11 +1,16 @@
-from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
+from uuid import UUID
 
 import httpx
+import jwt
 import pytest
 from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
+from pydantic import SecretStr
+from unittest.mock import AsyncMock
 
+from app.core import security
 from app.core.config import settings
-from app.core.security import verify_supabase_access_token
 
 
 @pytest.mark.asyncio
@@ -13,21 +18,99 @@ async def test_supabase_verification_fails_closed_when_not_configured(monkeypatc
     monkeypatch.setattr(settings, "supabase_url", None)
     monkeypatch.setattr(settings, "supabase_publishable_key", None)
     with pytest.raises(HTTPException) as exc:
-        await verify_supabase_access_token("some-token")
+        await security.verify_supabase_access_token("some-token")
     assert exc.value.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_supabase_verification_rejects_unconfirmed_email(monkeypatch):
+async def test_supabase_verification_requires_confirmed_email(monkeypatch):
     monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
-    monkeypatch.setattr(settings, "supabase_publishable_key", type("Secret", (), {"get_secret_value": lambda self: "public-key"})())
-    response = httpx.Response(200, json={"id": "2d3d0000-0000-4000-8000-000000000001", "email": "user@example.com"})
-    client = AsyncMock()
-    client.get.return_value = response
-    context = AsyncMock()
-    context.__aenter__.return_value = client
-    context.__aexit__.return_value = False
-    with patch("app.core.security.httpx.AsyncClient", return_value=context):
-        with pytest.raises(HTTPException) as exc:
-            await verify_supabase_access_token("unconfirmed-token")
+    monkeypatch.setattr(settings, "supabase_publishable_key", SecretStr("public-key"))
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            json={
+                "id": "2d3d0000-0000-4000-8000-000000000001",
+                "email": "user@example.com",
+            },
+            request=request,
+        )
+    )
+    original_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        security.httpx,
+        "AsyncClient",
+        lambda **kwargs: original_client(transport=transport, **kwargs),
+    )
+    with pytest.raises(HTTPException) as exc:
+        await security.verify_supabase_access_token("unconfirmed-token")
     assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_supabase_verification_accepts_confirmed_identity(monkeypatch):
+    monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "supabase_publishable_key", SecretStr("public-key"))
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            json={
+                "id": "2d3d0000-0000-4000-8000-000000000001",
+                "email": "user@example.com",
+                "email_confirmed_at": "2026-11-26T00:00:00Z",
+            },
+            request=request,
+        )
+    )
+    original_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        security.httpx,
+        "AsyncClient",
+        lambda **kwargs: original_client(transport=transport, **kwargs),
+    )
+    identity = await security.verify_supabase_access_token("valid-token")
+    assert identity["email"] == "user@example.com"
+
+
+@pytest.mark.asyncio
+async def test_supabase_claims_are_derived_from_linked_erp_user(monkeypatch):
+    user = SimpleNamespace(
+        id=UUID("12345678-1234-1234-1234-123456789abc"),
+        business_id=UUID("12345678-1234-1234-1234-123456789abd"),
+        branch_id=None,
+        email="user@example.com",
+        display_name="ERP User",
+    )
+    session = SimpleNamespace(scalar=AsyncMock(return_value=user))
+    monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(
+        security,
+        "decode_access_token",
+        lambda token: (_ for _ in ()).throw(
+            HTTPException(status_code=401, detail="Invalid or expired access token")
+        ),
+    )
+    monkeypatch.setattr(
+        security,
+        "verify_supabase_access_token",
+        AsyncMock(
+            return_value={
+                "id": "2d3d0000-0000-4000-8000-000000000001",
+                "email": "user@example.com",
+                "email_confirmed_at": "2026-11-26T00:00:00Z",
+            }
+        ),
+    )
+    token = jwt.encode(
+        {"iss": "https://example.supabase.co/auth/v1"},
+        "not-used-for-verification",
+        algorithm="HS256",
+    )
+    claims = await security.current_claims(
+        HTTPAuthorizationCredentials(scheme="Bearer", credentials=token),
+        session,
+    )
+    assert claims["sub"] == str(user.id)
+    assert claims["business_id"] == str(user.business_id)
+    assert claims["branch_id"] is None
+    assert claims["auth_provider"] == "supabase"
