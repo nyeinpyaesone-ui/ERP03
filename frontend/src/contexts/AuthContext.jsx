@@ -3,6 +3,7 @@ import { api, ApiError } from '../services/api';
 import {
   clearActiveAuthProvider,
   clearSupabaseSession,
+  getSupabaseAccessToken,
   saveSupabaseSession,
   selectErpProvider,
   selectSupabaseProvider,
@@ -55,14 +56,16 @@ export function AuthProvider({ children }) {
   };
 
   const logout = useCallback(() => {
-    const revocation = signOutSupabase();
+    // Capture the current token only; remote revocation starts after local
+    // credentials and in-memory identity are cleared.
+    const revocationToken = getSupabaseAccessToken().catch(() => null);
     clearSupabaseSession();
     clearActiveAuthProvider();
     localStorage.removeItem('erp03_token');
     setUser(null);
     setProbeError(false);
+    void revocationToken.then((token) => signOutSupabase(token)).catch(() => {});
     window.location.href = '/login';
-    void revocation.catch(() => {});
   }, []);
 
   return (
