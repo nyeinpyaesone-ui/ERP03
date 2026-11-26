@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     @field_validator("cors_origins")
     @classmethod
     def validate_cors_origins(cls, value: str) -> str:
-        origins = [o.strip() for o in value.split(",") if o.strip()]
+        origins = [origin.strip() for origin in value.split(",") if origin.strip()]
         if not origins:
             raise ValueError("CORS_ORIGINS must contain at least one origin")
         for origin in origins:
@@ -102,7 +102,9 @@ class Settings(BaseSettings):
     def validate_production_security(self) -> Settings:
         env = self.environment.lower()
         if bool(self.supabase_url) != bool(self.supabase_publishable_key):
-            raise ValueError("SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY must be configured together")
+            raise ValueError(
+                "SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY must be configured together"
+            )
         if self.supabase_url and not self.supabase_url.startswith("https://"):
             raise ValueError("SUPABASE_URL must use HTTPS")
         if env in {"production", "prod"}:
@@ -115,11 +117,11 @@ class Settings(BaseSettings):
                     "SECRET_KEY must be explicitly configured with at least 32 characters in production"
                 )
             if any(
-                o.startswith(("http://localhost", "http://127.0.0.1"))
-                for o in self.cors_origin_list
+                origin.startswith(("http://localhost", "http://127.0.0.1"))
+                for origin in self.cors_origin_list
             ):
                 raise ValueError("Production CORS_ORIGINS must not contain localhost/127.0.0.1")
-            if any(o.startswith("http://") for o in self.cors_origin_list):
+            if any(origin.startswith("http://") for origin in self.cors_origin_list):
                 raise ValueError("Production CORS_ORIGINS must use HTTPS")
             if "sqlite" in self.database_url.lower():
                 raise ValueError("Production must use PostgreSQL DATABASE_URL, not SQLite")
@@ -144,7 +146,7 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
     def redis_url_parsed(self) -> str | None:
