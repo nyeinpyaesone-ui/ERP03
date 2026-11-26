@@ -26,7 +26,7 @@ A task is complete only when verification exits successfully and prints `RESULT 
 ## Navigation
 
 - New API: add the schema under `ERP-BACKEND/app/schemas/`, business logic under `app/services/`, route under `app/api/`, register it in `app/main.py`, and add focused tests.
-- New database column: update `app/models/`, generate an Alembic revision, review the migration in `app/alembic/versions/`, then validate through the canonical gate.
+- New database column: update `app/models/`, generate an Alembic revision, review the migration in `ERP-BACKEND/alembic/versions/`, then validate through the canonical gate.
 - Do not assume a `dev` branch exists; use the actual base and PR head refs.
 
 ## Version caution
