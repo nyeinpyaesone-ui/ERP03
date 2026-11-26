@@ -9,7 +9,6 @@ from fastapi import status
 from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
 from starlette.responses import JSONResponse
 
-
 REQUEST_COUNT = Counter(
     "erp03_http_requests_total",
     "Total HTTP requests",
