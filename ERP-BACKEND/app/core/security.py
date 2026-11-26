@@ -85,7 +85,11 @@ async def verify_supabase_access_token(token: str) -> dict:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Supabase identity response"
         )
-    if not identity.get("id") or not identity.get("email") or not identity.get("email_confirmed_at"):
+    if (
+        not identity.get("id")
+        or not identity.get("email")
+        or not identity.get("email_confirmed_at")
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="A verified Supabase email identity is required",
@@ -125,7 +129,7 @@ async def current_claims(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Supabase identity is not linked to an active ERP03 user",
-            )
+            ) from None
         return {
             "sub": str(user.id),
             "business_id": str(user.business_id),
