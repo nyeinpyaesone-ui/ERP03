@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import httpx
@@ -7,7 +8,6 @@ import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import SecretStr
-from unittest.mock import AsyncMock
 
 from app.core import security
 from app.core.config import settings
