@@ -140,18 +140,16 @@ export async function getSupabaseAccessToken() {
   return refreshed.access_token || null;
 }
 
-export async function signOutSupabase() {
-  const token = await getSupabaseAccessToken();
-  if (token && isSupabaseConfigured) {
-    try {
-      await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/auth/v1/logout`, {
-        method: 'POST',
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(2500),
-      });
-    } catch {
-      // Local sign-out is authoritative; remote revocation is best effort.
-    }
+export async function signOutSupabase(accessToken) {
+  if (!accessToken || !isSupabaseConfigured) return;
+  try {
+    await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/auth/v1/logout`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(2500),
+      keepalive: true,
+    });
+  } catch {
+    // Local sign-out is authoritative; remote revocation is bounded best effort.
   }
-  clearSupabaseSession();
 }
