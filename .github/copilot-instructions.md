@@ -13,7 +13,7 @@ bash scripts/agent/verify.sh
 
 The second command is the only completion gate. Do not substitute standalone pytest, Ruff, frontend-build, or hand-written command sequences for it. Those commands may be used only to diagnose a failure, not to declare completion.
 
-A task is complete only when verification exits successfully and prints `RESULT PASS`. Report the exact `.agent/evidence/<stamp>.json` path and quote its `result`, `commit`, and `used_pg` values. A local SQLite fallback can still produce `RESULT PASS`; it does not prove PostgreSQL production-config qualification. CI's `agent-parity.yml` runs the same bootstrap and verify commands with PostgreSQL 15 and Redis 7.
+A task is complete only when verification exits successfully and prints `RESULT PASS`. Report the exact `.agent/evidence/<stamp>.json` path and quote its `result`, `commit`, and `used_pg` values. A local SQLite fallback can still produce `RESULT PASS`; it does not prove PostgreSQL production-config qualification. CI's `agent-parity.yml` provisions PostgreSQL 15 and Redis 7, but the evidence field `used_pg` is authoritative: a green job with `used_pg: false` is SQLite qualification, not PostgreSQL qualification. A recent PR #310 run provisioned healthy services but still fell back to SQLite; treat that as an unresolved qualification issue until the probe failure is diagnosed.
 
 ## Repository invariants
 
