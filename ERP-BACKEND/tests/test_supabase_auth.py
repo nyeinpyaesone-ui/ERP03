@@ -1,4 +1,6 @@
+import os
 from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -40,12 +42,10 @@ async def test_supabase_verification_rejects_unconfirmed_email(monkeypatch):
         await verify_supabase_access_token("unconfirmed-token")
     assert exc.value.status_code == 401
 
+
 @pytest.mark.asyncio
 async def test_local_supabase_signup_token_is_accepted_by_backend(monkeypatch):
     """Exercise the real local GoTrue endpoint and the backend's token verifier."""
-    import os
-    from uuid import uuid4
-
     if os.getenv("SUPABASE_AUTH_INTEGRATION") != "true":
         pytest.skip("local Supabase Auth integration job only")
 
@@ -78,8 +78,6 @@ async def test_local_supabase_signup_token_is_accepted_by_backend(monkeypatch):
 @pytest.mark.asyncio
 async def test_local_supabase_rejects_invalid_access_token(monkeypatch):
     """Ensure the backend fails closed against the running local Auth service."""
-    import os
-
     if os.getenv("SUPABASE_AUTH_INTEGRATION") != "true":
         pytest.skip("local Supabase Auth integration job only")
 
