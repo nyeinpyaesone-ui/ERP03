@@ -90,9 +90,7 @@ async def link_supabase_identity(
         select(User).where(User.id == erp_user_id, User.active.is_(True))
     )
     if erp_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="ERP user is inactive"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="ERP user is inactive")
 
     identity = await verify_supabase_access_token(payload.access_token)
     try:
