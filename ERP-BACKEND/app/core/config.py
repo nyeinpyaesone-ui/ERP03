@@ -114,7 +114,8 @@ class Settings(BaseSettings):
                 or len(secret) < 32
             ):
                 raise ValueError(
-                    "SECRET_KEY must be explicitly configured with at least 32 characters in production"
+                    "SECRET_KEY must be explicitly configured with at least 32 "
+                    "characters in production"
                 )
             if any(
                 origin.startswith(("http://localhost", "http://127.0.0.1"))
