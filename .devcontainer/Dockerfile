@@ -1,25 +1,20 @@
 # syntax=docker/dockerfile:1
-# Python 3.12 Bookworm is published for linux/amd64 and linux/arm64.
-# The previous universal image is x86-64-only and cannot be used for ARM64 builds.
+# Python 3.12 Bookworm supports linux/amd64 and linux/arm64.
 FROM mcr.microsoft.com/devcontainers/python:3-3.12-bookworm
 
 USER root
 
-# Remove an inherited stale Yarn APT source before apt-get update. ERP03 uses npm;
-# keeping an unused third-party Yarn source can make a valid base image fail
-# when that repository's signing key changes.
+# Remove an inherited stale Yarn APT source before apt-get update.
 RUN set -eux; \
     for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do \
       [ -f "$source" ] || continue; \
-      if grep -q 'dl.yarnpkg.com/debian' "$source"; then \
-        rm -f "$source"; \
-      fi; \
+      if grep -q 'dl.yarnpkg.com/debian' "$source"; then rm -f "$source"; fi; \
     done; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates curl; \
     rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 22 from the official NodeSource repository.
+# Node 22 satisfies the repository's Vite 8 toolchain.
 RUN set -eux; \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
     apt-get update; \
@@ -27,6 +22,7 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 ENV VIRTUAL_ENV=/opt/erp03-venv
+ENV VENV_DIR=/opt/erp03-venv
 ENV PATH="/opt/erp03-venv/bin:${PATH}"
 
 WORKDIR /workspace
@@ -39,9 +35,10 @@ COPY ERP-BACKEND/requirements.txt ERP-BACKEND/dev-requirements.txt /workspace/ER
 RUN python -m venv "$VIRTUAL_ENV" \
     && python -m pip install --upgrade pip \
     && pip install -r /workspace/ERP-BACKEND/requirements.txt \
-    && pip install -r /workspace/ERP-BACKEND/dev-requirements.txt
+    && pip install -r /workspace/ERP-BACKEND/dev-requirements.txt \
+    && chown -R vscode:vscode "$VIRTUAL_ENV"
 
 COPY frontend/package.json frontend/package-lock.json /workspace/frontend/
-RUN cd /workspace/frontend && npm ci --no-audit --no-fund
+RUN cd /workspace/frontend && npm ci --no-audit --no-fund --include=optional
 
 USER vscode
