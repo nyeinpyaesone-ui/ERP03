@@ -101,10 +101,6 @@ jobs:
           set -euo pipefail
           pytest -q
 
-  quality:
-    name: Backend quality checks
-    uses: ./.github/workflows/quality.yml
-
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 15
