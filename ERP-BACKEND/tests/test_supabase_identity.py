@@ -3,10 +3,8 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-
 from app.core.errors import ConflictError, ForbiddenError
 from app.services.supabase_identity import link_supabase_identity
-
 from sqlalchemy.exc import IntegrityError
 
 
