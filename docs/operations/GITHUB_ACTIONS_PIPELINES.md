@@ -36,9 +36,9 @@ flowchart TD
 
 ## Current verification findings
 
-- `.github/workflows/policy.yml` is present. Policy Enforcement run #495 on PR #318 ended `startup_failure` with zero jobs; no job logs exist, so the startup cause remains unresolved.
+- `.github/workflows/policy.yml` is present. Recent PR-triggered Policy Enforcement runs ended `startup_failure` with zero jobs; no job logs exist, so the startup cause remains unresolved.
 - On prior branch head `5a1d792666ceb4d6e322ff77723ad69e92cd7aa9`, CI backend/frontend, Quality, Docker backend publisher, Frontend Container, Coverage and Type Check completed successfully. Agent Parity was cancelled; the Devcontainer workflow's main devcontainer build was cancelled while its frontend/backend development image jobs succeeded.
-- Latest branch head has only a pending Coverage run; no full CI/Agent Parity run is associated with it. The final Compose image-tag correction therefore still needs a fresh qualification run.
+- A later PR run set is active/incomplete; consult PR #318 for live check conclusions. No all-green result is claimed, and the final Compose image-tag correction still needs a completed full qualification run.
 - The Policy Enforcement startup issue is separate from the reusable release chain and must be fixed before claiming all repository checks are green.
 
 ## Registry and token model
@@ -141,7 +141,7 @@ For an external event producer, the supported GitHub dispatch endpoint is `POST 
 - [x] Remove unverified static PyPI-token publishing path.
 - [ ] Confirm actual staging/production Environment variables, secrets and protection rules in GitHub Settings; workflow references alone do not prove they are configured.
 - [ ] Populate runtime secrets through GitHub Settings using newly generated values; values cannot be read back through the GitHub API.
-- [ ] Obtain a fresh full PR qualification run on the latest head; the pending Coverage-only run does not validate the final setup image-tag change.
+- [ ] Complete full PR qualification on the latest head; do not treat a partial or documentation-only run as proof of the final setup image-tag change.
 - [ ] Resolve `.github/workflows/policy.yml` startup failure and verify GHCR package access for the deployment workflow's built-in read-only token.
 - [ ] Add and test automatic rollback for production; staging already has a rollback path.
 
