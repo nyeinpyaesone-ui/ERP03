@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.validation import validate_idempotency_key
@@ -17,6 +17,7 @@ router = APIRouter(prefix="/sales", tags=["sales"])
 @router.post("", response_model=SaleResultResponse, status_code=status.HTTP_201_CREATED)
 async def create_sale(
     payload: CreateSaleRequest,
+    request: Request,
     claims: dict = Depends(permission_dependency("sales.create")),
     session: AsyncSession = Depends(get_db_session),
     x_idempotency_key: str | None = Header(default=None),
@@ -45,6 +46,7 @@ async def create_sale(
         lines=[SaleLine(**line.model_dump()) for line in payload.lines],
         payments=[SalePayment(**payment.model_dump()) for payment in payload.payments],
         idempotency_key=f"{business_id}:{idempotency_key}",
+        request_id=getattr(request.state, "request_id", None),
     )
     return SaleResultResponse(
         invoice_id=str(result.invoice_id),

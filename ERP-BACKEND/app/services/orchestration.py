@@ -6,14 +6,15 @@ when its domain transaction commits; the operation row and the domain
 mutations are updated in the same database transaction so either both
 succeed or neither does.
 
-The reconciliation worker is safe under multiple replicas: claiming an
-operation is an atomic conditional UPDATE (state re-checked inside the
-write transaction), so two workers never process the same operation.
+The reconciliation service is safe under multiple replicas: PostgreSQL row
+claims use SELECT FOR UPDATE SKIP LOCKED, and completion/failure paths fence
+stale workers by reloading and locking the current lease owner.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -23,10 +24,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError
+from app.core.operation_metrics import record_operation_retry, record_operation_transition
 from app.models.operations import (
     Operation,
     OperationState,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class OperationService:
@@ -36,13 +40,30 @@ class OperationService:
         self.session = session
         self.worker_id = worker_id or f"worker-{id(self)}"
 
+    def _record_transition(self, operation: Operation, from_state: str, to_state: str) -> None:
+        record_operation_transition(operation.operation_type, from_state, to_state)
+        fields = {
+            "operation_id": operation.operation_id,
+            "operation_type": operation.operation_type,
+            "business_id": str(operation.business_id),
+            "branch_id": str(operation.branch_id) if operation.branch_id else None,
+            "from_state": from_state,
+            "to_state": to_state,
+            "worker_id": self.worker_id,
+        }
+        request_id = operation.payload_json.get("request_id")
+        if isinstance(request_id, str):
+            fields["request_id"] = request_id
+        logger.info("operation_state_transition", extra=fields)
+
     # ------------------------------------------------------------------ create
 
     @staticmethod
     def _canonical_payload(payload: dict[str, Any]) -> str:
         """Serialize a command deterministically for idempotency comparison."""
+        command = {key: value for key, value in payload.items() if key != "request_id"}
         return json.dumps(
-            payload,
+            command,
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=False,
@@ -123,6 +144,7 @@ class OperationService:
                 canonical_payload=canonical_payload,
             )
             return existing
+        self._record_transition(operation, "new", OperationState.PENDING.value)
         return operation
 
     # ------------------------------------------------------------------ read
@@ -189,9 +211,76 @@ class OperationService:
             if datetime.now(UTC) < backoff:
                 return None
 
+        previous_state = operation.state.value
         operation.state = OperationState.PROCESSING
         operation.claimed_at = datetime.now(UTC)
         operation.claimed_by = self.worker_id
+        operation.updated_at = datetime.now(UTC)
+        await self.session.flush()
+        self._record_transition(operation, previous_state, OperationState.PROCESSING.value)
+        return operation
+
+    async def start_operation(self, operation: Operation) -> Operation:
+        """Move a durable operation into PROCESSING within its caller transaction.
+
+        Synchronous domain handlers call this after creating the operation and
+        commit the state together with the domain mutation. Background workers
+        should continue to use claim_next() so row-level leases are respected.
+        """
+        current = await self.session.scalar(
+            select(Operation)
+            .where(Operation.id == operation.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if (
+            current is None
+            or not current.is_claimable
+            or not current.can_transition_to(OperationState.PROCESSING)
+        ):
+            raise ConflictError("Operation cannot transition to processing")
+        previous_state = current.state.value
+        now = datetime.now(UTC)
+        current.state = OperationState.PROCESSING
+        current.claimed_at = now
+        current.claimed_by = self.worker_id
+        current.updated_at = now
+        await self.session.flush()
+        self._record_transition(current, previous_state, OperationState.PROCESSING.value)
+        return current
+
+    async def _lock_processing_operation(self, operation: Operation) -> Operation:
+        """Reload and lock an operation, enforcing the current worker lease."""
+        current = await self.session.scalar(
+            select(Operation)
+            .where(Operation.id == operation.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if (
+            current is None
+            or current.state != OperationState.PROCESSING
+            or current.claimed_by != self.worker_id
+        ):
+            raise ConflictError(
+                f"Worker {self.worker_id} no longer owns operation {operation.operation_id}"
+            )
+        return current
+
+    async def heartbeat(self, operation_id: str) -> Operation:
+        """Renew the processing lease only while this worker still owns it."""
+        operation = await self.session.scalar(
+            select(Operation)
+            .where(Operation.operation_id == operation_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if (
+            operation is None
+            or operation.state != OperationState.PROCESSING
+            or operation.claimed_by != self.worker_id
+        ):
+            raise ConflictError(f"Worker {self.worker_id} no longer owns operation {operation_id}")
         operation.updated_at = datetime.now(UTC)
         await self.session.flush()
         return operation
@@ -208,10 +297,12 @@ class OperationService:
         commits the domain mutations (invoice, payment, stock), so the
         operation outcome and the business result are atomic.
         """
+        operation = await self._lock_processing_operation(operation)
         if not operation.can_transition_to(OperationState.COMMITTED):
             raise ConflictError(
                 f"Operation {operation.operation_id} cannot transition to committed"
             )
+        previous_state = operation.state.value
         operation.state = OperationState.COMMITTED
         operation.result_json = result
         operation.committed_at = datetime.now(UTC)
@@ -219,6 +310,7 @@ class OperationService:
         operation.claimed_at = None
         operation.claimed_by = None
         await self.session.flush()
+        self._record_transition(operation, previous_state, OperationState.COMMITTED.value)
 
     async def fail_operation(
         self,
@@ -228,8 +320,10 @@ class OperationService:
         error_message: str,
     ) -> None:
         """Record a failed attempt and either schedule retry or escalate."""
+        operation = await self._lock_processing_operation(operation)
         if not operation.can_transition_to(OperationState.FAILED):
             raise ConflictError(f"Operation {operation.operation_id} cannot transition to failed")
+        previous_state = operation.state.value
         operation.retry_count += 1
         operation.error_code = error_code
         operation.error_message = error_message
@@ -245,6 +339,8 @@ class OperationService:
             operation.backoff_until = datetime.now(UTC) + timedelta(seconds=backoff_seconds)
             operation.state = OperationState.FAILED
         await self.session.flush()
+        self._record_transition(operation, previous_state, operation.state.value)
+        record_operation_retry(operation.operation_type, error_code)
 
     async def cancel_operation(self, operation: Operation) -> None:
         """Cancel a non-terminal operation for controlled manual recovery."""
@@ -252,11 +348,13 @@ class OperationService:
             raise ConflictError(
                 f"Operation {operation.operation_id} cannot transition to cancelled"
             )
+        previous_state = operation.state.value
         operation.state = OperationState.CANCELLED
         operation.claimed_at = None
         operation.claimed_by = None
         operation.updated_at = datetime.now(UTC)
         await self.session.flush()
+        self._record_transition(operation, previous_state, OperationState.CANCELLED.value)
 
     # ------------------------------------------------------------------ reconcile
 
@@ -292,4 +390,8 @@ class OperationService:
             operation.updated_at = datetime.now(UTC)
             recovered.append(operation)
         await self.session.flush()
+        for operation in recovered:
+            self._record_transition(
+                operation, OperationState.PROCESSING.value, OperationState.PENDING.value
+            )
         return recovered

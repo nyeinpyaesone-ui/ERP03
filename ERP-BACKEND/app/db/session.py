@@ -43,7 +43,24 @@ def _create_engine() -> Any:
         "echo": settings.db_echo,
         "future": True,
     }
-    return create_async_engine(settings.database_url, **kwargs)
+    engine = create_async_engine(settings.database_url, **kwargs)
+
+    # sqlite3's legacy transaction mode does not BEGIN for SELECT statements.
+    # A SAVEPOINT released before an explicit BEGIN can therefore commit
+    # independently of the caller's transaction. Disable driver-managed
+    # transaction control and make SQLAlchemy own BEGIN so nested savepoints
+    # remain inside the outer unit of work and roll back atomically.
+    @event.listens_for(engine.sync_engine, "connect")
+    def _disable_sqlite_driver_transaction_control(
+        dbapi_connection: Any, connection_record: Any
+    ) -> None:
+        dbapi_connection.isolation_level = None
+
+    @event.listens_for(engine.sync_engine, "begin")
+    def _begin_sqlite_transaction(connection: Any) -> None:
+        connection.exec_driver_sql("BEGIN")
+
+    return engine
 
 
 def _wire_pool_metrics(pool: Any) -> None:

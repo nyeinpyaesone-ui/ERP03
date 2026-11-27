@@ -1,5 +1,7 @@
 """Coverage for the cross-module operation orchestration state machine."""
 
+import asyncio
+import os
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -67,6 +69,32 @@ async def test_create_operation_is_idempotent_by_operation_id():
 
 
 @pytest.mark.asyncio
+async def test_request_id_does_not_change_operation_command_identity():
+    """A retry may carry a new request ID without changing the idempotent command."""
+    business, branch, _warehouse, _user = await _bootstrap("ORCHRID")
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        first = await service.create_operation(
+            operation_id="orch-request-id-001",
+            operation_type="pos.sale",
+            business_id=business.id,
+            branch_id=branch.id,
+            payload={"product": "widget", "qty": 1, "request_id": "request-a"},
+        )
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        replay = await service.create_operation(
+            operation_id="orch-request-id-001",
+            operation_type="pos.sale",
+            business_id=business.id,
+            branch_id=branch.id,
+            payload={"product": "widget", "qty": 1, "request_id": "request-b"},
+        )
+    assert replay.id == first.id
+    assert replay.payload_json["request_id"] == "request-a"
+
+
+@pytest.mark.asyncio
 async def test_claim_next_marks_pending_operation_processing():
     """Claiming transitions PENDING -> PROCESSING and stamps the worker."""
     business, branch, _warehouse, _user = await _bootstrap("ORCHC")
@@ -101,9 +129,13 @@ async def test_claim_next_returns_none_when_no_claimable_operations():
     assert claimed is None
 
 
+@pytest.mark.skipif(
+    os.environ.get("DATABASE_URL", "").startswith("sqlite"),
+    reason="independent worker claims require PostgreSQL row locks",
+)
 @pytest.mark.asyncio
 async def test_concurrent_workers_claim_different_operations():
-    """Two claimable operations are claimed by separate workers, never doubled."""
+    """Two independent PostgreSQL sessions must never claim the same row."""
     business, branch, _warehouse, _user = await _bootstrap("ORCHCC")
     async with SessionFactory() as session, session.begin():
         service = OperationService(session)
@@ -121,16 +153,22 @@ async def test_concurrent_workers_claim_different_operations():
             branch_id=branch.id,
             payload={"n": 2},
         )
-        await session.commit()
-    async with SessionFactory() as session, session.begin():
-        service_a = OperationService(session, worker_id="worker-a")
-        service_b = OperationService(session, worker_id="worker-b")
-        claimed_a = await service_a.claim_next()
-        claimed_b = await service_b.claim_next()
-        await session.commit()
+
+    async def claim(worker_id: str):
+        async with SessionFactory() as session, session.begin():
+            operation = await OperationService(session, worker_id=worker_id).claim_next()
+            await asyncio.sleep(0.1)
+            if operation is None:
+                return None
+            return operation.id, operation.claimed_by
+
+    claimed_a, claimed_b = await asyncio.gather(
+        claim("worker-a"),
+        claim("worker-b"),
+    )
     assert claimed_a is not None and claimed_b is not None
-    assert claimed_a.id != claimed_b.id
-    assert {claimed_a.claimed_by, claimed_b.claimed_by} == {"worker-a", "worker-b"}
+    assert claimed_a[0] != claimed_b[0]
+    assert {claimed_a[1], claimed_b[1]} == {"worker-a", "worker-b"}
 
 
 @pytest.mark.asyncio
@@ -266,6 +304,74 @@ async def test_reconcile_stale_recovers_processing_operations():
     assert reclaimed is not None
     assert reclaimed.state == OperationState.PROCESSING
     assert reclaimed.claimed_by == "worker-b"
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_renews_lease_and_prevents_stale_reconciliation():
+    """A live owner can renew its lease so another worker does not reclaim it."""
+    business, branch, _warehouse, _user = await _bootstrap("ORCHHB")
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session, worker_id="worker-a")
+        await service.create_operation(
+            operation_id="orch-heartbeat-001",
+            operation_type="pos.sale",
+            business_id=business.id,
+            branch_id=branch.id,
+            payload={"product": "widget"},
+        )
+        operation = await service.claim_next()
+        assert operation is not None
+        operation.updated_at = datetime.now(UTC) - timedelta(hours=2)
+
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session, worker_id="worker-a")
+        renewed = await service.heartbeat("orch-heartbeat-001")
+        assert renewed.updated_at > datetime.now(UTC) - timedelta(seconds=10)
+
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session, worker_id="worker-b")
+        recovered = await service.reconcile_stale(stale_after_seconds=300)
+    assert recovered == []
+
+
+@pytest.mark.asyncio
+async def test_stale_worker_cannot_commit_after_operation_is_reclaimed():
+    """Lease fencing rejects a late commit after another worker reclaims the row."""
+    business, branch, _warehouse, _user = await _bootstrap("ORCHFENCE")
+    async with SessionFactory() as stale_session:
+        stale_service = OperationService(stale_session, worker_id="worker-a")
+        async with stale_session.begin():
+            await stale_service.create_operation(
+                operation_id="orch-fence-001",
+                operation_type="pos.sale",
+                business_id=business.id,
+                branch_id=branch.id,
+                payload={"product": "widget"},
+            )
+        async with stale_session.begin():
+            stale_operation = await stale_service.claim_next()
+            assert stale_operation is not None
+
+        async with SessionFactory() as session, session.begin():
+            operation = await session.scalar(
+                select(Operation).where(Operation.operation_id == "orch-fence-001")
+            )
+            operation.updated_at = datetime.now(UTC) - timedelta(hours=2)
+
+        async with SessionFactory() as session, session.begin():
+            new_service = OperationService(session, worker_id="worker-b")
+            recovered = await new_service.reconcile_stale(stale_after_seconds=300)
+            assert len(recovered) == 1
+            reclaimed = await new_service.claim_next()
+            assert reclaimed is not None
+            assert reclaimed.claimed_by == "worker-b"
+
+        with pytest.raises(ConflictError, match="no longer owns"):
+            async with stale_session.begin():
+                await stale_service.commit_operation(
+                    stale_operation,
+                    result={"invoice_id": "must-not-commit"},
+                )
 
 
 @pytest.mark.asyncio

@@ -11,8 +11,11 @@ from app.db.session import SessionFactory
 from app.main import app
 from app.models.erp import Invoice, Product, StockBalance, Warehouse
 from app.models.identity import Branch
+from app.models.operations import Operation, OperationState
+from app.services import sales as sales_service
 from app.services.bootstrap import bootstrap_business
-from app.services.sales import SaleLine, SalePayment, create_pos_sale
+from app.services.inventory import adjust_stock as real_adjust_stock
+from app.services.sales import SaleLine, SalePayment, create_pos_sale, sale_operation_id
 from sqlalchemy import select
 
 pytestmark = pytest.mark.integration  # migrated DB provisioned by conftest (SQLite or PostgreSQL)
@@ -65,6 +68,7 @@ async def test_bootstrap_login_and_pos_sale_round_trip():
             )
         )
 
+    key = f"sale-{uuid4().hex}"
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://test",
@@ -84,7 +88,7 @@ async def test_bootstrap_login_and_pos_sale_round_trip():
             "/api/v1/sales",
             headers={
                 "Authorization": f"Bearer {token}",
-                "X-Idempotency-Key": f"sale-{uuid4().hex}",
+                "X-Idempotency-Key": key,
             },
             json={
                 "branch_id": str(branch.id),
@@ -119,6 +123,21 @@ async def test_bootstrap_login_and_pos_sale_round_trip():
         )
         assert balance is not None
         assert balance.quantity == Decimal("3")
+        operation = await session.scalar(
+            select(Operation).where(
+                Operation.operation_id
+                == sale_operation_id(business.id, branch.id, f"{business.id}:{key}")
+            )
+        )
+        assert operation is not None
+        assert operation.state == OperationState.COMMITTED
+        assert operation.payload_json["request_id"] == sale.headers["x-request-id"]
+        assert operation.result_json == {
+            "invoice_id": sale.json()["invoice_id"],
+            "total": "200.00",
+            "paid": "200.00",
+            "balance": "0.00",
+        }
 
         invoice = await session.scalar(
             select(Invoice).where(Invoice.id == sale.json()["invoice_id"])
@@ -128,7 +147,9 @@ async def test_bootstrap_login_and_pos_sale_round_trip():
 
 
 @pytest.mark.asyncio
-async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
+async def test_pos_sale_rollback_restores_stock_and_operation_after_post_mutation_failure(
+    monkeypatch,
+):
     business, branch, warehouse, _ = await _bootstrap("RB")
     async with SessionFactory() as session, session.begin():
         product = Product(
@@ -152,8 +173,15 @@ async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
         )
 
     invoice_no = f"INV-{uuid4().hex[:8]}"
+    key = f"rollback-{uuid4().hex}"
+
+    async def fail_after_stock(*args, **kwargs):
+        await real_adjust_stock(*args, **kwargs)
+        raise PaymentError("injected failure after stock mutation")
+
+    monkeypatch.setattr(sales_service, "adjust_stock", fail_after_stock)
     async with SessionFactory() as session:
-        with pytest.raises(PaymentError):
+        with pytest.raises(PaymentError, match="injected failure"):
             await create_pos_sale(
                 session,
                 business_id=business.id,
@@ -161,7 +189,8 @@ async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
                 warehouse_id=warehouse.id,
                 invoice_no=invoice_no,
                 lines=[SaleLine(product.id, Decimal("1"))],
-                payments=[SalePayment(method="x" * 33, amount=Decimal("50"))],
+                payments=[SalePayment(method="cash", amount=Decimal("50"))],
+                idempotency_key=f"{business.id}:{key}",
             )
         await session.rollback()
 
@@ -175,6 +204,13 @@ async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
         assert balance is not None
         assert balance.quantity == Decimal("2")
         assert await session.scalar(select(Invoice).where(Invoice.invoice_no == invoice_no)) is None
+        operation = await session.scalar(
+            select(Operation).where(
+                Operation.operation_id
+                == sale_operation_id(business.id, branch.id, f"{business.id}:{key}")
+            )
+        )
+        assert operation is None
 
 
 @pytest.mark.asyncio
@@ -233,6 +269,80 @@ async def test_concurrent_sales_cannot_oversell_stock():
         )
         assert balance is not None
         assert balance.quantity == Decimal("0")
+
+
+@pytest.mark.skipif(
+    os.environ.get("DATABASE_URL", "").startswith("sqlite"),
+    reason="concurrent idempotency replay requires PostgreSQL row locks",
+)
+@pytest.mark.asyncio
+async def test_concurrent_replay_with_same_idempotency_key_commits_once():
+    """Concurrent delivery of one request returns one invoice and one stock decrement."""
+    business, branch, warehouse, _user = await _bootstrap("IDCC")
+    async with SessionFactory() as session, session.begin():
+        product = Product(
+            business_id=business.id,
+            branch_id=branch.id,
+            sku=f"SKU-{uuid4().hex[:8]}",
+            name="Concurrent Idempotency Product",
+            unit="pcs",
+            sale_price=Decimal("100.00"),
+            cost_price=Decimal("60.00"),
+            active=True,
+        )
+        session.add(product)
+        await session.flush()
+        session.add(
+            StockBalance(
+                warehouse_id=warehouse.id,
+                product_id=product.id,
+                quantity=Decimal("5"),
+            )
+        )
+
+    key = f"{business.id}:concurrent-{uuid4().hex}"
+    invoice_no = f"INV-{uuid4().hex[:12]}"
+
+    async def attempt():
+        async with SessionFactory() as session:
+            return await create_pos_sale(
+                session,
+                business_id=business.id,
+                branch_id=branch.id,
+                warehouse_id=warehouse.id,
+                invoice_no=invoice_no,
+                lines=[SaleLine(product.id, Decimal("1"))],
+                payments=[SalePayment(method="cash", amount=Decimal("100.00"))],
+                idempotency_key=key,
+            )
+
+    first, second = await asyncio.gather(attempt(), attempt())
+    assert first.invoice_id == second.invoice_id
+
+    async with SessionFactory() as session:
+        balance = await session.scalar(
+            select(StockBalance).where(
+                StockBalance.warehouse_id == warehouse.id,
+                StockBalance.product_id == product.id,
+            )
+        )
+        invoices = (
+            await session.scalars(
+                select(Invoice).where(
+                    Invoice.business_id == business.id,
+                    Invoice.branch_id == branch.id,
+                    Invoice.idempotency_key == key,
+                )
+            )
+        ).all()
+        operation = await session.scalar(
+            select(Operation).where(
+                Operation.operation_id == sale_operation_id(business.id, branch.id, key)
+            )
+        )
+    assert balance is not None and balance.quantity == Decimal("4")
+    assert len(invoices) == 1
+    assert operation is not None and operation.state == OperationState.COMMITTED
 
 
 @pytest.mark.asyncio
