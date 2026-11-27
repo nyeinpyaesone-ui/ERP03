@@ -110,7 +110,7 @@ For an external event producer, the supported GitHub dispatch endpoint is `POST 
 
 - Require environment reviewers for production where supported; prevent self-review and bypass.
 - Restrict deployment branches to `main` for staging and the approved release path for production.
-- Use immutable image digests for staging; production currently accepts a version tag and resolves it to the matching image tags.
+- Use immutable image digests for both staging and production. Production validates both SHA-256 digests and checks each OCI revision label against the checked-out release-tag commit.
 - Staging workflow performs health checks and rollback. Production workflow performs health checks but does not yet implement automatic rollback; production readiness remains incomplete until rollback is added and tested.
 - The legacy canary workflow is now disabled because it used Docker Hub and example domains rather than a verified deployment target.
 
@@ -126,8 +126,11 @@ For an external event producer, the supported GitHub dispatch endpoint is `POST 
 
 - [x] Inspect current `main` workflows, Dockerfiles, Compose image names, settings and open PR inventory.
 - [x] Confirm all newly referenced Actions use full commit SHAs.
-- [x] Add reusable workflow contracts and explicit `needs` ordering.
+- [x] Add reusable workflow contracts, image-digest outputs and explicit `needs` ordering.
 - [x] Reuse the signed backend GHCR workflow and retain frontend multi-architecture manifest verification.
+- [x] Publish backend/frontend digests in release notes for downstream deployment inputs.
+- [x] Use built-in read-only `GITHUB_TOKEN` for staging/production GHCR pulls; separate SSH secrets from non-sensitive Environment variables.
+- [x] Make production deployment consume immutable image digests and verify source-revision labels.
 - [x] Remove unverified static PyPI-token publishing path.
 - [ ] Confirm actual staging/production Environment variables, secrets and protection rules in GitHub Settings; workflow references alone do not prove they are configured.
 - [ ] Populate runtime secrets through GitHub Settings using newly generated values; values cannot be read back through the GitHub API.
