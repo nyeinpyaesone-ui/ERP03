@@ -270,6 +270,79 @@ async def test_concurrent_sales_cannot_oversell_stock():
         assert balance.quantity == Decimal("0")
 
 
+@pytest.mark.skipif(
+    os.environ.get("DATABASE_URL", "").startswith("sqlite"),
+    reason="concurrent idempotency replay requires PostgreSQL row locks",
+)
+@pytest.mark.asyncio
+async def test_concurrent_replay_with_same_idempotency_key_commits_once():
+    """Concurrent delivery of one request returns one invoice and one stock decrement."""
+    business, branch, warehouse, _user = await _bootstrap("IDCC")
+    async with SessionFactory() as session, session.begin():
+        product = Product(
+            business_id=business.id,
+            branch_id=branch.id,
+            sku=f"SKU-{uuid4().hex[:8]}",
+            name="Concurrent Idempotency Product",
+            unit="pcs",
+            sale_price=Decimal("100.00"),
+            cost_price=Decimal("60.00"),
+            active=True,
+        )
+        session.add(product)
+        await session.flush()
+        session.add(
+            StockBalance(
+                warehouse_id=warehouse.id,
+                product_id=product.id,
+                quantity=Decimal("5"),
+            )
+        )
+
+    key = f"{business.id}:concurrent-{uuid4().hex}"
+    invoice_no = f"INV-{uuid4().hex[:12]}"
+
+    async def attempt():
+        async with SessionFactory() as session:
+            return await create_pos_sale(
+                session,
+                business_id=business.id,
+                branch_id=branch.id,
+                warehouse_id=warehouse.id,
+                invoice_no=invoice_no,
+                lines=[SaleLine(product.id, Decimal("1"))],
+                payments=[SalePayment(method="cash", amount=Decimal("100.00"))],
+                idempotency_key=key,
+            )
+
+    first, second = await asyncio.gather(attempt(), attempt())
+    assert first.invoice_id == second.invoice_id
+
+    async with SessionFactory() as session:
+        balance = await session.scalar(
+            select(StockBalance).where(
+                StockBalance.warehouse_id == warehouse.id,
+                StockBalance.product_id == product.id,
+            )
+        )
+        invoices = (
+            await session.scalars(
+                select(Invoice).where(
+                    Invoice.business_id == business.id,
+                    Invoice.branch_id == branch.id,
+                    Invoice.idempotency_key == key,
+                )
+            )
+        ).all()
+        operation = await session.scalar(
+            select(Operation).where(
+                Operation.operation_id == sale_operation_id(business.id, branch.id, key)
+            )
+        )
+    assert balance is not None and balance.quantity == Decimal("4")
+    assert len(invoices) == 1
+    assert operation is not None and operation.state == OperationState.COMMITTED
+
 @pytest.mark.asyncio
 async def test_owner_token_cannot_cross_branch_boundary():
     business, branch, warehouse, user = await _bootstrap("BR")
