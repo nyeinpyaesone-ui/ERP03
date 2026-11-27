@@ -10,9 +10,12 @@ from app.core.errors import PaymentError
 from app.db.session import SessionFactory
 from app.main import app
 from app.models.erp import Invoice, Product, StockBalance, Warehouse
+from app.models.operations import Operation, OperationState
 from app.models.identity import Branch
 from app.services.bootstrap import bootstrap_business
-from app.services.sales import SaleLine, SalePayment, create_pos_sale
+from app.services import sales as sales_service
+from app.services.inventory import adjust_stock as real_adjust_stock
+from app.services.sales import SaleLine, SalePayment, create_pos_sale, sale_operation_id
 from sqlalchemy import select
 
 pytestmark = pytest.mark.integration  # migrated DB provisioned by conftest (SQLite or PostgreSQL)
@@ -119,6 +122,21 @@ async def test_bootstrap_login_and_pos_sale_round_trip():
         )
         assert balance is not None
         assert balance.quantity == Decimal("3")
+        operation = await session.scalar(
+            select(Operation).where(
+                Operation.operation_id == sale_operation_id(
+                    business.id, branch.id, f"{business.id}:{key}"
+                )
+            )
+        )
+        assert operation is not None
+        assert operation.state == OperationState.COMMITTED
+        assert operation.result_json == {
+            "invoice_id": first.json()["invoice_id"],
+            "total": "200.00",
+            "paid": "200.00",
+            "balance": "0.00",
+        }
 
         invoice = await session.scalar(
             select(Invoice).where(Invoice.id == sale.json()["invoice_id"])
@@ -128,7 +146,7 @@ async def test_bootstrap_login_and_pos_sale_round_trip():
 
 
 @pytest.mark.asyncio
-async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
+async def test_pos_sale_rollback_restores_stock_and_operation_after_post_mutation_failure(monkeypatch):
     business, branch, warehouse, _ = await _bootstrap("RB")
     async with SessionFactory() as session, session.begin():
         product = Product(
@@ -152,8 +170,15 @@ async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
         )
 
     invoice_no = f"INV-{uuid4().hex[:8]}"
+    key = f"rollback-{uuid4().hex}"
+
+    async def fail_after_stock(*args, **kwargs):
+        await real_adjust_stock(*args, **kwargs)
+        raise PaymentError("injected failure after stock mutation")
+
+    monkeypatch.setattr(sales_service, "adjust_stock", fail_after_stock)
     async with SessionFactory() as session:
-        with pytest.raises(PaymentError):
+        with pytest.raises(PaymentError, match="injected failure"):
             await create_pos_sale(
                 session,
                 business_id=business.id,
@@ -161,7 +186,8 @@ async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
                 warehouse_id=warehouse.id,
                 invoice_no=invoice_no,
                 lines=[SaleLine(product.id, Decimal("1"))],
-                payments=[SalePayment(method="x" * 33, amount=Decimal("50"))],
+                payments=[SalePayment(method="cash", amount=Decimal("50"))],
+                idempotency_key=f"{business.id}:{key}",
             )
         await session.rollback()
 
@@ -175,6 +201,14 @@ async def test_pos_sale_rollback_restores_stock_after_post_mutation_failure():
         assert balance is not None
         assert balance.quantity == Decimal("2")
         assert await session.scalar(select(Invoice).where(Invoice.invoice_no == invoice_no)) is None
+        operation = await session.scalar(
+            select(Operation).where(
+                Operation.operation_id == sale_operation_id(
+                    business.id, branch.id, f"{business.id}:{key}"
+                )
+            )
+        )
+        assert operation is None
 
 
 @pytest.mark.asyncio
