@@ -44,7 +44,7 @@ jobs:
           FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
         run: |
           set -Eeuo pipefail
-          [[ "$VERSION" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || {
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || {
             echo "::error::version must be a semantic version tag"
             exit 1
           }
@@ -186,6 +186,11 @@ jobs:
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT }}
           VERSION: ${{ inputs.version }}
         run: |
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "printf '%s\n' '$VERSION' > '$DEPLOY_PATH/current-release'"
+          set -Eeuo pipefail
+          port="$DEPLOY_SSH_PORT"
+          if [ -z "$port" ]; then port=22; fi
+          ssh -i "$HOME/.ssh/id_ed25519" -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" "printf '%s\\n' '$VERSION' > '$DEPLOY_PATH/current-release'"
