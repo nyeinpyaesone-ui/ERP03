@@ -10,10 +10,12 @@ flowchart TD
   PR[Pull request / push to main] --> CI[CI reusable workflow]
   CI --> B[Backend: PostgreSQL migrations + tests]
   CI --> F[Frontend: npm ci + build]
-  CI --> Q[Quality reusable workflow]
+  PR[Pull request / push main] --> Q[Quality workflow]
   TAG[Version tag v*] --> R[Release workflow]
   R --> CI2[Call CI qualification]
+  R --> Q2[Call Quality]
   CI2 --> C[Call Container workflow]
+  Q2 --> C
   C --> BE[Build backend image]
   C --> FE[Build frontend image]
   BE --> VERIFY[Verify amd64 + arm64 manifests]
@@ -23,7 +25,7 @@ flowchart TD
 
 ### Event and hand-off rules
 
-- `workflow_call` is the in-repository contract for deterministic pipeline reuse. CI calls Quality; Release calls CI and then Container.
+- `workflow_call` is the in-repository contract for deterministic pipeline reuse. Release calls CI and Quality in parallel, then calls Container only after both pass.
 - `needs` enforces ordering and propagates failure. A release cannot be created if qualification or either image publication fails.
 - Pull requests build both images without pushing. Pushes to `main` and `release/**` publish images. Version tags are handled by Release, which calls Container once; this avoids a second independent tag-triggered build.
 - `workflow_dispatch` remains available on CI for an operator-requested qualification run.
@@ -81,7 +83,7 @@ Do not split a managed database URL into `DB_HOST` / `DB_PASSWORD` unless a spec
 
 ## Current repository mismatches addressed by this change
 
-- CI and Quality are linked through `workflow_call` rather than running as disconnected checks.
+- Release gates both CI and Quality through `workflow_call`; CI and Quality remain separate checks on pull requests, avoiding duplicate lint runs.
 - Release now depends on CI/Quality, then on successful backend and frontend GHCR publication.
 - Container workflow now builds both backend and frontend for `linux/amd64` and `linux/arm64`, verifies both manifest architectures, and uses the built-in token.
 - Tag-triggered container publication is routed through Release, preventing duplicate tag builds.
