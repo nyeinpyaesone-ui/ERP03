@@ -7,27 +7,29 @@
 
 ```mermaid
 flowchart TD
-  PR[Pull request / push to main] --> CI[CI reusable workflow]
-  CI --> B[Backend: PostgreSQL migrations + tests]
-  CI --> F[Frontend: npm ci + build]
-  PR[Pull request / push main] --> Q[Quality workflow]
-  TAG[Version tag v*] --> R[Release workflow]
-  R --> CI2[Call CI qualification]
-  R --> Q2[Call Quality]
-  CI2 --> C[Call Container workflow]
-  Q2 --> C
-  C --> BE[Build backend image]
-  C --> FE[Build frontend image]
-  BE --> VERIFY[Verify amd64 + arm64 manifests]
-  FE --> VERIFY
-  VERIFY --> GH[Create GitHub Release]
+  PR[Pull request / push main] --> CI[CI: backend + frontend]
+  PR --> Q[Quality]
+  PR --> P[Policy]
+  MAIN[Push main] --> DB[Signed backend GHCR build]
+  MAIN --> DF[Frontend GHCR build]
+  TAG[Version tag v*] --> R[Release]
+  R --> CI2[Reusable CI]
+  R --> Q2[Reusable Quality]
+  CI2 --> DB2[Reusable signed backend publisher]
+  Q2 --> DB2
+  CI2 --> DF2[Reusable frontend publisher]
+  Q2 --> DF2
+  DB2 --> REL[GitHub Release]
+  DF2 --> REL
+  ST[Manual staging deployment] --> STE[staging environment]
+  PROD[Manual production deployment] --> PRE[production environment]
 ```
 
 ### Event and hand-off rules
 
-- `workflow_call` is the in-repository contract for deterministic pipeline reuse. Release calls CI and Quality in parallel, then calls Container only after both pass.
+- `workflow_call` is the in-repository contract for deterministic pipeline reuse. Release calls CI and Quality in parallel, then calls the signed backend publisher and frontend publisher only after both pass.
 - `needs` enforces ordering and propagates failure. A release cannot be created if qualification or either image publication fails.
-- Pull requests build both images without pushing. Pushes to `main` and `release/**` publish images. Version tags are handled by Release, which calls Container once; this avoids a second independent tag-triggered build.
+- Pull requests build images without pushing. Pushes to `main` publish backend and frontend images through their dedicated workflows. Version tags are handled by Release, which calls `docker-publish.yml` for the signed backend and `container.yml` for the frontend; direct tag triggers were removed from the backend publisher to prevent duplicate builds.
 - `workflow_dispatch` remains available on CI for an operator-requested qualification run.
 - Use `repository_dispatch` only when an external system must initiate a repository workflow. Keep `event_type` names explicit and validate payload fields; never pass secrets or arbitrary shell fragments in `client_payload`.
 - Do not use `workflow_run` as the default internal dependency mechanism. Reusable workflows plus `needs` provide a direct dependency graph and clearer failure propagation.
@@ -46,47 +48,78 @@ The root `pyproject.toml` currently contains tool configuration only; it has no 
 
 ## GitHub Environments and variables
 
-The repository currently has no verified deployment workflow/target that consumes `staging` or `production` environments. Do not add production secrets or imply that an environment is protected until it is configured in **Settings → Environments** and referenced by a real deployment job.
+The repository already has deployment workflows referencing the `staging` and `production` GitHub Environments. The connector can inspect workflow references but cannot verify the actual Environment secret/variable values or protection rules, and it cannot write secret values. Configure the following names under **Settings → Environments**; do not create placeholder values.
 
-When deployment targets are implemented, create separate environments:
+### `staging` Environment
 
-### `staging`
+**Secrets**
+- `STAGING_SSH_PRIVATE_KEY` — deployment account private key.
+- `STAGING_SSH_KNOWN_HOSTS` — pinned SSH host key lines; do not discover trust at deploy time.
 
-- Restrict deployment branches to the approved integration branch or protected branches.
-- Store only staging-specific values.
-- Require a successful image qualification and deploy immutable image digests, not `latest`.
+**Variables**
+- `STAGING_SSH_HOST`
+- `STAGING_SSH_USER`
+- `STAGING_SSH_PORT` — optional; defaults to 22.
+- `STAGING_DEPLOY_PATH` — existing clean checkout containing the Compose deployment files and server-managed runtime `.env`.
 
-### `production`
+GHCR access uses the workflow's ephemeral `GITHUB_TOKEN` with `packages: read`; no long-lived `STAGING_GHCR_READ_TOKEN` or GHCR username secret is required after this branch is merged.
 
-- Restrict deployment branches/tags to the approved release path.
-- Require an independent reviewer where the repository plan/settings support it.
-- Disable self-review and bypass where available.
-- Use immutable image digests and a verified rollback procedure.
+### `production` Environment
 
-### Future runtime secret names
+**Secrets**
+- `DEPLOY_SSH_PRIVATE_KEY`
+- `DEPLOY_SSH_KNOWN_HOSTS`
 
-These names are aligned to `ERP-BACKEND/app/core/config.py`; add only those required by the actual target:
+**Variables**
+- `DEPLOY_HOST`
+- `DEPLOY_USER`
+- `DEPLOY_PATH`
+- `DEPLOY_ENV_FILE` — absolute path to the server-managed Compose environment file, outside the uploaded release directory.
+- `DEPLOY_SSH_PORT` — optional; defaults to 22.
 
-| Name | Type | Use |
+GHCR access uses the workflow's ephemeral `GITHUB_TOKEN` with `packages: read`; no long-lived `GHCR_TOKEN` or `GHCR_USERNAME` Environment secret is required after this branch is merged.
+
+### Server-managed runtime configuration
+
+The server-side environment file referenced by `STAGING_DEPLOY_PATH` / `DEPLOY_ENV_FILE` must be provisioned securely on each host and must not be copied from GitHub Actions artifacts. It supplies the Compose-required runtime values:
+
+- `SECRET_KEY`
+- `DATABASE_URL` (URL-encoded `postgresql+asyncpg://` DSN)
+- `CORS_ORIGINS` (real HTTPS origins in production)
+- `POSTGRES_PASSWORD` and `REDIS_PASSWORD` when the Compose-managed database/cache services are enabled
+- Optional `TYPESAFE_API_KEY`, `WEBHOOK_SECRET`, and observability configuration only when those features are enabled
+
+Do not store application database credentials in repository variables or pass them through build args, dispatch payloads, logs or artifacts. Restrict the server-side env file to the deployment account and keep it outside the release checkout.
+
+### Token and external hook policy
+
+| Use | Credential | Permission |
 |---|---|---|
-| `SECRET_KEY` | Secret | Application signing/encryption secret; unique per environment |
-| `DATABASE_URL` | Secret | URL-encoded `postgresql+asyncpg://` DSN |
-| `REDIS_URL` | Secret | Redis connection URL, if Redis is enabled |
-| `WEBHOOK_SECRET` | Secret | Only after a real inbound webhook endpoint is implemented |
-| `TYPESAFE_API_KEY` | Secret | Only when TypeSafe is enabled |
-| `CORS_ORIGINS` | Variable | Exact comma-separated HTTPS origins in production |
-| `ENVIRONMENT` | Variable | `staging` or `production` |
-| `LOG_LEVEL` | Variable | `INFO` or approved level |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Variable | Collector endpoint; not a credential by itself |
+| CI / checkout | Built-in `GITHUB_TOKEN` | `contents: read` |
+| GHCR publishing | Built-in `GITHUB_TOKEN` | `packages: write` |
+| Staging/production GHCR pulls | Built-in `GITHUB_TOKEN` | `packages: read` |
+| GitHub Release | Built-in `GITHUB_TOKEN` | `contents: write` only on release job |
+| Backend image signing | GitHub OIDC | `id-token: write` only on backend publisher job |
+| PyPI | Not configured as a supported ERP03 package release yet | Do not create `PYPI_TOKEN`; add PyPI Trusted Publishing only after package metadata exists |
 
-Do not split a managed database URL into `DB_HOST` / `DB_PASSWORD` unless a specific deployment integration requires it. Never put secrets in repository variables, workflow YAML, build args, artifacts, PR payloads or logs.
+The root `pyproject.toml` currently contains tool configuration only, not project/build-system metadata. Static-token PyPI publishing is therefore removed. If a Python distribution is added later, configure PyPI Trusted Publishing for the exact repository/workflow/environment and grant `id-token: write` only to that job.
+
+For an external event producer, the supported GitHub dispatch endpoint is `POST /repos/{owner}/{repo}/dispatches` with a narrowly scoped GitHub App installation token (`contents: write`) and an explicit `event_type`. No `repository_dispatch` trigger is currently configured in ERP03; do not expose one until an external producer and payload schema are known. Internal pipeline dependencies should continue to use `workflow_call` + `needs`.
+
+### Protection requirements
+
+- Require environment reviewers for production where supported; prevent self-review and bypass.
+- Restrict deployment branches to `main` for staging and the approved release path for production.
+- Use immutable image digests for staging; production currently accepts a version tag and resolves it to the matching image tags.
+- Staging workflow performs health checks and rollback. Production workflow performs health checks but does not yet implement automatic rollback; production readiness remains incomplete until rollback is added and tested.
+- The legacy canary workflow is now disabled because it used Docker Hub and example domains rather than a verified deployment target.
 
 ## Current repository mismatches addressed by this change
 
-- Release gates both CI and Quality through `workflow_call`; CI and Quality remain separate checks on pull requests, avoiding duplicate lint runs.
-- Release now depends on CI/Quality, then on successful backend and frontend GHCR publication.
-- Container workflow now builds both backend and frontend for `linux/amd64` and `linux/arm64`, verifies both manifest architectures, and uses the built-in token.
-- Tag-triggered container publication is routed through Release, preventing duplicate tag builds.
+- Release gates CI and Quality through parallel `workflow_call` jobs; they remain separate checks on pull requests.
+- Release now depends on CI/Quality, then on the existing signed backend publisher and the frontend GHCR publisher.
+- Backend publication remains in `docker-publish.yml` with cosign signing/verification; `container.yml` owns the frontend image. Both publish multi-architecture manifests.
+- Tag-triggered backend publication is routed through Release, preventing duplicate builds against the direct tag trigger.
 - Static `PYPI_TOKEN` publishing is removed until ERP03 has package metadata and a configured trusted publisher.
 
 ## Implementation checklist
@@ -94,17 +127,17 @@ Do not split a managed database URL into `DB_HOST` / `DB_PASSWORD` unless a spec
 - [x] Inspect current `main` workflows, Dockerfiles, Compose image names, settings and open PR inventory.
 - [x] Confirm all newly referenced Actions use full commit SHAs.
 - [x] Add reusable workflow contracts and explicit `needs` ordering.
-- [x] Add backend GHCR build and multi-architecture manifest verification.
+- [x] Reuse the signed backend GHCR workflow and retain frontend multi-architecture manifest verification.
 - [x] Remove unverified static PyPI-token publishing path.
-- [ ] Configure GitHub Environment protections for staging/production after a real deployment target exists.
+- [ ] Confirm actual staging/production Environment variables, secrets and protection rules in GitHub Settings; workflow references alone do not prove they are configured.
 - [ ] Populate runtime secrets through GitHub Settings using newly generated values; values cannot be read back through the GitHub API.
 - [ ] Verify Actions checks on the pull request, including both image builds and the release-call graph.
-- [ ] Confirm package visibility/read permissions for the runtime deployment identity.
-- [ ] Add deployment, health-check, rollback and post-deploy evidence before marking staging/production ready.
+- [ ] Verify GHCR package access for the deployment workflow's built-in read-only token.
+- [ ] Add and test automatic rollback for production; staging already has a rollback path.
 
 ## Explicit non-goals
 
-- No live deployment, production environment creation, secret value upload, branch protection change or merge.
-- No application webhook endpoint was added: the current backend exposes webhook settings but no verified webhook router contract.
+- No live deployment, secret value upload, branch protection change or merge.
+- No application webhook endpoint was added: the backend exposes webhook settings but no verified webhook router contract. No external `repository_dispatch` producer is configured.
 - No unrelated ERP domain/model changes.
 - Existing PRs #311, #312, #315, #316 and #317 remain independent and unmodified by this branch.
