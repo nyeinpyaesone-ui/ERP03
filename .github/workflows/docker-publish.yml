@@ -4,9 +4,13 @@ on:
     - cron: '41 16 * * *'
   push:
     branches: [ "main" ]
-    tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ "main" ]
+  workflow_call:
+    outputs:
+      backend_digest:
+        description: Published backend OCI digest
+        value: ${{ jobs.build.outputs.image_digest }}
 
 env:
   REGISTRY: ghcr.io
@@ -16,6 +20,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    outputs:
+      image_digest: ${{ steps.build-and-push.outputs.digest }}
     permissions:
       contents: read
       packages: write
@@ -68,6 +74,7 @@ jobs:
           labels: |
             ${{ steps.meta.outputs.labels }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
           provenance: mode=max

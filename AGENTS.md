@@ -46,16 +46,16 @@ CI uses Python 3.12 / Node 22; local Python may be 3.14 (asyncpg 0.32.0 works on
 
 ## Environment & secrets
 
-Two `.env` files — never mix:
+Two local files — never mix:
 
-- `ERP-BACKEND/.env` — backend runtime (`SECRET_KEY`, `DATABASE_URL`, `CORS_ORIGINS`, `REDIS_URL`)
-- `.env.compose` — Docker Compose only (`POSTGRES_PASSWORD`, `DOCKERHUB_IMAGE_*`, `SECRET_KEY`)
+- `ERP-BACKEND/.env` — backend runtime settings (`SECRET_KEY`, `DATABASE_URL`, `CORS_ORIGINS`, `REDIS_URL`)
+- `.env.compose` — root Compose interpolation (`POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `ERP03_BACKEND_IMAGE`, `ERP03_FRONTEND_IMAGE`, `IMAGE_TAG`, `DATABASE_URL`, `CORS_ORIGINS`)
 
-The compose file is **not** read by the backend (Settings uses `extra="forbid"`).
+The Compose file is not read by the backend directly; Compose injects only declared Settings fields into the container. Generated production configuration requires `ERP03_CORS_ORIGINS` to contain HTTPS origins.
 
-Docker Hub images (multi-arch amd64/arm64): `nyeinpyaesone-ui/erp03-backend`, `nyeinpyaesone-ui/erp03-frontend` (`IMAGE_TAG=latest`).
+GHCR images (multi-arch amd64/arm64): `ghcr.io/nyeinpyaesone-ui/erp03-backend` and `ghcr.io/nyeinpyaesone-ui/erp03-frontend`. Prefer immutable digests for deployments.
 
-Never commit real credentials, `.env` files, or anything under `secrets/` or `.agent/`. All three are gitignored.
+GitHub Actions uses its built-in `GITHUB_TOKEN` for GHCR. Do not create Docker Hub PATs for the current pipeline. Deployment SSH private keys and pinned known-hosts data are Environment secrets; non-sensitive host/user/path/port values are Environment variables. Never commit credentials, `.env` files, or anything under `secrets/` or `.agent/`.
 
 ## Database & migrations
 
@@ -94,16 +94,20 @@ Add a DB column: modify `app/models/*.py` → `alembic revision --autogenerate -
 
 ## CI workflows
 
-| Workflow | Trigger | Key steps |
-|----------|---------|-----------|
-| `ci.yml` | push/PR `main`, `feat/**`, `fix/**` | PG + Redis services → compile → migrate (5 retries) → pytest (3 retries) → frontend build |
-| `quality.yml` | push/PR | ruff check/format + compileall + frontend build |
-| `security.yml` | schedule/PR | pip-audit + CodeQL |
-| `container.yml` | push tag/main/release | Docker Hub multi-arch (amd64/arm64) + provenance + SBOM |
-| `iac.yml` | push/PR | terraform fmt/validate/plan |
-| `release.yml` | push tags `v*` | SemVer tag → GitHub Release → PyPI |
+| Workflow | Trigger | Responsibility |
+|----------|---------|----------------|
+| `ci.yml` | push/PR `main`, manual dispatch, reusable call | PostgreSQL + Redis → compile → migrate → pytest → frontend build |
+| `quality.yml` | push/PR `main`, reusable call | Ruff check/format + compile |
+| `policy.yml` | push/PR `main`, manual dispatch | Kustomize render + Conftest policy checks; recent PR runs of Policy Enforcement ended `startup_failure` with zero jobs and remain under investigation |
+| `docker-publish.yml` | push `main`, schedule, PR, reusable Release call | Signed backend GHCR multi-arch image + SBOM/provenance + manifest and signature verification |
+| `container.yml` | push `main` / `release/**`, PR, reusable Release call | Frontend GHCR multi-arch image + SBOM/provenance + manifest verification |
+| `release.yml` | push tags `v*` | CI + Quality → signed backend + frontend images → GitHub Release |
+| `deploy-staging.yml` | manual dispatch | Staging environment; immutable digests; SSH health checks and rollback |
+| `production-deploy.yml` | manual dispatch from `main` + explicit confirmation | Production environment; immutable tag; server-managed env file; health verification |
+| `deploy-canary.yml` | manual dispatch | Disabled legacy placeholder; fails closed |
+| `rotate-secrets.yml` | manual dispatch | Audit acknowledgement only; no credential rotation |
 
-All GitHub Actions references pinned to 40-char commit SHAs. Concurrency groups (`ci-${{ github.ref }}`, `quality-${{ github.ref }}`) cancel in-progress runs. CI secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`; `PYPI_TOKEN` (release).
+Internal hand-offs use `workflow_call` and `needs`; avoid `workflow_run` chains for deterministic release dependencies. External producers may use `repository_dispatch` only after a typed event contract is defined. All referenced Actions remain pinned to full commit SHAs.
 
 ## Local development quirks (verified)
 

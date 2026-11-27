@@ -1,44 +1,18 @@
-name: Deploy Canary
+name: Deploy Canary (Disabled Legacy Workflow)
 
 on:
   workflow_dispatch:
-    inputs:
-      environment:
-        required: true
-        default: "staging"
-      image_tag:
-        required: true
-        default: "latest"
 
 permissions:
   contents: read
-  deployments: write
 
 jobs:
-  deploy:
+  disabled:
+    name: Fail closed until a verified canary target exists
     runs-on: ubuntu-latest
-    environment:
-      name: ${{ inputs.environment }}
-      url: https://${{ inputs.environment }}.erp03.example.com
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Deploy canary (25% traffic)
+      - name: Explain supported deployment paths
         run: |
-          echo "Deploying docker.io/${{ github.repository_owner }}/erp03-backend:${{ inputs.image_tag }}"
-          echo "Canary weight: 25%"
-      - name: Smoke test canary
-        run: |
-          curl -f https://${{ inputs.environment }}.erp03.example.com/api/v1/healthz
-
-  promote-production:
-    needs: deploy
-    runs-on: ubuntu-latest
-    if: inputs.environment == 'staging'
-    environment:
-      name: production
-      url: https://api.erp03.example.com
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Promote canary to production
-        run: |
-          echo "Promoting backend:${{ inputs.image_tag }} to production"
+          echo "::error::This legacy canary workflow referenced Docker Hub and example domains and did not perform a real deployment."
+          echo "::error::Use deploy-staging.yml with verified GHCR digests. Production remains a separate manually approved workflow."
+          exit 1

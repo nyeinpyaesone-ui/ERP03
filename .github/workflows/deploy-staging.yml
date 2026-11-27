@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: erp03-staging-deploy
@@ -67,11 +68,11 @@ jobs:
 
       - name: Authenticate staging host to GHCR with read-only credentials
         env:
-          STAGING_HOST: ${{ secrets.STAGING_SSH_HOST }}
-          STAGING_USER: ${{ secrets.STAGING_SSH_USER }}
-          STAGING_PORT: ${{ secrets.STAGING_SSH_PORT }}
-          GHCR_USERNAME: ${{ secrets.STAGING_GHCR_USERNAME }}
-          GHCR_READ_TOKEN: ${{ secrets.STAGING_GHCR_READ_TOKEN }}
+          STAGING_HOST: ${{ vars.STAGING_SSH_HOST }}
+          STAGING_USER: ${{ vars.STAGING_SSH_USER }}
+          STAGING_PORT: ${{ vars.STAGING_SSH_PORT }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_READ_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -Eeuo pipefail
           test -n "$STAGING_HOST"
@@ -90,9 +91,9 @@ jobs:
 
       - name: Deploy immutable images, verify runtime health, and rollback on failure
         env:
-          STAGING_HOST: ${{ secrets.STAGING_SSH_HOST }}
-          STAGING_USER: ${{ secrets.STAGING_SSH_USER }}
-          STAGING_PORT: ${{ secrets.STAGING_SSH_PORT }}
+          STAGING_HOST: ${{ vars.STAGING_SSH_HOST }}
+          STAGING_USER: ${{ vars.STAGING_SSH_USER }}
+          STAGING_PORT: ${{ vars.STAGING_SSH_PORT }}
           DEPLOY_PATH: ${{ vars.STAGING_DEPLOY_PATH }}
           SOURCE_SHA: ${{ inputs.source_sha }}
           BACKEND_DIGEST: ${{ inputs.backend_digest }}
