@@ -14,9 +14,7 @@ OPERATION_RETRIES = Counter(
 )
 
 
-def record_operation_transition(
-    operation_type: str, from_state: str, to_state: str
-) -> None:
+def record_operation_transition(operation_type: str, from_state: str, to_state: str) -> None:
     """Record a state transition without high-cardinality IDs as labels."""
     OPERATION_TRANSITIONS.labels(
         operation_type=operation_type,
