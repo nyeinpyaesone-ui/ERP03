@@ -69,6 +69,32 @@ async def test_create_operation_is_idempotent_by_operation_id():
 
 
 @pytest.mark.asyncio
+async def test_request_id_does_not_change_operation_command_identity():
+    """A retry may carry a new request ID without changing the idempotent command."""
+    business, branch, _warehouse, _user = await _bootstrap("ORCHRID")
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        first = await service.create_operation(
+            operation_id="orch-request-id-001",
+            operation_type="pos.sale",
+            business_id=business.id,
+            branch_id=branch.id,
+            payload={"product": "widget", "qty": 1, "request_id": "request-a"},
+        )
+    async with SessionFactory() as session, session.begin():
+        service = OperationService(session)
+        replay = await service.create_operation(
+            operation_id="orch-request-id-001",
+            operation_type="pos.sale",
+            business_id=business.id,
+            branch_id=branch.id,
+            payload={"product": "widget", "qty": 1, "request_id": "request-b"},
+        )
+    assert replay.id == first.id
+    assert replay.payload_json["request_id"] == "request-a"
+
+
+@pytest.mark.asyncio
 async def test_claim_next_marks_pending_operation_processing():
     """Claiming transitions PENDING -> PROCESSING and stamps the worker."""
     business, branch, _warehouse, _user = await _bootstrap("ORCHC")
