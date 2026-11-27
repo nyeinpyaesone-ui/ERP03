@@ -103,9 +103,7 @@ def _sale_fingerprint(
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def sale_operation_id(
-    business_id: UUID, branch_id: UUID, idempotency_key: str | None
-) -> str:
+def sale_operation_id(business_id: UUID, branch_id: UUID, idempotency_key: str | None) -> str:
     """Return a stable tenant/branch-scoped operation identity for a POS sale."""
     if idempotency_key is None:
         return f"pos-sale:{uuid4().hex}"
