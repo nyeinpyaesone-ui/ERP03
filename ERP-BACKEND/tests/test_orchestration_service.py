@@ -130,9 +130,7 @@ async def test_concurrent_workers_claim_different_operations():
 
     async def claim(worker_id: str):
         async with SessionFactory() as session, session.begin():
-            operation = await OperationService(
-                session, worker_id=worker_id
-            ).claim_next()
+            operation = await OperationService(session, worker_id=worker_id).claim_next()
             await asyncio.sleep(0.1)
             if operation is None:
                 return None
@@ -145,6 +143,7 @@ async def test_concurrent_workers_claim_different_operations():
     assert claimed_a is not None and claimed_b is not None
     assert claimed_a[0] != claimed_b[0]
     assert {claimed_a[1], claimed_b[1]} == {"worker-a", "worker-b"}
+
 
 @pytest.mark.asyncio
 async def test_commit_operation_transitions_to_committed():
