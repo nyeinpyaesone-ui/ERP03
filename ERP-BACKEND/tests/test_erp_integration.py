@@ -10,10 +10,10 @@ from app.core.errors import PaymentError
 from app.db.session import SessionFactory
 from app.main import app
 from app.models.erp import Invoice, Product, StockBalance, Warehouse
-from app.models.operations import Operation, OperationState
 from app.models.identity import Branch
-from app.services.bootstrap import bootstrap_business
+from app.models.operations import Operation, OperationState
 from app.services import sales as sales_service
+from app.services.bootstrap import bootstrap_business
 from app.services.inventory import adjust_stock as real_adjust_stock
 from app.services.sales import SaleLine, SalePayment, create_pos_sale, sale_operation_id
 from sqlalchemy import select
@@ -68,6 +68,7 @@ async def test_bootstrap_login_and_pos_sale_round_trip():
             )
         )
 
+    key = f"sale-{uuid4().hex}"
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://test",
@@ -87,7 +88,7 @@ async def test_bootstrap_login_and_pos_sale_round_trip():
             "/api/v1/sales",
             headers={
                 "Authorization": f"Bearer {token}",
-                "X-Idempotency-Key": f"sale-{uuid4().hex}",
+                "X-Idempotency-Key": key,
             },
             json={
                 "branch_id": str(branch.id),
@@ -132,7 +133,7 @@ async def test_bootstrap_login_and_pos_sale_round_trip():
         assert operation is not None
         assert operation.state == OperationState.COMMITTED
         assert operation.result_json == {
-            "invoice_id": first.json()["invoice_id"],
+            "invoice_id": sale.json()["invoice_id"],
             "total": "200.00",
             "paid": "200.00",
             "balance": "0.00",
@@ -146,7 +147,9 @@ async def test_bootstrap_login_and_pos_sale_round_trip():
 
 
 @pytest.mark.asyncio
-async def test_pos_sale_rollback_restores_stock_and_operation_after_post_mutation_failure(monkeypatch):
+async def test_pos_sale_rollback_restores_stock_and_operation_after_post_mutation_failure(
+    monkeypatch,
+):
     business, branch, warehouse, _ = await _bootstrap("RB")
     async with SessionFactory() as session, session.begin():
         product = Product(
