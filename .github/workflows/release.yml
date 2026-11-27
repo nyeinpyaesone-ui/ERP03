@@ -5,9 +5,8 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
   packages: write
-  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -15,21 +14,32 @@ concurrency:
 
 jobs:
   qualification:
-    name: Full CI and quality qualification
+    name: Full CI qualification
+    permissions:
+      contents: read
     uses: ./.github/workflows/ci.yml
 
   quality:
     name: Backend quality checks
+    permissions:
+      contents: read
     uses: ./.github/workflows/quality.yml
 
   backend-image:
     name: Publish and sign backend image
     needs: [qualification, quality]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     uses: ./.github/workflows/docker-publish.yml
 
   frontend-image:
     name: Publish frontend image
     needs: [qualification, quality]
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/container.yml
 
   release:
