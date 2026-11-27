@@ -1,5 +1,7 @@
 """Coverage for the cross-module operation orchestration state machine."""
 
+import asyncio
+import os
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -101,9 +103,13 @@ async def test_claim_next_returns_none_when_no_claimable_operations():
     assert claimed is None
 
 
+@pytest.mark.skipif(
+    os.environ.get("DATABASE_URL", "").startswith("sqlite"),
+    reason="independent worker claims require PostgreSQL row locks",
+)
 @pytest.mark.asyncio
 async def test_concurrent_workers_claim_different_operations():
-    """Two claimable operations are claimed by separate workers, never doubled."""
+    """Two independent PostgreSQL sessions must never claim the same row."""
     business, branch, _warehouse, _user = await _bootstrap("ORCHCC")
     async with SessionFactory() as session, session.begin():
         service = OperationService(session)
@@ -121,17 +127,24 @@ async def test_concurrent_workers_claim_different_operations():
             branch_id=branch.id,
             payload={"n": 2},
         )
-        await session.commit()
-    async with SessionFactory() as session, session.begin():
-        service_a = OperationService(session, worker_id="worker-a")
-        service_b = OperationService(session, worker_id="worker-b")
-        claimed_a = await service_a.claim_next()
-        claimed_b = await service_b.claim_next()
-        await session.commit()
-    assert claimed_a is not None and claimed_b is not None
-    assert claimed_a.id != claimed_b.id
-    assert {claimed_a.claimed_by, claimed_b.claimed_by} == {"worker-a", "worker-b"}
 
+    async def claim(worker_id: str):
+        async with SessionFactory() as session, session.begin():
+            operation = await OperationService(
+                session, worker_id=worker_id
+            ).claim_next()
+            await asyncio.sleep(0.1)
+            if operation is None:
+                return None
+            return operation.id, operation.claimed_by
+
+    claimed_a, claimed_b = await asyncio.gather(
+        claim("worker-a"),
+        claim("worker-b"),
+    )
+    assert claimed_a is not None and claimed_b is not None
+    assert claimed_a[0] != claimed_b[0]
+    assert {claimed_a[1], claimed_b[1]} == {"worker-a", "worker-b"}
 
 @pytest.mark.asyncio
 async def test_commit_operation_transitions_to_committed():
