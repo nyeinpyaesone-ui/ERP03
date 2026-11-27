@@ -6,6 +6,7 @@ on:
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -100,6 +101,10 @@ jobs:
         run: |
           set -euo pipefail
           pytest -q
+
+  quality:
+    name: Backend quality checks
+    uses: ./.github/workflows/quality.yml
 
   frontend:
     runs-on: ubuntu-latest
