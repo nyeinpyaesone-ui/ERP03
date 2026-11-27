@@ -42,6 +42,7 @@ jobs:
           - 6379:6379
     env:
       AGENT_ENV: ci
+      QUALIFY_DB_MODE: required
       DATABASE_URL: postgresql+asyncpg://erp03:erp03@127.0.0.1:5432/erp03
       REDIS_URL: redis://127.0.0.1:6379/0
     steps:
@@ -60,7 +61,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Bootstrap
         run: bash scripts/agent/bootstrap.sh
-      - name: Verify
+      - name: Verify (PostgreSQL required)
         run: bash scripts/agent/verify.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
