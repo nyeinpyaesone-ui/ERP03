@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -15,6 +15,7 @@ from app.core.errors import ConflictError, PaymentError, SaleValidationError
 from app.models.erp import Customer, Invoice, InvoiceItem, Payment, Product, Warehouse
 from app.models.identity import Branch
 from app.services.inventory import adjust_stock
+from app.services.orchestration import OperationService
 
 
 async def _find_idempotent_invoice(
@@ -100,6 +101,16 @@ def _sale_fingerprint(
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def sale_operation_id(
+    business_id: UUID, branch_id: UUID, idempotency_key: str | None
+) -> str:
+    """Return a stable tenant/branch-scoped operation identity for a POS sale."""
+    if idempotency_key is None:
+        return f"pos-sale:{uuid4().hex}"
+    identity = f"{business_id}:{branch_id}:{idempotency_key}".encode("utf-8")
+    return f"pos-sale:{hashlib.sha256(identity).hexdigest()}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -327,6 +338,19 @@ async def create_pos_sale(
                     return SaleResult.from_invoice(existing)
             raise ConflictError("Invoice number already exists for this branch") from exc
 
+        operation_service = OperationService(
+            session,
+            worker_id=f"api-{uuid4().hex}",
+        )
+        operation = await operation_service.create_operation(
+            operation_id=sale_operation_id(business_id, branch_id, idempotency_key),
+            operation_type="pos.sale",
+            business_id=business_id,
+            branch_id=branch_id,
+            payload={"request_fingerprint": fingerprint},
+        )
+        await operation_service.start_operation(operation)
+
         prepared.sort(key=lambda item: str(item[0].product_id))
         for line, price, line_total in prepared:
             session.add(
@@ -370,9 +394,19 @@ async def create_pos_sale(
                 )
                 await session.flush()
 
-        return SaleResult(
+        sale_result = SaleResult(
             invoice_id=invoice.id,
             total=total,
             paid=paid,
             balance=total - paid,
         )
+        await operation_service.commit_operation(
+            operation,
+            result={
+                "invoice_id": str(sale_result.invoice_id),
+                "total": str(sale_result.total),
+                "paid": str(sale_result.paid),
+                "balance": str(sale_result.balance),
+            },
+        )
+        return sale_result
