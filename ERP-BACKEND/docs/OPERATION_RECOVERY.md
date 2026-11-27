@@ -56,7 +56,7 @@ Do not select or print `payload_json` or `error_message` into shared logs or tic
 
 1. Confirm the environment, database identity and current application revision.
 2. Inspect the operation row and its timestamps, retry count, error code and worker owner.
-3. For `processing`, confirm the worker is stopped or its lease has expired. A live worker should renew the lease with `OperationService.heartbeat()`.
+3. For `processing`, confirm the worker is stopped or its lease has expired. A live worker should renew the lease with `OperationService.heartbeat(operation_id)`. 
 4. For `failed`, wait until `backoff_until` and let the worker claim it through `claim_next()`.
 5. For `reconciliation_required`, stop automatic retries. Verify the invoice, payment records, stock balance and stock movements before any manual action.
 6. For `committed`, use the stored result and original idempotency key. Do not create a compensating sale merely because the client timed out.
