@@ -215,6 +215,44 @@ class OperationService:
         await self.session.flush()
         return operation
 
+    async def _lock_processing_operation(self, operation: Operation) -> Operation:
+        """Reload and lock an operation, enforcing the current worker lease."""
+        current = await self.session.scalar(
+            select(Operation)
+            .where(Operation.id == operation.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if (
+            current is None
+            or current.state != OperationState.PROCESSING
+            or current.claimed_by != self.worker_id
+        ):
+            raise ConflictError(
+                f"Worker {self.worker_id} no longer owns operation {operation.operation_id}"
+            )
+        return current
+
+    async def heartbeat(self, operation_id: str) -> Operation:
+        """Renew the processing lease only while this worker still owns it."""
+        operation = await self.session.scalar(
+            select(Operation)
+            .where(Operation.operation_id == operation_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if (
+            operation is None
+            or operation.state != OperationState.PROCESSING
+            or operation.claimed_by != self.worker_id
+        ):
+            raise ConflictError(
+                f"Worker {self.worker_id} no longer owns operation {operation_id}"
+            )
+        operation.updated_at = datetime.now(UTC)
+        await self.session.flush()
+        return operation
+
     async def commit_operation(
         self,
         operation: Operation,
@@ -227,6 +265,7 @@ class OperationService:
         commits the domain mutations (invoice, payment, stock), so the
         operation outcome and the business result are atomic.
         """
+        operation = await self._lock_processing_operation(operation)
         if not operation.can_transition_to(OperationState.COMMITTED):
             raise ConflictError(
                 f"Operation {operation.operation_id} cannot transition to committed"
@@ -247,6 +286,7 @@ class OperationService:
         error_message: str,
     ) -> None:
         """Record a failed attempt and either schedule retry or escalate."""
+        operation = await self._lock_processing_operation(operation)
         if not operation.can_transition_to(OperationState.FAILED):
             raise ConflictError(f"Operation {operation.operation_id} cannot transition to failed")
         operation.retry_count += 1
