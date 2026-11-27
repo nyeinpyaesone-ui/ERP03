@@ -379,6 +379,7 @@ EOF
     # Keep generated names aligned with docker-compose.yml and GHCR.
     local pg_pass="${SECRETS[POSTGRES_PASSWORD]}"
     local redis_pass="${SECRETS[REDIS_PASSWORD]}"
+    local image_tag="${IMAGE_TAG:-latest}"
     local cors_origins="${ERP03_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}"
     if [[ "$ENV_TYPE" == "production" ]]; then
       [[ -n "${ERP03_CORS_ORIGINS:-}" ]] || die "ERP03_CORS_ORIGINS is required for production"
@@ -396,9 +397,9 @@ POSTGRES_PASSWORD=${pg_pass}
 REDIS_PASSWORD=${redis_pass}
 
 ERP03_ENVIRONMENT=${ENV_TYPE}
-ERP03_BACKEND_IMAGE=ghcr.io/nyeinpyaesone-ui/erp03-backend
-ERP03_FRONTEND_IMAGE=ghcr.io/nyeinpyaesone-ui/erp03-frontend
-IMAGE_TAG=${IMAGE_TAG:-latest}
+ERP03_BACKEND_IMAGE=ghcr.io/nyeinpyaesone-ui/erp03-backend:${image_tag}
+ERP03_FRONTEND_IMAGE=ghcr.io/nyeinpyaesone-ui/erp03-frontend:${image_tag}
+IMAGE_TAG=${image_tag}
 
 SECRET_KEY=${SECRETS[SECRET_KEY]}
 DATABASE_URL=postgresql+asyncpg://erp03:${pg_pass}@postgres:5432/erp03
