@@ -229,10 +229,18 @@ class OperationService:
         commit the state together with the domain mutation. Background workers
         should continue to use claim_next() so row-level leases are respected.
         """
-        if not operation.is_claimable or not operation.can_transition_to(OperationState.PROCESSING):
-            raise ConflictError(
-                f"Operation {operation.operation_id} cannot transition to processing"
-            )
+        operation = await self.session.scalar(
+            select(Operation)
+            .where(Operation.id == operation.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if (
+            operation is None
+            or not operation.is_claimable
+            or not operation.can_transition_to(OperationState.PROCESSING)
+        ):
+            raise ConflictError("Operation cannot transition to processing")
         previous_state = operation.state.value
         now = datetime.now(UTC)
         operation.state = OperationState.PROCESSING
