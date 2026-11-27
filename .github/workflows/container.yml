@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: ["main"]
   workflow_call:
+    outputs:
+      frontend_digest:
+        description: Published frontend OCI digest
+        value: ${{ jobs.build-frontend.outputs.image_digest }}
 
 permissions:
   contents: read
@@ -20,6 +24,8 @@ jobs:
     name: Build and publish frontend to GHCR
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    outputs:
+      image_digest: ${{ steps.build-and-push.outputs.digest }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
