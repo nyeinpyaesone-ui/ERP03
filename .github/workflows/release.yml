@@ -17,9 +17,13 @@ jobs:
     name: Full CI and quality qualification
     uses: ./.github/workflows/ci.yml
 
+  quality:
+    name: Backend quality checks
+    uses: ./.github/workflows/quality.yml
+
   containers:
     name: Publish verified multi-architecture images
-    needs: qualification
+    needs: [qualification, quality]
     uses: ./.github/workflows/container.yml
 
   release:
