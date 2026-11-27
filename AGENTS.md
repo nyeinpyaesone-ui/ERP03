@@ -98,7 +98,7 @@ Add a DB column: modify `app/models/*.py` → `alembic revision --autogenerate -
 |----------|---------|----------------|
 | `ci.yml` | push/PR `main`, manual dispatch, reusable call | PostgreSQL + Redis → compile → migrate → pytest → frontend build |
 | `quality.yml` | push/PR `main`, reusable call | Ruff check/format + compile |
-| `policy.yml` | push/PR `main`, manual dispatch | Kustomize render + Conftest policy checks; run #486 on PR #318 ended `startup_failure` with zero jobs and remains under investigation |
+| `policy.yml` | push/PR `main`, manual dispatch | Kustomize render + Conftest policy checks; run #495 on PR #318 ended `startup_failure` with zero jobs and remains under investigation |
 | `docker-publish.yml` | push `main`, schedule, PR, reusable Release call | Signed backend GHCR multi-arch image + SBOM/provenance + manifest and signature verification |
 | `container.yml` | push `main` / `release/**`, PR, reusable Release call | Frontend GHCR multi-arch image + SBOM/provenance + manifest verification |
 | `release.yml` | push tags `v*` | CI + Quality → signed backend + frontend images → GitHub Release |
