@@ -6,9 +6,9 @@ when its domain transaction commits; the operation row and the domain
 mutations are updated in the same database transaction so either both
 succeed or neither does.
 
-The reconciliation worker is safe under multiple replicas: claiming an
-operation is an atomic conditional UPDATE (state re-checked inside the
-write transaction), so two workers never process the same operation.
+The reconciliation service is safe under multiple replicas: PostgreSQL row
+claims use SELECT FOR UPDATE SKIP LOCKED, and completion/failure paths fence
+stale workers by reloading and locking the current lease owner.
 """
 
 from __future__ import annotations
