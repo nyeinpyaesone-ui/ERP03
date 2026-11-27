@@ -34,8 +34,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
-          pip install ruff==0.17.1
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r dev-requirements.txt
 
       - name: Run ruff check
         run: ruff check app tests alembic
