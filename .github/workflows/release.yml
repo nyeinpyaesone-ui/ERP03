@@ -7,6 +7,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -21,14 +22,19 @@ jobs:
     name: Backend quality checks
     uses: ./.github/workflows/quality.yml
 
-  containers:
-    name: Publish verified multi-architecture images
+  backend-image:
+    name: Publish and sign backend image
+    needs: [qualification, quality]
+    uses: ./.github/workflows/docker-publish.yml
+
+  frontend-image:
+    name: Publish frontend image
     needs: [qualification, quality]
     uses: ./.github/workflows/container.yml
 
   release:
     name: Create GitHub release
-    needs: containers
+    needs: [backend-image, frontend-image]
     runs-on: ubuntu-latest
     permissions:
       contents: write
