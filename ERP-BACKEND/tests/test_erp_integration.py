@@ -125,9 +125,8 @@ async def test_bootstrap_login_and_pos_sale_round_trip():
         assert balance.quantity == Decimal("3")
         operation = await session.scalar(
             select(Operation).where(
-                Operation.operation_id == sale_operation_id(
-                    business.id, branch.id, f"{business.id}:{key}"
-                )
+                Operation.operation_id
+                == sale_operation_id(business.id, branch.id, f"{business.id}:{key}")
             )
         )
         assert operation is not None
