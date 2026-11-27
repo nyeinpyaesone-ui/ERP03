@@ -40,9 +40,7 @@ class OperationService:
         self.session = session
         self.worker_id = worker_id or f"worker-{id(self)}"
 
-    def _record_transition(
-        self, operation: Operation, from_state: str, to_state: str
-    ) -> None:
+    def _record_transition(self, operation: Operation, from_state: str, to_state: str) -> None:
         record_operation_transition(operation.operation_type, from_state, to_state)
         fields = {
             "operation_id": operation.operation_id,
