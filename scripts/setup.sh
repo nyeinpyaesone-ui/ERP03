@@ -221,6 +221,11 @@ sync_github_secrets() {
 auto_configure_all() {
   log "🔧 Auto-configuring environment ($ENV_TYPE)..."
 
+  if [[ "$ENV_TYPE" == "production" ]]; then
+    [[ -n "${ERP03_CORS_ORIGINS:-}" ]] || die "ERP03_CORS_ORIGINS is required for production"
+    [[ "$ERP03_CORS_ORIGINS" != *"http://"* ]] || die "Production ERP03_CORS_ORIGINS must use HTTPS"
+  fi
+
   # 1. Ensure venv exists for later use (but generate secrets with system python)
   if [[ ! -d "$VENV_DIR" ]]; then
     local py; py="$(python_cmd)"
@@ -332,7 +337,7 @@ DB_POOL_SIZE=20
 DB_MAX_OVERFLOW=30
 DB_POOL_RECYCLE=3600
 DB_ECHO=false
-CORS_ORIGINS=https://your-domain.com
+CORS_ORIGINS=${ERP03_CORS_ORIGINS}
 TYPESAFE_ENABLED=true
 TYPESAFE_API_KEY=
 JWT_EXPIRY_MINUTES=15
