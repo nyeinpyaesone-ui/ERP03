@@ -158,6 +158,7 @@ async def create_pos_sale(
     customer_id: UUID | None = None,
     currency: str = "MMK",
     idempotency_key: str | None = None,
+    request_id: str | None = None,
 ) -> SaleResult:
     """Create invoice, inventory movements and payments in one DB transaction."""
     if not lines:
@@ -345,7 +346,10 @@ async def create_pos_sale(
             operation_type="pos.sale",
             business_id=business_id,
             branch_id=branch_id,
-            payload={"request_fingerprint": fingerprint},
+            payload={
+                "request_fingerprint": fingerprint,
+                **({"request_id": request_id} if request_id else {}),
+            },
         )
         await operation_service.start_operation(operation)
 
