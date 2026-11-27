@@ -27,12 +27,19 @@ flowchart TD
 
 ### Event and hand-off rules
 
-- `workflow_call` is the in-repository contract for deterministic pipeline reuse. Release calls CI and Quality in parallel, then calls the signed backend publisher and frontend publisher only after both pass.
+- `workflow_call` is the in-repository contract for deterministic pipeline reuse. Release calls CI and Quality in parallel, then calls the signed backend publisher and frontend publisher only after both pass. The reusable image workflows expose `backend_digest` and `frontend_digest`; Release includes both immutable references in its release notes for downstream staging/production inputs.
 - `needs` enforces ordering and propagates failure. A release cannot be created if qualification or either image publication fails.
 - Pull requests build images without pushing. Pushes to `main` publish backend and frontend images through their dedicated workflows. Version tags are handled by Release, which calls `docker-publish.yml` for the signed backend and `container.yml` for the frontend; direct tag triggers were removed from the backend publisher to prevent duplicate builds.
 - `workflow_dispatch` remains available on CI for an operator-requested qualification run.
 - Use `repository_dispatch` only when an external system must initiate a repository workflow. Keep `event_type` names explicit and validate payload fields; never pass secrets or arbitrary shell fragments in `client_payload`.
 - Do not use `workflow_run` as the default internal dependency mechanism. Reusable workflows plus `needs` provide a direct dependency graph and clearer failure propagation.
+
+## Current verification findings
+
+- `.github/workflows/policy.yml` is present. Policy Enforcement run #495 on PR #318 ended `startup_failure` with zero jobs; no job logs exist, so the startup cause remains unresolved.
+- On prior branch head `5a1d792666ceb4d6e322ff77723ad69e92cd7aa9`, CI backend/frontend, Quality, Docker backend publisher, Frontend Container, Coverage and Type Check completed successfully. Agent Parity and Devcontainer Build were still running at last inspection.
+- Current branch head is `8f5e6d14f999f5a1d81eba33e7900f09e560c70c`; no PR-triggered run is currently returned for that head. The final Compose image-tag correction therefore still needs a fresh qualification run.
+- The Policy Enforcement startup issue is separate from the reusable release chain and must be fixed before claiming all repository checks are green.
 
 ## Registry and token model
 
@@ -134,8 +141,8 @@ For an external event producer, the supported GitHub dispatch endpoint is `POST 
 - [x] Remove unverified static PyPI-token publishing path.
 - [ ] Confirm actual staging/production Environment variables, secrets and protection rules in GitHub Settings; workflow references alone do not prove they are configured.
 - [ ] Populate runtime secrets through GitHub Settings using newly generated values; values cannot be read back through the GitHub API.
-- [ ] Verify Actions checks on the pull request, including both image builds and the release-call graph.
-- [ ] Verify GHCR package access for the deployment workflow's built-in read-only token.
+- [ ] Obtain a fresh PR run on head `8f5e6d14f999f5a1d81eba33e7900f09e560c70c`; prior-head runs do not validate the final setup image-tag change.
+- [ ] Resolve `.github/workflows/policy.yml` startup failure and verify GHCR package access for the deployment workflow's built-in read-only token.
 - [ ] Add and test automatic rollback for production; staging already has a rollback path.
 
 ## Explicit non-goals
