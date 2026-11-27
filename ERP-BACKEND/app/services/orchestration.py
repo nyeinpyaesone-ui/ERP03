@@ -196,6 +196,25 @@ class OperationService:
         await self.session.flush()
         return operation
 
+    async def start_operation(self, operation: Operation) -> Operation:
+        """Move a durable operation into PROCESSING within its caller transaction.
+
+        Synchronous domain handlers call this after creating the operation and
+        commit the state together with the domain mutation. Background workers
+        should continue to use claim_next() so row-level leases are respected.
+        """
+        if not operation.can_transition_to(OperationState.PROCESSING):
+            raise ConflictError(
+                f"Operation {operation.operation_id} cannot transition to processing"
+            )
+        now = datetime.now(UTC)
+        operation.state = OperationState.PROCESSING
+        operation.claimed_at = now
+        operation.claimed_by = self.worker_id
+        operation.updated_at = now
+        await self.session.flush()
+        return operation
+
     async def commit_operation(
         self,
         operation: Operation,
