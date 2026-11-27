@@ -227,27 +227,27 @@ class OperationService:
         commit the state together with the domain mutation. Background workers
         should continue to use claim_next() so row-level leases are respected.
         """
-        operation = await self.session.scalar(
+        current = await self.session.scalar(
             select(Operation)
             .where(Operation.id == operation.id)
             .with_for_update()
             .execution_options(populate_existing=True)
         )
         if (
-            operation is None
-            or not operation.is_claimable
-            or not operation.can_transition_to(OperationState.PROCESSING)
+            current is None
+            or not current.is_claimable
+            or not current.can_transition_to(OperationState.PROCESSING)
         ):
             raise ConflictError("Operation cannot transition to processing")
-        previous_state = operation.state.value
+        previous_state = current.state.value
         now = datetime.now(UTC)
-        operation.state = OperationState.PROCESSING
-        operation.claimed_at = now
-        operation.claimed_by = self.worker_id
-        operation.updated_at = now
+        current.state = OperationState.PROCESSING
+        current.claimed_at = now
+        current.claimed_by = self.worker_id
+        current.updated_at = now
         await self.session.flush()
-        self._record_transition(operation, previous_state, OperationState.PROCESSING.value)
-        return operation
+        self._record_transition(current, previous_state, OperationState.PROCESSING.value)
+        return current
 
     async def _lock_processing_operation(self, operation: Operation) -> Operation:
         """Reload and lock an operation, enforcing the current worker lease."""
