@@ -32,10 +32,13 @@ else
   printf '[SKIP] docker        reason=no-daemon (%s)\n' "$AGENT_ENV_NAME"
 fi
 
-if grep -q '"used_pg": *false' "$JSON"; then
-  echo "[SKIP] postgres      reason=sqlite-fallback"
+if grep -q '"used_pg": *true' "$JSON"; then
+  echo "[PASS] postgres      authenticated connection verified"
+elif grep -q '"db_mode": *"required"' "$JSON"; then
+  echo "[FAIL] postgres      required by policy; connection unavailable"
+  RC=1
 else
-  echo "[PASS] postgres      reachable"
+  echo "[SKIP] postgres      reason=sqlite-fallback (local-only qualification)"
 fi
 
 if [ -x .venv/bin/mypy ] || command -v mypy >/dev/null 2>&1; then
