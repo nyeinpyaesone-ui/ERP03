@@ -14,6 +14,7 @@ write transaction), so two workers never process the same operation.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -23,10 +24,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError
+from app.core.operation_metrics import record_operation_retry, record_operation_transition
 from app.models.operations import (
     Operation,
     OperationState,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class OperationService:
@@ -35,6 +40,24 @@ class OperationService:
     def __init__(self, session: AsyncSession, worker_id: str | None = None) -> None:
         self.session = session
         self.worker_id = worker_id or f"worker-{id(self)}"
+
+    def _record_transition(
+        self, operation: Operation, from_state: str, to_state: str
+    ) -> None:
+        record_operation_transition(operation.operation_type, from_state, to_state)
+        fields = {
+            "operation_id": operation.operation_id,
+            "operation_type": operation.operation_type,
+            "business_id": str(operation.business_id),
+            "branch_id": str(operation.branch_id) if operation.branch_id else None,
+            "from_state": from_state,
+            "to_state": to_state,
+            "worker_id": self.worker_id,
+        }
+        request_id = operation.payload_json.get("request_id")
+        if isinstance(request_id, str):
+            fields["request_id"] = request_id
+        logger.info("operation_state_transition", extra=fields)
 
     # ------------------------------------------------------------------ create
 
@@ -123,6 +146,7 @@ class OperationService:
                 canonical_payload=canonical_payload,
             )
             return existing
+        self._record_transition(operation, "new", OperationState.PENDING.value)
         return operation
 
     # ------------------------------------------------------------------ read
@@ -189,11 +213,13 @@ class OperationService:
             if datetime.now(UTC) < backoff:
                 return None
 
+        previous_state = operation.state.value
         operation.state = OperationState.PROCESSING
         operation.claimed_at = datetime.now(UTC)
         operation.claimed_by = self.worker_id
         operation.updated_at = datetime.now(UTC)
         await self.session.flush()
+        self._record_transition(operation, previous_state, OperationState.PROCESSING.value)
         return operation
 
     async def start_operation(self, operation: Operation) -> Operation:
@@ -207,12 +233,14 @@ class OperationService:
             raise ConflictError(
                 f"Operation {operation.operation_id} cannot transition to processing"
             )
+        previous_state = operation.state.value
         now = datetime.now(UTC)
         operation.state = OperationState.PROCESSING
         operation.claimed_at = now
         operation.claimed_by = self.worker_id
         operation.updated_at = now
         await self.session.flush()
+        self._record_transition(operation, previous_state, OperationState.PROCESSING.value)
         return operation
 
     async def _lock_processing_operation(self, operation: Operation) -> Operation:
@@ -268,6 +296,7 @@ class OperationService:
             raise ConflictError(
                 f"Operation {operation.operation_id} cannot transition to committed"
             )
+        previous_state = operation.state.value
         operation.state = OperationState.COMMITTED
         operation.result_json = result
         operation.committed_at = datetime.now(UTC)
@@ -275,6 +304,7 @@ class OperationService:
         operation.claimed_at = None
         operation.claimed_by = None
         await self.session.flush()
+        self._record_transition(operation, previous_state, OperationState.COMMITTED.value)
 
     async def fail_operation(
         self,
@@ -287,6 +317,7 @@ class OperationService:
         operation = await self._lock_processing_operation(operation)
         if not operation.can_transition_to(OperationState.FAILED):
             raise ConflictError(f"Operation {operation.operation_id} cannot transition to failed")
+        previous_state = operation.state.value
         operation.retry_count += 1
         operation.error_code = error_code
         operation.error_message = error_message
@@ -302,6 +333,8 @@ class OperationService:
             operation.backoff_until = datetime.now(UTC) + timedelta(seconds=backoff_seconds)
             operation.state = OperationState.FAILED
         await self.session.flush()
+        self._record_transition(operation, previous_state, operation.state.value)
+        record_operation_retry(operation.operation_type, error_code)
 
     async def cancel_operation(self, operation: Operation) -> None:
         """Cancel a non-terminal operation for controlled manual recovery."""
@@ -309,11 +342,13 @@ class OperationService:
             raise ConflictError(
                 f"Operation {operation.operation_id} cannot transition to cancelled"
             )
+        previous_state = operation.state.value
         operation.state = OperationState.CANCELLED
         operation.claimed_at = None
         operation.claimed_by = None
         operation.updated_at = datetime.now(UTC)
         await self.session.flush()
+        self._record_transition(operation, previous_state, OperationState.CANCELLED.value)
 
     # ------------------------------------------------------------------ reconcile
 
@@ -343,10 +378,15 @@ class OperationService:
             operation = await self.session.get(Operation, op_id)
             if operation is None:
                 continue
+            previous_state = operation.state.value
             operation.state = OperationState.PENDING
             operation.claimed_at = None
             operation.claimed_by = None
             operation.updated_at = datetime.now(UTC)
             recovered.append(operation)
         await self.session.flush()
+        for operation in recovered:
+            self._record_transition(
+                operation, OperationState.PROCESSING.value, OperationState.PENDING.value
+            )
         return recovered
