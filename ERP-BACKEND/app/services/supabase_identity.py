@@ -27,18 +27,14 @@ async def link_supabase_identity(
         raise ForbiddenError("Supabase email must match the authenticated ERP03 user's email")
 
     locked_user = await session.scalar(
-        select(User)
-        .where(User.id == erp_user.id, User.active.is_(True))
-        .with_for_update()
+        select(User).where(User.id == erp_user.id, User.active.is_(True)).with_for_update()
     )
     if locked_user is None:
         raise ForbiddenError("Authenticated ERP03 user is no longer active")
     if normalized_email != locked_user.email.strip().casefold():
         raise ForbiddenError("Supabase email must match the authenticated ERP03 user's email")
 
-    existing = await session.scalar(
-        select(User).where(User.supabase_user_id == supabase_user_id)
-    )
+    existing = await session.scalar(select(User).where(User.supabase_user_id == supabase_user_id))
     if existing is not None and existing.id != locked_user.id:
         raise ConflictError("Supabase identity is already linked to another ERP03 user")
     if locked_user.supabase_user_id not in (None, supabase_user_id):
