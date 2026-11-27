@@ -343,6 +343,7 @@ async def test_concurrent_replay_with_same_idempotency_key_commits_once():
     assert len(invoices) == 1
     assert operation is not None and operation.state == OperationState.COMMITTED
 
+
 @pytest.mark.asyncio
 async def test_owner_token_cannot_cross_branch_boundary():
     business, branch, warehouse, user = await _bootstrap("BR")
