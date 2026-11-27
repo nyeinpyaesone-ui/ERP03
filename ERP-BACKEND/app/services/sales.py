@@ -109,7 +109,7 @@ def sale_operation_id(
     """Return a stable tenant/branch-scoped operation identity for a POS sale."""
     if idempotency_key is None:
         return f"pos-sale:{uuid4().hex}"
-    identity = f"{business_id}:{branch_id}:{idempotency_key}".encode("utf-8")
+    identity = f"{business_id}:{branch_id}:{idempotency_key}".encode()
     return f"pos-sale:{hashlib.sha256(identity).hexdigest()}"
 
 
