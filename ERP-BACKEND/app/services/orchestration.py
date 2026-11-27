@@ -61,8 +61,9 @@ class OperationService:
     @staticmethod
     def _canonical_payload(payload: dict[str, Any]) -> str:
         """Serialize a command deterministically for idempotency comparison."""
+        command = {key: value for key, value in payload.items() if key != "request_id"}
         return json.dumps(
-            payload,
+            command,
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=False,
