@@ -131,6 +131,7 @@ async def test_bootstrap_login_and_pos_sale_round_trip():
         )
         assert operation is not None
         assert operation.state == OperationState.COMMITTED
+        assert operation.payload_json["request_id"] == sale.headers["x-request-id"]
         assert operation.result_json == {
             "invoice_id": sale.json()["invoice_id"],
             "total": "200.00",
