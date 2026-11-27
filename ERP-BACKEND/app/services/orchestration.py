@@ -30,7 +30,6 @@ from app.models.operations import (
     OperationState,
 )
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -386,7 +385,6 @@ class OperationService:
             operation = await self.session.get(Operation, op_id)
             if operation is None:
                 continue
-            previous_state = operation.state.value
             operation.state = OperationState.PENDING
             operation.claimed_at = None
             operation.claimed_by = None
