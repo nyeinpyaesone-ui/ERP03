@@ -7,6 +7,14 @@ on:
         description: "Immutable release tag to deploy (for example v1.0.0)"
         required: true
         type: string
+      backend_digest:
+        description: "Published backend OCI digest (sha256:...)"
+        required: true
+        type: string
+      frontend_digest:
+        description: "Published frontend OCI digest (sha256:...)"
+        required: true
+        type: string
       confirm:
         description: "Type DEPLOY-PRODUCTION to authorize deployment"
         required: true
@@ -29,15 +37,25 @@ jobs:
       name: production
     timeout-minutes: 30
     steps:
-      - name: Validate release ref
+      - name: Validate release ref and image digests
         env:
           VERSION: ${{ inputs.version }}
+          BACKEND_DIGEST: ${{ inputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
         run: |
-          set -euo pipefail
-          case "$VERSION" in
-            v[0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "Invalid release tag: $VERSION"; exit 1 ;;
-          esac
+          set -Eeuo pipefail
+          [[ "$VERSION" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || {
+            echo "::error::version must be a semantic version tag"
+            exit 1
+          }
+          [[ "$BACKEND_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::backend_digest must be a sha256 OCI digest"
+            exit 1
+          }
+          [[ "$FRONTEND_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::frontend_digest must be a sha256 OCI digest"
+            exit 1
+          }
 
       - name: Checkout immutable release
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -45,6 +63,10 @@ jobs:
           ref: ${{ inputs.version }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Resolve release source commit
+        id: source
+        run: echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Configure SSH
         env:
@@ -65,6 +87,9 @@ jobs:
       - name: Deploy immutable release
         env:
           VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          BACKEND_DIGEST: ${{ inputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
@@ -81,7 +106,7 @@ jobs:
           test -n "$GHCR_TOKEN"
 
           printf -v release_path '%s/releases/%s' "$DEPLOY_PATH" "$VERSION"
-          printf -v remote_args '%q %q %q' "$release_path" "$DEPLOY_ENV_FILE" "$VERSION"
+          printf -v remote_args '%q %q %q %q %q %q' "$release_path" "$DEPLOY_ENV_FILE" "$VERSION" "$BACKEND_DIGEST" "$FRONTEND_DIGEST" "$SOURCE_SHA"
           port="$DEPLOY_SSH_PORT"
           if [ -z "$port" ]; then port=22; fi
 
@@ -105,13 +130,22 @@ jobs:
           release_path="$1"
           env_file="$2"
           version="$3"
+          backend_digest="$4"
+          frontend_digest="$5"
+          source_sha="$6"
           cd "$release_path"
 
-          export ERP03_BACKEND_IMAGE="ghcr.io/nyeinpyaesone-ui/erp03-backend:$version"
-          export ERP03_FRONTEND_IMAGE="ghcr.io/nyeinpyaesone-ui/erp03-frontend:$version"
+          backend_image="ghcr.io/nyeinpyaesone-ui/erp03-backend@$backend_digest"
+          frontend_image="ghcr.io/nyeinpyaesone-ui/erp03-frontend@$frontend_digest"
+          export ERP03_BACKEND_IMAGE="$backend_image"
+          export ERP03_FRONTEND_IMAGE="$frontend_image"
           export IMAGE_TAG="$version"
 
           docker compose --env-file "$env_file" --profile full pull backend frontend
+          backend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$backend_image")"
+          frontend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$frontend_image")"
+          test "$backend_revision" = "$source_sha" || { echo "Backend digest does not match release source"; exit 1; }
+          test "$frontend_revision" = "$source_sha" || { echo "Frontend digest does not match release source"; exit 1; }
           docker compose --env-file "$env_file" --profile full run --rm migrate
           docker compose --env-file "$env_file" --profile full up -d --remove-orphans backend frontend
           docker compose --env-file "$env_file" --profile full ps
