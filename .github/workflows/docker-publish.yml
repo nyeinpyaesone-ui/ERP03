@@ -4,9 +4,9 @@ on:
     - cron: '41 16 * * *'
   push:
     branches: [ "main" ]
-    tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ "main" ]
+  workflow_call:
 
 env:
   REGISTRY: ghcr.io
