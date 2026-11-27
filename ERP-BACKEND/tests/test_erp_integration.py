@@ -205,9 +205,8 @@ async def test_pos_sale_rollback_restores_stock_and_operation_after_post_mutatio
         assert await session.scalar(select(Invoice).where(Invoice.invoice_no == invoice_no)) is None
         operation = await session.scalar(
             select(Operation).where(
-                Operation.operation_id == sale_operation_id(
-                    business.id, branch.id, f"{business.id}:{key}"
-                )
+                Operation.operation_id
+                == sale_operation_id(business.id, branch.id, f"{business.id}:{key}")
             )
         )
         assert operation is None
