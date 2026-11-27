@@ -14,6 +14,7 @@ QUALIFY_JSON=""
 QUALIFY_STEPS=()
 QUALIFY_CURRENT="init"
 QUALIFY_USED_PG="false"
+QUALIFY_DB_MODE="${QUALIFY_DB_MODE:-auto}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -41,10 +42,10 @@ write_evidence() {
   fi
   [ -n "$QUALIFY_JSON" ] || return 0
   {
-    printf '{"env":"%s","arch":"%s","commit":"%s","used_pg":%s,"steps":[' \
+    printf '{"env":"%s","arch":"%s","commit":"%s","db_mode":"%s","used_pg":%s,"steps":[' \
       "${AGENT_ENV_NAME:-local}" "$(uname -m)" \
       "$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo none)" \
-      "$QUALIFY_USED_PG"
+      "$QUALIFY_DB_MODE" "$QUALIFY_USED_PG"
     local first=1
     for s in "${QUALIFY_STEPS[@]}"; do
       [ "$first" -eq 1 ] && first=0 || printf ','
@@ -65,9 +66,7 @@ require_path() {
   }
 }
 
-# ---------------------------------------------------------------------------
 # Activate the provisioned virtualenv (created by scripts/setup.sh).
-# ---------------------------------------------------------------------------
 VENV_DIR="${VENV_DIR:-$ROOT_DIR/.venv}"
 if [[ ! -x "$VENV_DIR/bin/python" ]]; then
   die "virtualenv not found at $VENV_DIR. Run ./scripts/setup.sh first."
@@ -79,47 +78,72 @@ command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 2; }
 command -v node >/dev/null || { echo "node is required" >&2; exit 2; }
 command -v npm >/dev/null || { echo "npm is required" >&2; exit 2; }
 
-# ---------------------------------------------------------------------------
-# Database URL resolution with precondition probe.
-# Prefer PostgreSQL when reachable; otherwise fall back to hermetic SQLite
-# with a clear warning instead of an opaque asyncpg connection error.
-# ---------------------------------------------------------------------------
+# Database policy: auto preserves local PRoot behavior; required is fail-closed
+# for CI/release qualification; sqlite explicitly selects the hermetic local suite.
 DEFAULT_PG_URL="postgresql+asyncpg://erp03:erp03@127.0.0.1:5432/erp03"
 SQLITE_URL="sqlite+aiosqlite:////tmp/erp03-qualify.sqlite3"
-
 : "${DATABASE_URL:=$DEFAULT_PG_URL}"
+export DATABASE_URL
 
 probe_postgres() {
   local url="$1"
   [[ "$url" == postgresql+asyncpg://* ]] || return 1
-  python3 - <<EOF >/dev/null 2>&1
-import asyncio, asyncpg, sys
+  DATABASE_URL="$url" python3 - <<'PY'
+import asyncio
+import os
+import sys
+import asyncpg
+
 async def main():
     try:
-        conn = await asyncpg.connect("${url}", timeout=2)
+        conn = await asyncpg.connect(os.environ["DATABASE_URL"], timeout=5)
+        await conn.execute("SELECT 1")
         await conn.close()
-    except Exception:
+    except Exception as exc:
+        # Do not print the DSN: it may contain credentials.
+        print(f"PostgreSQL connection probe failed: {type(exc).__name__}", file=sys.stderr)
         raise SystemExit(1)
+
 asyncio.run(main())
-EOF
+PY
 }
 
+step_begin "database"
 USE_PG=false
 QUALIFY_USED_PG="false"
-if probe_postgres "$DATABASE_URL"; then
-  USE_PG=true
-  QUALIFY_USED_PG="true"
-  log "PostgreSQL reachable at $DATABASE_URL — qualification will run against it"
-else
-  warn "PostgreSQL not reachable at $DATABASE_URL"
-  warn "Falling back to hermetic SQLite: $SQLITE_URL"
-  warn "To run against PostgreSQL, set DATABASE_URL to a reachable instance."
-  DATABASE_URL="$SQLITE_URL"
-  export DATABASE_URL
-  # Must also set ENVIRONMENT=development to avoid production validation error
-  ENVIRONMENT=development
-  export ENVIRONMENT
-fi
+case "$QUALIFY_DB_MODE" in
+  required)
+    if ! probe_postgres "$DATABASE_URL"; then
+      die "QUALIFY_DB_MODE=required but PostgreSQL is unavailable; SQLite fallback is forbidden."
+    fi
+    USE_PG=true
+    QUALIFY_USED_PG="true"
+    log "PostgreSQL verified; strict database qualification enabled"
+    ;;
+  sqlite)
+    DATABASE_URL="$SQLITE_URL"
+    ENVIRONMENT=development
+    export DATABASE_URL ENVIRONMENT
+    warn "Explicit SQLite qualification mode selected; this is not PostgreSQL evidence."
+    ;;
+  auto)
+    if probe_postgres "$DATABASE_URL"; then
+      USE_PG=true
+      QUALIFY_USED_PG="true"
+      log "PostgreSQL verified; qualification will use PostgreSQL"
+    else
+      warn "PostgreSQL is unavailable; falling back to hermetic SQLite: $SQLITE_URL"
+      warn "This local fallback does not qualify PostgreSQL behavior."
+      DATABASE_URL="$SQLITE_URL"
+      ENVIRONMENT=development
+      export DATABASE_URL ENVIRONMENT
+    fi
+    ;;
+  *)
+    die "invalid QUALIFY_DB_MODE='$QUALIFY_DB_MODE' (expected: auto, required, sqlite)"
+    ;;
+esac
+step_done
 
 log "Validate repository foundations"
 require_path "$BACKEND_DIR/alembic.ini" "Alembic configuration"
@@ -144,7 +168,6 @@ def _collect_paths(routes, out):
         p = getattr(r, 'path', None)
         if p:
             out.add(p)
-        # FastAPI 0.162+: included routers expose routes via original_router
         orig = getattr(r, 'original_router', None)
         if orig:
             _collect_paths(orig.routes, out)
@@ -172,6 +195,7 @@ assert any('/api/v1/sales' in p or p == '/sales' for p in paths), paths
 print('development configuration and critical routes: OK')
 "
 fi
+step_done
 
 step_begin "migrate"
 DATABASE_URL="$DATABASE_URL" alembic upgrade head
