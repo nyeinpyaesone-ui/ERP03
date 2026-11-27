@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import Claims
@@ -67,104 +68,108 @@ async def register(
     payload: RegisterRequest,
     session: AsyncSession = Depends(get_db_session),
 ) -> RegisterResponse:
-    """Register a new business and admin user.
+    """Register a business and its owner atomically.
 
-    Creates a business, an owner user, assigns the Owner role with default
-    permissions, and returns a JWT access token. This is a self-service
-    onboarding endpoint — no prior authentication required.
+    Registration returns the new identifiers. The client must call /auth/login
+    with the supplied credentials to obtain an access token.
+    User email addresses are unique within a business, matching the database
+    constraint and the business-code-scoped login contract.
     """
-    # Check if business already exists
-    existing_business = await session.scalar(
-        select(Business).where(Business.code == payload.business_code.strip())
-    )
-    if existing_business:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Business code already exists",
-        )
+    business_code = payload.business_code.strip()
+    email = str(payload.email).lower()
+    permission_codes = {
+        "sales.create",
+        "products.manage",
+        "customers.manage",
+        "suppliers.manage",
+        "purchases.receive",
+    }
 
-    # Check if user email already exists
-    existing_user = await session.scalar(select(User).where(User.email == payload.email.lower()))
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email already registered",
-        )
+    try:
+        async with session.begin():
+            # Keep all reads and writes within one explicit transaction.
+            # A query before begin() triggers AsyncSession autobegin.
+            existing_business = await session.scalar(
+                select(Business.id).where(Business.code == business_code)
+            )
+            if existing_business is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Business code already exists",
+                )
 
-    async with session.begin():
-        # Create business
-        business = Business(
-            id=uuid4(),
-            name=payload.business_name or payload.business_code,
-            code=payload.business_code.strip(),
-            default_currency=payload.default_currency or "MMK",
-            timezone=payload.timezone or "Asia/Yangon",
-            locale=payload.locale or "my-MM",
-            active=True,
-        )
-        session.add(business)
-        await session.flush()
-
-        # Create owner user
-        user = User(
-            id=uuid4(),
-            business_id=business.id,
-            email=payload.email.lower(),
-            password_hash=hash_password(payload.password),
-            display_name=payload.display_name,
-            active=True,
-        )
-        session.add(user)
-        await session.flush()
-
-        # Ensure permissions exist
-        perm_codes = {
-            "sales.create",
-            "products.manage",
-            "customers.manage",
-            "suppliers.manage",
-            "purchases.receive",
-        }
-        permissions = (
-            await session.scalars(select(Permission).where(Permission.code.in_(perm_codes)))
-        ).all()
-        perm_by_code = {p.code: p for p in permissions}
-
-        missing = [c for c in perm_codes if c not in perm_by_code]
-        if missing:
-            for code in missing:
-                session.add(Permission(id=uuid4(), code=code, description=f"{code} permission"))
+            business = Business(
+                id=uuid4(),
+                name=payload.business_name or business_code,
+                code=business_code,
+                default_currency=payload.default_currency or "MMK",
+                timezone=payload.timezone or "Asia/Yangon",
+                locale=payload.locale or "my-MM",
+                active=True,
+            )
+            session.add(business)
             await session.flush()
+
+            user = User(
+                id=uuid4(),
+                business_id=business.id,
+                email=email,
+                password_hash=hash_password(payload.password),
+                display_name=payload.display_name,
+                active=True,
+            )
+            session.add(user)
+            await session.flush()
+
+            # Permission rows are migration-owned reference data. Do not
+            # mutate the shared catalogue during an individual registration.
             permissions = (
-                await session.scalars(select(Permission).where(Permission.code.in_(perm_codes)))
+                await session.scalars(
+                    select(Permission).where(Permission.code.in_(permission_codes))
+                )
             ).all()
-            perm_by_code = {p.code: p for p in permissions}
+            permissions_by_code = {permission.code: permission for permission in permissions}
+            missing = permission_codes - permissions_by_code.keys()
+            if missing:
+                missing_list = ", ".join(sorted(missing))
+                raise RuntimeError(f"Missing permission catalog entries: {missing_list}")
 
-        # Create Owner role
-        owner_role = Role(
-            id=uuid4(),
-            business_id=business.id,
-            name="Owner",
-        )
-        session.add(owner_role)
-        await session.flush()
+            owner_role = Role(
+                id=uuid4(),
+                business_id=business.id,
+                name="Owner",
+            )
+            session.add(owner_role)
+            await session.flush()
 
-        # Assign permissions to Owner role
-        for code in perm_codes:
+            for code in sorted(permission_codes):
+                await session.execute(
+                    role_permissions.insert().values(
+                        role_id=owner_role.id,
+                        permission_id=permissions_by_code[code].id,
+                    )
+                )
+
             await session.execute(
-                role_permissions.insert().values(
+                user_roles.insert().values(
+                    user_id=user.id,
                     role_id=owner_role.id,
-                    permission_id=perm_by_code[code].id,
                 )
             )
-
-        # Assign Owner role to user
-        await session.execute(
-            user_roles.insert().values(
-                user_id=user.id,
-                role_id=owner_role.id,
-            )
+    except IntegrityError as exc:
+        # A concurrent request may lose the unique business-code race after
+        # both requests pass the pre-insert check. Translate that known race
+        # into the same 409 response; do not mask unrelated integrity errors.
+        await session.rollback()
+        duplicate_business = await session.scalar(
+            select(Business.id).where(Business.code == business_code)
         )
+        if duplicate_business is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Business code already exists",
+            ) from exc
+        raise
 
     return RegisterResponse(
         business_id=str(business.id),
