@@ -3,7 +3,7 @@ from uuid import UUID
 
 import jwt
 from argon2 import PasswordHasher
-from argon2.exceptions import Argon2Error
+from argon2.exceptions import Argon2Error, InvalidHashError
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -20,7 +20,7 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, password_hash: str) -> bool:
     try:
         return password_hasher.verify(password_hash, password)
-    except Argon2Error:
+    except (Argon2Error, InvalidHashError):
         # Any hashing failure (bad hash format, invalid credentials, unknown
         # parameters) authenticates nobody; never surface it as a 500.
         return False
