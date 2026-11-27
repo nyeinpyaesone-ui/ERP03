@@ -38,7 +38,7 @@ flowchart TD
 
 - `.github/workflows/policy.yml` is present. Policy Enforcement run #495 on PR #318 ended `startup_failure` with zero jobs; no job logs exist, so the startup cause remains unresolved.
 - On prior branch head `5a1d792666ceb4d6e322ff77723ad69e92cd7aa9`, CI backend/frontend, Quality, Docker backend publisher, Frontend Container, Coverage and Type Check completed successfully. Agent Parity and Devcontainer Build were still running at last inspection.
-- Current branch head is `8f5e6d14f999f5a1d81eba33e7900f09e560c70c`; no PR-triggered run is currently returned for that head. The final Compose image-tag correction therefore still needs a fresh qualification run.
+- No PR-triggered run is currently returned for the latest branch head. The final Compose image-tag correction therefore still needs a fresh qualification run.
 - The Policy Enforcement startup issue is separate from the reusable release chain and must be fixed before claiming all repository checks are green.
 
 ## Registry and token model
