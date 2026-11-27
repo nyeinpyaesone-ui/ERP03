@@ -124,7 +124,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          status_json="$(supabase status --env --output-format json)"
+          status_json="$(supabase status --output json)"
           api_url="$(jq -r '.API_URL // empty' <<< "$status_json")"
           publishable_key="$(jq -r '.PUBLISHABLE_KEY // empty' <<< "$status_json")"
           test -n "$api_url"
