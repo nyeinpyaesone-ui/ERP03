@@ -53,7 +53,7 @@ Two `.env` files — never mix:
 
 The compose file is **not** read by the backend (Settings uses `extra="forbid"`).
 
-Docker Hub images (multi-arch amd64/arm64): `nyeinpyaesone-ui/erp03-backend`, `nyeinpyaesone-ui/erp03-frontend` (`IMAGE_TAG=latest`).
+GHCR images (multi-arch amd64/arm64): `ghcr.io/nyeinpyaesone-ui/erp03-backend` and `ghcr.io/nyeinpyaesone-ui/erp03-frontend`. Use immutable commit-SHA tags for staging/production.
 
 Never commit real credentials, `.env` files, or anything under `secrets/` or `.agent/`. All three are gitignored.
 
@@ -96,14 +96,14 @@ Add a DB column: modify `app/models/*.py` → `alembic revision --autogenerate -
 
 | Workflow | Trigger | Key steps |
 |----------|---------|-----------|
-| `ci.yml` | push/PR `main`, `feat/**`, `fix/**` | PG + Redis services → compile → migrate (5 retries) → pytest (3 retries) → frontend build |
+| `ci.yml` | push/PR `main`, manual dispatch, reusable call | PG + Redis services → compile → migrate → pytest → frontend build; calls `quality.yml` |
 | `quality.yml` | push/PR | ruff check/format + compileall + frontend build |
 | `security.yml` | schedule/PR | pip-audit + CodeQL |
-| `container.yml` | push tag/main/release | Docker Hub multi-arch (amd64/arm64) + provenance + SBOM |
+| `container.yml` | push main/release branches, PR, reusable call from Release | GHCR backend + frontend multi-arch (amd64/arm64), provenance, SBOM, manifest verification |
 | `iac.yml` | push/PR | terraform fmt/validate/plan |
-| `release.yml` | push tags `v*` | SemVer tag → GitHub Release → PyPI |
+| `release.yml` | push tags `v*` | CI + Quality → backend/frontend GHCR images → GitHub Release |
 
-All GitHub Actions references pinned to 40-char commit SHAs. Concurrency groups (`ci-${{ github.ref }}`, `quality-${{ github.ref }}`) cancel in-progress runs. CI secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`; `PYPI_TOKEN` (release).
+All GitHub Actions references pinned to 40-char commit SHAs. Concurrency groups (`ci-${{ github.ref }}`, `quality-${{ github.ref }}`) cancel in-progress runs. CI uses the built-in `GITHUB_TOKEN` only. GHCR publishing requires `packages: write`; GitHub Release requires `contents: write`. PyPI publishing is intentionally disabled until package metadata and a Trusted Publisher are configured.
 
 ## Local development quirks (verified)
 
