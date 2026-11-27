@@ -181,7 +181,6 @@ declare -A SECRET_SPECS=(
   ["SECRET_KEY"]="Application secret key|token_urlsafe(48)|all"
   ["POSTGRES_PASSWORD"]="PostgreSQL password|token_hex(24)|production,compose"
   ["REDIS_PASSWORD"]="Redis password|token_hex(24)|compose"
-  ["DB_PASSWORD"]="Legacy database password override|from_env|production"
 )
 
 # Generate secure values using system python3 (no venv dependency)
@@ -556,7 +555,7 @@ start_infra() {
   fi
   log "Starting Docker Compose stack using .env.compose..."
   # Use the generated .env.compose for consistent secrets
-  (cd "$ROOT_DIR" && compose_cmd --env-file .env.compose up -d --build)
+  (cd "$ROOT_DIR" && compose_cmd --env-file .env.compose --profile full up -d --build)
   log "Compose stack started: API http://localhost:8000/docs · UI http://localhost:3000"
 }
 
