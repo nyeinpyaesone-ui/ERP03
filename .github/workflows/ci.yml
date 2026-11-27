@@ -150,7 +150,7 @@ jobs:
           pip install -r dev-requirements.txt
       - name: Verify live Supabase Auth integration
         working-directory: ERP-BACKEND
-        run: pytest -q tests/test_supabase_auth.py
+        run: pytest -q --no-cov tests/test_supabase_auth.py
       - name: Stop isolated Supabase stack
         if: always()
         run: supabase stop --no-backup || true
