@@ -181,13 +181,7 @@ declare -A SECRET_SPECS=(
   ["SECRET_KEY"]="Application secret key|token_urlsafe(48)|all"
   ["POSTGRES_PASSWORD"]="PostgreSQL password|token_hex(24)|production,compose"
   ["REDIS_PASSWORD"]="Redis password|token_hex(24)|compose"
-  ["DOCKERHUB_TOKEN"]="Docker Hub PAT|from_github|ci,production"
-  ["DB_PASSWORD"]="Production DB password|from_github|production"
-  ["DB_HOST"]="Production DB host|from_github|production"
-  ["REDIS_USER"]="Redis username|default:default|compose"
-  ["REDIS_ACCOUNT_NUMBER"]="Upstash Redis account|from_github|production"
-  ["API_REDIS_KEY"]="Upstash Redis REST API key|from_github|production"
-  ["OLLAMA_IMAGE_TAG"]="Ollama version|fixed:0.32.5|all"
+  ["DB_PASSWORD"]="Legacy database password override|from_env|production"
 )
 
 # Generate secure values using system python3 (no venv dependency)
@@ -248,13 +242,13 @@ auto_configure_all() {
   if $PRE_CONFIGURED_SECRETS; then
     log "Applying pre-configured secret values..."
     [[ -n "$PRE_SECRET_KEY" ]] && SECRETS[SECRET_KEY]="$PRE_SECRET_KEY" && log "  ✓ SECRET_KEY pre-configured"
-    [[ -n "$PRE_DB_PASSWORD" ]] && SECRETS[DB_PASSWORD]="$PRE_DB_PASSWORD" && log "  ✓ DB_PASSWORD pre-configured"
+    [[ -n "$PRE_DB_PASSWORD" ]] && SECRETS[POSTGRES_PASSWORD]="$PRE_DB_PASSWORD" && log "  ✓ database password pre-configured"
     [[ -n "$PRE_REDIS_PASSWORD" ]] && SECRETS[REDIS_PASSWORD]="$PRE_REDIS_PASSWORD" && log "  ✓ REDIS_PASSWORD pre-configured"
     [[ -n "$PRE_POSTGRES_PASSWORD" ]] && SECRETS[POSTGRES_PASSWORD]="$PRE_POSTGRES_PASSWORD" && log "  ✓ POSTGRES_PASSWORD pre-configured"
   fi
   # Also honor environment variables for non-interactive CI/CD use
   [[ -n "${ERP03_SECRET_KEY:-}" ]] && SECRETS[SECRET_KEY]="${ERP03_SECRET_KEY}" && log "  ✓ SECRET_KEY from ERP03_SECRET_KEY env"
-  [[ -n "${ERP03_DB_PASSWORD:-}" ]] && SECRETS[DB_PASSWORD]="${ERP03_DB_PASSWORD}" && log "  ✓ DB_PASSWORD from ERP03_DB_PASSWORD env"
+  [[ -n "${ERP03_DB_PASSWORD:-}" ]] && SECRETS[POSTGRES_PASSWORD]="${ERP03_DB_PASSWORD}" && log "  ✓ database password from ERP03_DB_PASSWORD env"
   [[ -n "${ERP03_REDIS_PASSWORD:-}" ]] && SECRETS[REDIS_PASSWORD]="${ERP03_REDIS_PASSWORD}" && log "  ✓ REDIS_PASSWORD from ERP03_REDIS_PASSWORD env"
   [[ -n "${ERP03_POSTGRES_PASSWORD:-}" ]] && SECRETS[POSTGRES_PASSWORD]="${ERP03_POSTGRES_PASSWORD}" && log "  ✓ POSTGRES_PASSWORD from ERP03_POSTGRES_PASSWORD env"
 
@@ -321,8 +315,8 @@ OTEL_EXPORTER_OTLP_ENDPOINT=
 DEBUG=true
 EOF
     else
-      local db_host="${SECRETS[DB_HOST]:-localhost}"
-      local db_pass="${SECRETS[DB_PASSWORD]}"
+      local db_host="${ERP03_DB_HOST:-localhost}"
+      local db_pass="${SECRETS[POSTGRES_PASSWORD]}"
       # Ensure DB_PASSWORD is not empty for production
       if [[ -z "$db_pass" || "$db_pass" == "__GITHUB_SECRET__" ]]; then
         warn "DB_PASSWORD not set locally; generate a strong one or set in GitHub secrets"
@@ -378,61 +372,35 @@ EOF
     log "Keeping existing $compose_env (use --force to regenerate)"
   else
     log "Generating $compose_env..."
-    # Use same passwords across all configs for consistency
+    # Keep generated names aligned with docker-compose.yml and GHCR.
     local pg_pass="${SECRETS[POSTGRES_PASSWORD]}"
     local redis_pass="${SECRETS[REDIS_PASSWORD]}"
-    local redis_user="${SECRETS[REDIS_USER]}"
+    local cors_origins="${ERP03_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}"
+    if [[ "$ENV_TYPE" == "production" ]]; then
+      [[ -n "${ERP03_CORS_ORIGINS:-}" ]] || die "ERP03_CORS_ORIGINS is required for production"
+      [[ "$ERP03_CORS_ORIGINS" != *"http://"* ]] || die "Production ERP03_CORS_ORIGINS must use HTTPS"
+      cors_origins="$ERP03_CORS_ORIGINS"
+    fi
     cat > "$compose_env" <<EOF
 # ERP03 Docker Compose Environment — AUTO-GENERATED
-# Environment: ${ENV_TYPE}
-# Usage: docker compose --env-file .env.compose up -d
-#        docker compose -f docker-compose.dev.yml --env-file .env.compose up -d
+# Usage: docker compose --env-file .env.compose --profile full up -d
 
-# Database (use 'erp03' consistently everywhere)
 POSTGRES_DB=erp03
 POSTGRES_USER=erp03
 POSTGRES_PASSWORD=${pg_pass}
-POSTGRES_HOST=postgres
-POSTGRES_PORT=5432
 
-# Redis
 REDIS_PASSWORD=${redis_pass}
-REDIS_USER=${redis_user}
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_URL=redis://:${redis_pass}@redis:6379/0
-REDIS_ACCOUNT_NUMBER=${SECRETS[REDIS_ACCOUNT_NUMBER]}
-API_REDIS_KEY=${SECRETS[API_REDIS_KEY]}
 
-# Docker Hub (for container.yml CI)
-DOCKERHUB_USERNAME=powerrangeranikg
-DOCKERHUB_TOKEN=${SECRETS[DOCKERHUB_TOKEN]}
-DOCKERHUB_IMAGE_BACKEND=powerrangeranikg/erp03-backend
-DOCKERHUB_IMAGE_FRONTEND=powerrangeranikg/erp03-frontend
+ERP03_ENVIRONMENT=${ENV_TYPE}
+ERP03_BACKEND_IMAGE=ghcr.io/nyeinpyaesone-ui/erp03-backend
+ERP03_FRONTEND_IMAGE=ghcr.io/nyeinpyaesone-ui/erp03-frontend
 IMAGE_TAG=${IMAGE_TAG:-latest}
 
-# Backend (production uses pre-built images; dev uses this for build-time)
 SECRET_KEY=${SECRETS[SECRET_KEY]}
-ENVIRONMENT=${ENV_TYPE}
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173
-API_URL=http://localhost:8000
-WS_URL=ws://localhost:8000
 DATABASE_URL=postgresql+asyncpg://erp03:${pg_pass}@postgres:5432/erp03
-OLLAMA_URL=http://ollama:11434
+CORS_ORIGINS=${cors_origins}
 
-# Frontend (Vite build-time injection)
 VITE_API_BASE_URL=/api
-VITE_WS_URL=ws://localhost:8000
-VITE_APP_TITLE=ERP03
-
-# Ollama
-OLLAMA_IMAGE_TAG=${SECRETS[OLLAMA_IMAGE_TAG]}
-
-# NGINX (production reverse proxy)
-NGINX_HTTP_PORT=80
-NGINX_HTTPS_PORT=443
-SSL_CERT_PATH=/etc/nginx/ssl/cert.pem
-SSL_KEY_PATH=/etc/nginx/ssl/key.pem
 EOF
     chmod 600 "$compose_env"
     log "  ✓ Compose config written"
