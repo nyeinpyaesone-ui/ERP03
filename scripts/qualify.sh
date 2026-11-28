@@ -91,17 +91,26 @@ SQLITE_URL="sqlite+aiosqlite:////tmp/erp03-qualify.sqlite3"
 
 probe_postgres() {
   local url="$1"
-  [[ "$url" == postgresql+asyncpg://* ]] || return 1
-  python3 - <<EOF >/dev/null 2>&1
-import asyncio, asyncpg, sys
+  [[ "$url" == postgresql+asyncpg://* || "$url" == postgresql://* ]] || return 1
+  python3 - "$url" <<'PY' >/dev/null 2>&1
+import asyncio
+import asyncpg
+import sys
+
+
 async def main():
+    url = sys.argv[1]
+    if url.startswith("postgresql+asyncpg://"):
+        url = "postgresql://" + url.removeprefix("postgresql+asyncpg://")
     try:
-        conn = await asyncpg.connect("${url}", timeout=2)
-        await conn.close()
+        connection = await asyncpg.connect(url, timeout=2)
+        await connection.close()
     except Exception:
         raise SystemExit(1)
+
+
 asyncio.run(main())
-EOF
+PY
 }
 
 USE_PG=false
@@ -111,6 +120,9 @@ if probe_postgres "$DATABASE_URL"; then
   QUALIFY_USED_PG="true"
   log "PostgreSQL reachable at $DATABASE_URL — qualification will run against it"
 else
+  if [ "${REQUIRE_POSTGRES:-0}" = "1" ]; then
+    die "PostgreSQL is required for this qualification environment but is not reachable at $DATABASE_URL"
+  fi
   warn "PostgreSQL not reachable at $DATABASE_URL"
   warn "Falling back to hermetic SQLite: $SQLITE_URL"
   warn "To run against PostgreSQL, set DATABASE_URL to a reachable instance."
