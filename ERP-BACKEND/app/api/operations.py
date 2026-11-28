@@ -22,7 +22,10 @@ def _tenant_id(claims: Claims) -> UUID:
     try:
         return UUID(claims["business_id"])
     except (KeyError, TypeError, ValueError) as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid tenant identity") from exc
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid tenant identity",
+        ) from exc
 
 
 def _branch_scope(claims: Claims, requested: UUID | None) -> UUID | None:
@@ -30,7 +33,10 @@ def _branch_scope(claims: Claims, requested: UUID | None) -> UUID | None:
     if assigned:
         assigned_id = UUID(str(assigned))
         if requested is not None and requested != assigned_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Branch access denied")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Branch access denied",
+            )
         return assigned_id
     return requested
 
@@ -79,7 +85,12 @@ async def get_business_context(
             for item in branches
         ],
         "warehouses": [
-            {"id": str(item.id), "branch_id": str(item.branch_id), "code": item.code, "name": item.name}
+            {
+                "id": str(item.id),
+                "branch_id": str(item.branch_id),
+                "code": item.code,
+                "name": item.name,
+            }
             for item in warehouses
         ],
     }
@@ -232,7 +243,9 @@ async def dashboard_summary(
         local_now = datetime.now(ZoneInfo(business.timezone))
     except (ZoneInfoNotFoundError, ValueError):
         local_now = datetime.now(UTC)
-    month_start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
+    month_start = local_now.replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0
+    ).astimezone(UTC)
 
     invoice_conditions = [
         Invoice.business_id == business_id,
