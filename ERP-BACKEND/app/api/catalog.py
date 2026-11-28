@@ -91,6 +91,7 @@ async def set_product_active(
             business_id=UUID(claims["business_id"]),
             product_id=product_id,
             active=payload.active,
+            claims=claims,
         )
     return ProductResponse.model_validate(product)
 
