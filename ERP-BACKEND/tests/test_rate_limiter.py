@@ -38,7 +38,6 @@ async def _rate_limit_key_for_token(token: str) -> str:
     return pipeline.zadd.call_args.args[0]
 
 
-
 def test_redis_client_uses_bounded_pool_and_fail_fast_timeouts():
     with patch("redis.asyncio.from_url") as mock_redis:
         RedisRateLimitMiddleware(_noop_app, redis_url="redis://localhost:6379/0")
