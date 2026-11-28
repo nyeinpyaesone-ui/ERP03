@@ -35,6 +35,7 @@ VENV_DIR="${VENV_DIR:-$ROOT_DIR/.venv}"
 WITH_INFRA=false
 QUALIFY=false
 SKIP_FRONTEND=false
+ALLOW_SQLITE_SMOKE=false
 SYNC_SECRETS=false
 ENV_TYPE="development"
 FORCE=false
@@ -57,6 +58,7 @@ while [[ $# -gt 0 ]]; do
     --with-infra) WITH_INFRA=true ;;
     --qualify) QUALIFY=true ;;
     --skip-frontend) SKIP_FRONTEND=true ;;
+    --allow-sqlite-smoke) ALLOW_SQLITE_SMOKE=true ;;
     --sync-secrets) SYNC_SECRETS=true ;;
     --env-type) ENV_TYPE="${2:-}"; shift ;;
     --force) FORCE=true ;;
@@ -119,10 +121,10 @@ require_cmd() {
 }
 
 python_cmd() {
-  # Prefer an explicit 3.12+ interpreter; fall back to python3.
+  # Keep local, CI, and container runtimes on the same supported minor line.
   for candidate in python3.12 python3 python; do
     if command -v "$candidate" >/dev/null 2>&1 &&
-       "$candidate" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)' 2>/dev/null; then
+       "$candidate" -c 'import sys; sys.exit(0 if sys.version_info[:2] == (3, 12) else 1)' 2>/dev/null; then
       echo "$candidate"
       return 0
     fi
@@ -133,32 +135,65 @@ python_cmd() {
 check_toolchain() {
   log "Toolchain check ($PLATFORM/$arch_lower via $PKG)"
   local py
-  py="$(python_cmd)" || die "Python >= 3.12 is required. Install hint [$PKG]: python3.12"
+  py="$(python_cmd)" || die "Python 3.12.x is required to match CI and the backend image. Install hint [$PKG]: python3.12"
   PY_VERSION="$("$py" --version 2>&1)"
   log "Using $py ($PY_VERSION)"
-  require_cmd node "nodejs (LTS 20+)"
-  require_cmd npm "bundled with nodejs"
-  NODE_MAJOR="$(node --version | sed 's/v\([0-9]*\).*/\1/')"
-  (( NODE_MAJOR >= 18 )) || die "Node >= 18 required, found $(node --version)"
-  if docker_available; then
-    log "Docker detected — compose services available locally"
+  require_cmd node "Node.js 22.12+ (LTS) is required by the frontend toolchain"
+  require_cmd npm "bundled with Node.js"
+  NODE_VERSION="$(node --version | sed 's/^v//')"
+  node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major === 22 && minor >= 12 ? 0 : 1)' || die "Node.js 22.12+ is required to match CI; found v$NODE_VERSION"
+  detect_container_runtime
+  if [[ -n "$CONTAINER_ENGINE" ]]; then
+    log "$CONTAINER_ENGINE detected — container services available when Compose is installed"
   else
-    warn "Docker not found: skipping container-based services (backend still runs against SQLite/Postgres URLs you provide)"
+    warn "No working Docker or Podman runtime detected; native backend setup remains available"
   fi
 }
 
-docker_available() {
-  command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1
+CONTAINER_ENGINE=""
+
+detect_container_runtime() {
+  CONTAINER_ENGINE=""
+  if command -v docker >/dev/null 2>&1 && timeout 5 docker info >/dev/null 2>&1; then
+    CONTAINER_ENGINE="docker"
+  elif command -v podman >/dev/null 2>&1 && timeout 5 podman info >/dev/null 2>&1; then
+    CONTAINER_ENGINE="podman"
+  fi
+}
+
+compose_available() {
+  case "$CONTAINER_ENGINE" in
+    docker)
+      docker compose version >/dev/null 2>&1 || command -v docker-compose >/dev/null 2>&1
+      ;;
+    podman)
+      podman compose version >/dev/null 2>&1 || command -v podman-compose >/dev/null 2>&1
+      ;;
+    *) return 1 ;;
+  esac
 }
 
 compose_cmd() {
-  if docker compose version >/dev/null 2>&1; then
-    docker compose "$@"
-  elif command -v docker-compose >/dev/null 2>&1; then
-    docker-compose "$@"
-  else
-    die "docker compose is required for --with-infra"
-  fi
+  case "$CONTAINER_ENGINE" in
+    docker)
+      if docker compose version >/dev/null 2>&1; then docker compose "$@"
+      elif command -v docker-compose >/dev/null 2>&1; then docker-compose "$@"
+      else die "Docker Compose plugin or docker-compose is required"; fi
+      ;;
+    podman)
+      if podman compose version >/dev/null 2>&1; then podman compose "$@"
+      elif command -v podman-compose >/dev/null 2>&1; then podman-compose "$@"
+      else die "Podman Compose provider is missing; install podman-compose"; fi
+      ;;
+    *) die "No working Docker or Podman runtime is available" ;;
+  esac
+}
+
+require_infra_runtime() {
+  detect_container_runtime
+  [[ -n "$CONTAINER_ENGINE" ]] || die "--with-infra requires a running Docker or Podman runtime; install/start one, or omit --with-infra for native mode"
+  compose_available || die "$CONTAINER_ENGINE is available but its Compose provider is missing; install Docker Compose or podman-compose"
+  [[ -f "$ROOT_DIR/.env.compose" ]] || die "$ROOT_DIR/.env.compose is missing; generate the Compose environment before starting infrastructure"
 }
 
 # ---------------------------------------------------------------------------
@@ -556,14 +591,16 @@ setup_backend() {
   log "Provisioning Python virtualenv at $VENV_DIR"
   local py
   py="$(python_cmd)"
+  if [[ -x "$VENV_DIR/bin/python" ]] && ! "$VENV_DIR/bin/python" -c 'import sys; sys.exit(0 if sys.version_info[:2] == (3, 12) else 1)'; then
+    die "Existing virtualenv at $VENV_DIR is not Python 3.12. Preserve it and set VENV_DIR to a fresh path, or move it aside before retrying."
+  fi
   if [[ ! -d "$VENV_DIR" ]]; then
     "$py" -m venv "$VENV_DIR"
   fi
   # shellcheck disable=SC1091
   source "$VENV_DIR/bin/activate"
-  pip install --quiet --upgrade pip || pip install --quiet --upgrade pip
-  pip install --quiet --requirement "$BACKEND_DIR/requirements.txt" || pip install --quiet --requirement "$BACKEND_DIR/requirements.txt"
-  pip install --quiet --requirement "$BACKEND_DIR/dev-requirements.txt" || pip install --quiet --requirement "$BACKEND_DIR/dev-requirements.txt"
+  python -m pip install --quiet --upgrade pip
+  python -m pip install --quiet --requirement "$BACKEND_DIR/requirements.txt" --requirement "$BACKEND_DIR/dev-requirements.txt"
   log "Backend dependencies installed (pinned versions verified by CI)"
 }
 
@@ -583,11 +620,8 @@ setup_frontend() {
 # 6. Optional infrastructure + smoke verification
 # ---------------------------------------------------------------------------
 start_infra() {
-  if ! docker_available; then
-    die "--with-infra requested but Docker daemon is unavailable"
-  fi
-  log "Starting Docker Compose stack using .env.compose..."
-  # Use the generated .env.compose for consistent secrets
+  require_infra_runtime
+  log "Starting Compose stack with $CONTAINER_ENGINE using .env.compose..."
   (cd "$ROOT_DIR" && compose_cmd --env-file .env.compose up -d --build)
   log "Compose stack started: API http://localhost:8000/docs · UI http://localhost:3000"
 }
@@ -617,6 +651,8 @@ main() {
   fi
 
   check_toolchain
+  # Fail fast before creating environments or installing packages.
+  if $WITH_INFRA; then require_infra_runtime; fi
 
   # Use auto_configure_all for full config generation; falls back to legacy path
   if [[ -f "$BACKEND_DIR/.env" && "$FORCE" != "true" ]]; then
@@ -628,13 +664,18 @@ main() {
 
   setup_frontend
 
-  # Run smoke test after full setup
-  smoke_test
+  # The full qualification gate already runs the backend tests. Avoid running
+  # the same suite twice when --qualify is requested.
+  if ! $QUALIFY; then smoke_test; fi
 
   if $WITH_INFRA; then start_infra; fi
   if $QUALIFY; then
-    log "Running full qualification gate"
-    bash "$ROOT_DIR/scripts/qualify.sh"
+    log "Running qualification gate"
+    if $ALLOW_SQLITE_SMOKE; then
+      bash "$ROOT_DIR/scripts/qualify.sh" --allow-sqlite-smoke
+    else
+      bash "$ROOT_DIR/scripts/qualify.sh"
+    fi
   fi
   log "ERP03 bootstrap complete ($PLATFORM). Activate the env with: source .venv/bin/activate"
 }
