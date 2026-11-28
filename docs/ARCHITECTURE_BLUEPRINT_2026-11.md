@@ -108,7 +108,7 @@ The Kubernetes PostgreSQL, Redis and Ollama base image references still contain 
 
 ## 6. CI, release and deployment paths
 
-Current CI includes backend tests, frontend build, quality, security, container, type-check, coverage, agent-parity and policy gates.
+Current CI includes backend tests, frontend build, quality, security, container, type-check, coverage and agent-parity. The Kubernetes Rego policy sources remain in the repository, but this branch removes their automated GitHub Actions workflow.
 
 Two image workflows publish GHCR artifacts:
 - Backend: `.github/workflows/docker-publish.yml`
