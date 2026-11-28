@@ -102,7 +102,12 @@ import asyncpg
 
 async def main():
     try:
-        conn = await asyncpg.connect(os.environ["DATABASE_URL_TO_PROBE"], timeout=3)
+        # SQLAlchemy's asyncpg dialect URL is not accepted by asyncpg.connect().
+        # Normalize only the driver marker while preserving credentials/options.
+        database_url = os.environ["DATABASE_URL_TO_PROBE"].replace(
+            "postgresql+asyncpg://", "postgresql://", 1
+        )
+        conn = await asyncpg.connect(database_url, timeout=3)
         await conn.close()
     except Exception:
         raise SystemExit(1)
