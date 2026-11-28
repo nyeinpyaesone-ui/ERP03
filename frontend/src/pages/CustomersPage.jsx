@@ -1,95 +1,156 @@
-import { useState } from 'react';
-import { Users, Search, UserPlus, CreditCard } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Plus, Search, RefreshCw } from 'lucide-react';
+import { api } from '../services/api';
+
+const emptyForm = { code: '', name: '', phone: '', credit_limit: '0' };
+const money = (value, currency) => Number(value || 0).toLocaleString() + ' ' + (currency || 'MMK');
 
 export default function CustomersPage() {
+  const [customers, setCustomers] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [branchId, setBranchId] = useState('');
+  const [currency, setCurrency] = useState('MMK');
   const [search, setSearch] = useState('');
+  const [form, setForm] = useState(emptyForm);
+  const [showForm, setShowForm] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
-  const customers = [
-    { id: 1, name: 'Aung Aung', email: 'aung@example.com', phone: '09-1234567', customerType: 'Walk-in', totalSpent: 125000, lastVisit: '2 hours ago' },
-    { id: 2, name: 'Hla Hla', email: 'hla@example.com', phone: '09-2345678', customerType: 'Regular', totalSpent: 450000, lastVisit: '1 day ago' },
-    { id: 3, name: 'Kyaw Kyaw', email: 'kyaw@example.com', phone: '09-3456789', customerType: 'VIP', totalSpent: 1200000, lastVisit: '3 days ago' },
-    { id: 4, name: 'Su Su', email: 'su@example.com', phone: '09-4567890', customerType: 'Regular', totalSpent: 320000, lastVisit: '1 week ago' },
-  ];
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [context, result] = await Promise.all([
+        api.getBusinessContext(),
+        api.listCustomers({ limit: 200, offset: 0 }),
+      ]);
+      setBranches(context.branches || []);
+      setBranchId((current) => current || context.branches?.[0]?.id || '');
+      setCurrency(context.business?.currency || 'MMK');
+      setCustomers(result.items || []);
+    } catch (err) {
+      setError(err.message || 'Unable to load customers.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const filtered = customers.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.email.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => { load(); }, []);
+
+  const visible = customers.filter((item) => {
+    const term = search.trim().toLowerCase();
+    return (!branchId || item.branch_id === branchId)
+      && (!term || item.name.toLowerCase().includes(term) || item.code.toLowerCase().includes(term) || (item.phone || '').toLowerCase().includes(term));
+  });
+
+  const updateForm = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+
+  const createCustomer = async (event) => {
+    event.preventDefault();
+    if (!branchId) {
+      setError('This account has no accessible branch. Ask an administrator to assign one.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      await api.createCustomer({
+        branch_id: branchId,
+        code: form.code.trim(),
+        name: form.name.trim(),
+        phone: form.phone.trim() || null,
+        credit_limit: form.credit_limit || '0',
+      });
+      setForm(emptyForm);
+      setShowForm(false);
+      setNotice('Customer saved.');
+      await load();
+    } catch (err) {
+      setError(err.message || 'Customer could not be saved.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <section className="space-y-6">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
-          <p className="text-gray-600">Manage customer records and loyalty</p>
+          <p className="text-gray-600">Customer accounts and credit limits</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium">
-          <UserPlus size={16} /> Add Customer
-        </button>
+        <div className="flex gap-2">
+          <button type="button" onClick={load} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm"><RefreshCw size={16} /> Refresh</button>
+          <button type="button" onClick={() => setShowForm((value) => !value)} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white"><Plus size={16} /> Add customer</button>
+        </div>
+      </header>
+
+      {error && <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {notice && <div role="status" className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">{notice}</div>}
+
+      {showForm && (
+        <form onSubmit={createCustomer} className="grid gap-3 rounded-lg border bg-white p-5 md:grid-cols-2">
+          <h2 className="font-semibold md:col-span-2">Create customer</h2>
+          <label className="text-sm">Branch
+            <select value={branchId} onChange={(e) => setBranchId(e.target.value)} required className="mt-1 w-full rounded-md border p-2">
+              {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+            </select>
+          </label>
+          <label className="text-sm">Customer code
+            <input name="code" value={form.code} onChange={updateForm} required maxLength={64} className="mt-1 w-full rounded-md border p-2" />
+          </label>
+          <label className="text-sm">Customer name
+            <input name="name" value={form.name} onChange={updateForm} required maxLength={200} className="mt-1 w-full rounded-md border p-2" />
+          </label>
+          <label className="text-sm">Phone
+            <input name="phone" value={form.phone} onChange={updateForm} maxLength={32} className="mt-1 w-full rounded-md border p-2" />
+          </label>
+          <label className="text-sm">Credit limit ({currency})
+            <input name="credit_limit" type="number" min="0" step="0.01" value={form.credit_limit} onChange={updateForm} className="mt-1 w-full rounded-md border p-2" />
+          </label>
+          <div className="flex justify-end gap-2 md:col-span-2">
+            <button type="button" onClick={() => setShowForm(false)} className="rounded-md border px-4 py-2 text-sm">Cancel</button>
+            <button disabled={saving} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{saving ? 'Saving…' : 'Save customer'}</button>
+          </div>
+        </form>
+      )}
+
+      <div className="flex flex-wrap gap-3">
+        <label className="relative min-w-[220px] flex-1">
+          <Search aria-hidden="true" className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+          <input aria-label="Search customers" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, code or phone" className="w-full rounded-md border py-2 pl-9 pr-3" />
+        </label>
+        <label className="text-sm">Branch
+          <select aria-label="Filter branch" value={branchId} onChange={(e) => setBranchId(e.target.value)} className="ml-2 rounded-md border p-2">
+            <option value="">All accessible branches</option>
+            {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+          </select>
+        </label>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search customers by name or email..."
-          className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
-        />
-      </div>
-
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-lg border bg-white">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Spent</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Visit</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-            </tr>
+          <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+            <tr><th className="px-4 py-3">Code</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Phone</th><th className="px-4 py-3 text-right">Credit limit</th><th className="px-4 py-3">Status</th></tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
-            {filtered.map((c) => (
-              <tr key={c.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                      <Users className="w-4 h-4 text-gray-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{c.name}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-gray-600">{c.email}</td>
-                <td className="px-4 py-3 text-gray-600">{c.phone}</td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                    c.customerType === 'VIP' ? 'bg-purple-100 text-purple-600' :
-                    c.customerType === 'Regular' ? 'bg-blue-100 text-blue-600' :
-                    'bg-gray-100 text-gray-600'
-                  }`}>
-                    {c.customerType}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right font-medium text-gray-900">
-                  {c.totalSpent.toLocaleString()} MMK
-                </td>
-                <td className="px-4 py-3 text-gray-600">{c.lastVisit}</td>
-                <td className="px-4 py-3 text-right">
-                  <button className="text-gray-400 hover:text-blue-600 transition">
-                    <CreditCard className="w-4 h-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+          <tbody className="divide-y">
+            {loading ? <tr><td colSpan="5" className="p-8 text-center text-gray-500">Loading customers…</td></tr>
+              : visible.length === 0 ? <tr><td colSpan="5" className="p-8 text-center text-gray-500">No customers found.</td></tr>
+                : visible.map((customer) => (
+                  <tr key={customer.id}>
+                    <td className="px-4 py-3 font-medium">{customer.code}</td>
+                    <td className="px-4 py-3">{customer.name}</td>
+                    <td className="px-4 py-3 text-gray-600">{customer.phone || '—'}</td>
+                    <td className="px-4 py-3 text-right">{money(customer.credit_limit, currency)}</td>
+                    <td className="px-4 py-3"><span className={customer.active ? 'text-green-700' : 'text-gray-500'}>{customer.active ? 'Active' : 'Inactive'}</span></td>
+                  </tr>
+                ))}
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
   );
 }
