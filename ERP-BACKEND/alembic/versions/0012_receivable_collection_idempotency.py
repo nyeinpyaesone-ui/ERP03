@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = "0012_receivable_collection_idempotency"
+revision: str = "0012_receivable_collect"
 down_revision: str | Sequence[str] | None = "0011_supabase_identity_link"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
