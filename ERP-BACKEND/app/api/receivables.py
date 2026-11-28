@@ -124,6 +124,7 @@ async def list_outstanding_receivables(
         "items": [
             {
                 "invoice_id": str(invoice.id),
+                "branch_id": str(invoice.branch_id),
                 "invoice_no": invoice.invoice_no,
                 "customer_id": str(invoice.customer_id),
                 "customer_name": customer_name,
