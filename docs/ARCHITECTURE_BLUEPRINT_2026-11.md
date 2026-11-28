@@ -122,7 +122,7 @@ At the inspected baseline, PRs #274 and #275 are open:
 - #274 verifies JWT signatures and expiry before trusting tenant identity for rate limiting.
 - #275 reduces SQLAlchemy per-process pool sizing for the 10-pod HPA envelope.
 
-Their latest inspected PR heads had success for CI, Quality, Security, Container, Docker, Type Check, Coverage, Agent Parity and Devcontainer Build & Push. Policy Enforcement reported `startup_failure` with no jobs returned. This is not a policy pass.
+Their latest inspected PR heads had success for CI, Quality, Security, Container, Docker, Type Check, Coverage, Agent Parity and Devcontainer Build & Push. Historical note: the former Policy Enforcement workflow was subsequently retired from this branch; the Kubernetes Rego source files remain preserved.
 
 ## 7. External platform resource boundary
 
