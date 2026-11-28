@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import Claims
@@ -21,6 +21,13 @@ async def receive_purchase(
     session: AsyncSession = Depends(get_db_session),
     _auth: dict = Depends(permission_dependency("purchases.receive")),
 ) -> ReceivePurchaseResponse:
+    assigned_branch = claims.get("branch_id")
+    if assigned_branch and str(payload.branch_id) != str(assigned_branch):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Branch access denied",
+        )
+
     async with session.begin():
         total_value = await receive_purchase_lines(
             session,
