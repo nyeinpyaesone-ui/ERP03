@@ -198,7 +198,10 @@ class Payment(Base):
         Index("ix_payments_branch_created", "branch_id", "created_at"),
         Index("ix_payments_invoice", "invoice_id"),
         UniqueConstraint(
-            "business_id", "branch_id", "invoice_id", "idempotency_key",
+            "business_id",
+            "branch_id",
+            "invoice_id",
+            "idempotency_key",
             name="uq_payments_invoice_idempotency",
         ),
     )
