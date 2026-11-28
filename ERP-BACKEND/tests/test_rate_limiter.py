@@ -225,3 +225,14 @@ async def test_jwt_with_malformed_tenant_id_falls_back_to_client_ip_bucket():
     )
 
     assert await _rate_limit_key_for_token(token) == "ratelimit:192.0.2.10"
+
+
+@pytest.mark.asyncio
+async def test_jwt_without_business_id_falls_back_to_client_ip_bucket():
+    token = jwt.encode(
+        {"exp": int(time.time()) + 300},
+        settings.secret_key.get_secret_value(),
+        algorithm="HS256",
+    )
+
+    assert await _rate_limit_key_for_token(token) == "ratelimit:192.0.2.10"
