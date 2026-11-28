@@ -363,3 +363,137 @@ async def test_pos_sale_idempotency_replays_same_invoice_without_double_stock():
         )
         assert balance is not None
         assert balance.quantity == Decimal("3")
+
+
+@pytest.mark.asyncio
+async def test_unified_erp_onboarding_catalog_inventory_and_pos():
+    """Exercise the product workflow over one async event loop and real DB session."""
+    suffix = uuid4().hex[:12]
+    business_code = f"TEST-{suffix}"
+    email = f"erp-{suffix}@example.com"
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        registered = await client.post(
+            "/api/v1/auth/register",
+            json={
+                "business_code": business_code,
+                "business_name": "Integration Test Shop",
+                "email": email,
+                "password": "LocalTestPass-123",
+                "display_name": "Integration Owner",
+                "default_currency": "MMK",
+                "timezone": "Asia/Yangon",
+                "locale": "my-MM",
+            },
+        )
+        assert registered.status_code == 200, registered.text
+
+        logged_in = await client.post(
+            "/api/v1/auth/login",
+            json={
+                "business_code": business_code,
+                "email": email,
+                "password": "LocalTestPass-123",
+            },
+        )
+        assert logged_in.status_code == 200, logged_in.text
+        headers = {"Authorization": f"Bearer {logged_in.json()['access_token']}"}
+
+        context = await client.get("/api/v1/context", headers=headers)
+        assert context.status_code == 200, context.text
+        branch = context.json()["branches"][0]
+        warehouse = context.json()["warehouses"][0]
+        assert branch["code"] == "MAIN"
+        assert warehouse["code"] == "MAIN"
+
+        product_response = await client.post(
+            "/api/v1/products",
+            headers=headers,
+            json={
+                "branch_id": branch["id"],
+                "sku": f"SKU-{suffix}",
+                "name": "Myanmar Rice 5kg",
+                "unit": "bag",
+                "sale_price": "1200.00",
+                "cost_price": "800.00",
+                "min_stock": "2.000",
+            },
+        )
+        assert product_response.status_code == 201, product_response.text
+        product = product_response.json()
+
+        customer_response = await client.post(
+            "/api/v1/customers",
+            headers=headers,
+            json={
+                "branch_id": branch["id"],
+                "code": f"CUS-{suffix}",
+                "name": "Walk-in Customer",
+                "phone": "09-00000000",
+                "credit_limit": "50000.00",
+            },
+        )
+        assert customer_response.status_code == 201, customer_response.text
+        customer = customer_response.json()
+
+        receipt = await client.post(
+            "/api/v1/purchases/receipts",
+            headers=headers,
+            json={
+                "branch_id": branch["id"],
+                "warehouse_id": warehouse["id"],
+                "lines": [
+                    {
+                        "product_id": product["id"],
+                        "quantity": "10.000",
+                        "unit_cost": "800.00",
+                    }
+                ],
+            },
+        )
+        assert receipt.status_code == 201, receipt.text
+
+        stock = await client.get("/api/v1/inventory/stock", headers=headers)
+        assert stock.status_code == 200, stock.text
+        assert stock.json()["items"][0]["quantity"] == "10.000"
+
+        sale = await client.post(
+            "/api/v1/sales",
+            headers={**headers, "X-Idempotency-Key": f"sale-{suffix}"},
+            json={
+                "branch_id": branch["id"],
+                "warehouse_id": warehouse["id"],
+                "customer_id": customer["id"],
+                "currency": "MMK",
+                "lines": [
+                    {
+                        "product_id": product["id"],
+                        "quantity": "2.000",
+                        "unit_price": "1200.00",
+                    }
+                ],
+                "payments": [{"method": "cash", "amount": "1000.00", "currency": "MMK"}],
+            },
+        )
+        assert sale.status_code == 201, sale.text
+        assert sale.json()["total"] == "2400.00"
+        assert sale.json()["paid"] == "1000.00"
+        assert sale.json()["balance"] == "1400.00"
+
+        sales = await client.get("/api/v1/sales?limit=10", headers=headers)
+        assert sales.status_code == 200, sales.text
+        assert sales.json()["total"] == 1
+        assert sales.json()["items"][0]["customer_name"] == "Walk-in Customer"
+
+        summary = await client.get("/api/v1/dashboard/summary", headers=headers)
+        assert summary.status_code == 200, summary.text
+        assert summary.json()["currency"] == "MMK"
+        assert summary.json()["orders_count"] == 1
+        assert summary.json()["outstanding_balance"] == "1400.00"
+
+        final_stock = await client.get("/api/v1/inventory/stock", headers=headers)
+        assert final_stock.status_code == 200, final_stock.text
+        assert final_stock.json()["items"][0]["quantity"] == "8.000"
