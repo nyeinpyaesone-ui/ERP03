@@ -9,7 +9,7 @@ import pytest
 from app.core.errors import PaymentError
 from app.db.session import SessionFactory
 from app.main import app
-from app.models.erp import Invoice, Product, StockBalance, Warehouse
+from app.models.erp import Customer, Invoice, Product, StockBalance, Warehouse
 from app.models.identity import Branch
 from app.services.bootstrap import bootstrap_business
 from app.services.sales import SaleLine, SalePayment, create_pos_sale
@@ -504,11 +504,14 @@ async def test_receivable_collection_is_atomic_and_idempotent():
     suffix = uuid4().hex[:12]
     business, branch, warehouse, user = await _bootstrap("RC")
     async with SessionFactory() as session, session.begin():
-        customer = await session.scalar(
-            select(__import__("app.models.erp", fromlist=["Customer"]).Customer).where(
-                __import__("app.models.erp", fromlist=["Customer"]).Customer.business_id == business.id
-            )
+        customer = Customer(
+            business_id=business.id,
+            branch_id=branch.id,
+            code=f"RC-CUS-{suffix}",
+            name="Receivable Test Customer",
+            active=True,
         )
+        session.add(customer)
         product = Product(
             business_id=business.id,
             branch_id=branch.id,
@@ -522,11 +525,6 @@ async def test_receivable_collection_is_atomic_and_idempotent():
         session.add(product)
         await session.flush()
         session.add(StockBalance(warehouse_id=warehouse.id, product_id=product.id, quantity=Decimal("5")))
-    async with SessionFactory() as session:
-        from app.models.erp import Customer
-        customer = await session.scalar(select(Customer).where(Customer.business_id == business.id))
-    assert customer is not None
-
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         login = await client.post("/api/v1/auth/login", json={
             "business_code": business.code, "email": user.email, "password": "Correct-Horse-123"
