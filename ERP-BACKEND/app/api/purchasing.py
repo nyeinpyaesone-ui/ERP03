@@ -21,11 +21,12 @@ async def receive_purchase(
     session: AsyncSession = Depends(get_db_session),
     _auth: dict = Depends(permission_dependency("purchases.receive")),
 ) -> ReceivePurchaseResponse:
-    total_value = await receive_purchase_lines(
-        session,
-        business_id=UUID(claims["business_id"]),
-        branch_id=payload.branch_id,
-        warehouse_id=payload.warehouse_id,
-        lines=[(line.product_id, line.quantity, line.unit_cost) for line in payload.lines],
-    )
+    async with session.begin():
+        total_value = await receive_purchase_lines(
+            session,
+            business_id=UUID(claims["business_id"]),
+            branch_id=payload.branch_id,
+            warehouse_id=payload.warehouse_id,
+            lines=[(line.product_id, line.quantity, line.unit_cost) for line in payload.lines],
+        )
     return ReceivePurchaseResponse(total_value=str(total_value), lines_received=len(payload.lines))
