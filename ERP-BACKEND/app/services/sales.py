@@ -4,7 +4,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -15,6 +15,8 @@ from app.core.errors import ConflictError, PaymentError, SaleValidationError
 from app.models.erp import Customer, Invoice, InvoiceItem, Payment, Product, Warehouse
 from app.models.identity import Branch
 from app.services.inventory import adjust_stock
+
+MONEY_QUANTUM = Decimal("0.01")
 
 
 async def _find_idempotent_invoice(
@@ -256,23 +258,32 @@ async def create_pos_sale(
         subtotal = Decimal("0")
         discount_total = Decimal("0")
         tax_total = Decimal("0")
-        prepared: list[tuple[SaleLine, Decimal, Decimal]] = []
+        prepared: list[tuple[SaleLine, Decimal, Decimal, Decimal, Decimal]] = []
         for line in lines:
             product = products[line.product_id]
-            price = product.sale_price if line.unit_price is None else line.unit_price
-            if price < 0:
+            raw_price = product.sale_price if line.unit_price is None else line.unit_price
+            if raw_price < 0:
                 raise SaleValidationError("Unit price cannot be negative")
-            line_subtotal = price * line.quantity
-            line_total = line_subtotal - line.discount + line.tax
-            if line.discount > line_subtotal or line_total < 0:
+            price = raw_price.quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+            line_subtotal = (price * line.quantity).quantize(
+                MONEY_QUANTUM, rounding=ROUND_HALF_UP
+            )
+            line_discount = line.discount.quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+            line_tax = line.tax.quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+            line_total = line_subtotal - line_discount + line_tax
+            if line_discount > line_subtotal or line_total < 0:
                 raise SaleValidationError("Invalid line discount/tax")
             subtotal += line_subtotal
-            discount_total += line.discount
-            tax_total += line.tax
-            prepared.append((line, price, line_total))
+            discount_total += line_discount
+            tax_total += line_tax
+            prepared.append((line, price, line_discount, line_tax, line_total))
 
-        total = subtotal - discount_total + tax_total
-        paid = sum((payment.amount for payment in payments), Decimal("0"))
+        total = (subtotal - discount_total + tax_total).quantize(
+            MONEY_QUANTUM, rounding=ROUND_HALF_UP
+        )
+        paid = sum((payment.amount for payment in payments), Decimal("0")).quantize(
+            MONEY_QUANTUM, rounding=ROUND_HALF_UP
+        )
         if paid > total:
             raise PaymentError("Overpayment is not allowed")
 
@@ -328,15 +339,15 @@ async def create_pos_sale(
             raise ConflictError("Invoice number already exists for this branch") from exc
 
         prepared.sort(key=lambda item: str(item[0].product_id))
-        for line, price, line_total in prepared:
+        for line, price, line_discount, line_tax, line_total in prepared:
             session.add(
                 InvoiceItem(
                     invoice_id=invoice.id,
                     product_id=line.product_id,
                     quantity=line.quantity,
                     unit_price=price,
-                    discount=line.discount,
-                    tax=line.tax,
+                    discount=line_discount,
+                    tax=line_tax,
                     line_total=line_total,
                 )
             )
@@ -374,5 +385,5 @@ async def create_pos_sale(
             invoice_id=invoice.id,
             total=total,
             paid=paid,
-            balance=total - paid,
+            balance=(total - paid).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP),
         )
