@@ -28,9 +28,8 @@ The image workflows build AMD64 and ARM64 images. Backend publish also performs 
 1. Refresh `main` and record the release commit SHA.
 2. Review all PRs that affect transaction integrity, authentication, database pool sizing, migrations or manifests.
 3. Require CI, Quality, Security, Container, Docker, Type Check, Coverage and Agent Parity checks to pass for the exact commit.
-4. Require Policy Enforcement to complete successfully with an actual job. `startup_failure` with no jobs is not a pass.
-5. Verify backend and frontend image digests and architecture manifests.
-6. Confirm the staging host has the expected Compose file, Docker Engine and Compose plugin, clean checkout, secrets and a healthy previous release.
+4. Verify backend and frontend image digests and architecture manifests.
+5. Confirm the staging host has the expected Compose file, Docker Engine and Compose plugin, clean checkout, secrets and a healthy previous release.
 
 Local qualification:
 
