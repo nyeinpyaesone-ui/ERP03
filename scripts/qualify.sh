@@ -14,6 +14,7 @@ QUALIFY_JSON=""
 QUALIFY_STEPS=()
 QUALIFY_CURRENT="init"
 QUALIFY_USED_PG="false"
+ALLOW_SQLITE_SMOKE=false
 QUALIFY_MODE="full"
 QUALIFY_DATABASE="unknown"
 
@@ -24,7 +25,7 @@ while [ $# -gt 0 ]; do
       QUALIFY_JSON="$2"
       shift 2
       ;;
-    --allow-sqlite-smoke) QUALIFY_MODE="smoke-only" ;;
+    --allow-sqlite-smoke) ALLOW_SQLITE_SMOKE=true ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -44,10 +45,10 @@ write_evidence() {
   fi
   [ -n "$QUALIFY_JSON" ] || return 0
   {
-    printf '{"env":"%s","arch":"%s","commit":"%s","used_pg":%s,"steps":[' \
+    printf '{"env":"%s","arch":"%s","commit":"%s","used_pg":%s,"database":"%s","qualification":"%s","steps":[' \
       "${AGENT_ENV_NAME:-local}" "$(uname -m)" \
       "$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo none)" \
-      "$QUALIFY_USED_PG"
+      "$QUALIFY_USED_PG" "$QUALIFY_DATABASE" "$QUALIFY_MODE"
     local first=1
     for s in "${QUALIFY_STEPS[@]}"; do
       [ "$first" -eq 1 ] && first=0 || printf ','
@@ -116,9 +117,10 @@ if probe_postgres "$DATABASE_URL"; then
   USE_PG=true
   QUALIFY_USED_PG="true"
   QUALIFY_DATABASE="postgresql"
+  QUALIFY_MODE="full"
   log "PostgreSQL is reachable; running full database qualification."
 else
-  if [[ "$QUALIFY_MODE" != "smoke-only" ]]; then
+  if ! $ALLOW_SQLITE_SMOKE; then
     die "PostgreSQL is unavailable. Full qualification requires PostgreSQL; start the dev database or set DATABASE_URL. Use --allow-sqlite-smoke only for a clearly labelled, non-production smoke run."
   fi
   warn "Running SQLite smoke-only mode. PostgreSQL migrations and row-lock concurrency are NOT qualified."
@@ -127,6 +129,7 @@ else
   ENVIRONMENT=development
   export ENVIRONMENT
   QUALIFY_DATABASE="sqlite"
+  QUALIFY_MODE="smoke-only"
 fi
 
 log "Validate repository foundations"
@@ -143,9 +146,9 @@ ruff format --check app tests alembic
 step_done
 
 step_begin "compile"
-python3 -m compileall -q app alembic
+python -m compileall -q app alembic
 if $USE_PG; then
-  ENVIRONMENT=production SECRET_KEY="qualification-secret-key-with-at-least-32-bytes" CORS_ORIGINS="https://erp.example.invalid" DATABASE_URL="$DATABASE_URL" DATABASE_PATH="/tmp/erp03-qualification.sqlite3" python3 -c "
+  ENVIRONMENT=production SECRET_KEY="qualification-secret-key-with-at-least-32-bytes" CORS_ORIGINS="https://erp.example.invalid" DATABASE_URL="$DATABASE_URL" DATABASE_PATH="/tmp/erp03-qualification.sqlite3" python -c "
 from app.main import app
 def _collect_paths(routes, out):
     for r in routes:
@@ -163,7 +166,7 @@ assert any('/api/v1/sales' in p or p == '/sales' for p in paths), paths
 print('production configuration and critical routes: OK')
 "
 else
-  ENVIRONMENT=development SECRET_KEY="qualification-secret-key-with-at-least-32-bytes" CORS_ORIGINS="http://localhost:3000,http://localhost:5173" DATABASE_PATH="/tmp/erp03-qualification.sqlite3" python3 -c "
+  ENVIRONMENT=development SECRET_KEY="qualification-secret-key-with-at-least-32-bytes" CORS_ORIGINS="http://localhost:3000,http://localhost:5173" DATABASE_PATH="/tmp/erp03-qualification.sqlite3" python -c "
 from app.main import app
 def _collect_paths(routes, out):
     for r in routes:
