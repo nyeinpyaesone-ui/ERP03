@@ -11,6 +11,7 @@ export default function InventoryPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -42,7 +43,7 @@ export default function InventoryPage() {
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [branchId, warehouseId, search]);
+  }, [branchId, warehouseId, search, refresh]);
 
   const branchWarehouses = warehouses.filter((warehouse) => !branchId || warehouse.branch_id === branchId);
 
@@ -53,7 +54,7 @@ export default function InventoryPage() {
           <h1 className="text-2xl font-bold text-gray-900">Inventory</h1>
           <p className="text-gray-600">Live stock balances by branch and warehouse</p>
         </div>
-        <button type="button" onClick={() => setSearch((value) => value)} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+        <button type="button" onClick={() => setRefresh((value) => value + 1)} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
           <RefreshCw size={16} /> Refresh view
         </button>
       </header>
