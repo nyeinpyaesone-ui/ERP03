@@ -15,7 +15,8 @@ from app.core.security import (
     verify_supabase_access_token,
 )
 from app.db.session import get_db_session
-from app.models.identity import Business, Permission, Role, User, role_permissions, user_roles
+from app.models.erp import Warehouse
+from app.models.identity import Branch, Business, Permission, Role, User, role_permissions, user_roles
 from app.schemas.auth import (
     AuthenticatedUser,
     LoginRequest,
@@ -134,9 +135,27 @@ async def register(
         )
         session.add(business)
         await session.flush()
+        branch = Branch(
+            id=uuid4(),
+            business_id=business.id,
+            name="Main Branch",
+            code="MAIN",
+            active=True,
+        )
+        session.add(branch)
+        await session.flush()
+        warehouse = Warehouse(
+            id=uuid4(),
+            branch_id=branch.id,
+            code="MAIN",
+            name="Main Warehouse",
+            active=True,
+        )
+        session.add(warehouse)
         user = User(
             id=uuid4(),
             business_id=business.id,
+            branch_id=branch.id,
             email=payload.email.lower(),
             password_hash=hash_password(payload.password),
             display_name=payload.display_name,
