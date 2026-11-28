@@ -58,6 +58,22 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Wait for PostgreSQL and Redis
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for i in {1..30}; do
+            if pg_isready -h 127.0.0.1 -p 5432 -U erp03 -d erp03 &&
+              PGPASSWORD=erp03 psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U erp03 -d erp03 -c "SELECT 1" >/dev/null; then
+              echo "PostgreSQL is ready for qualification"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "::error::PostgreSQL did not become ready"
+              exit 1
+            fi
+            sleep 2
+          done
       - name: Bootstrap
         run: bash scripts/agent/bootstrap.sh
       - name: Verify
