@@ -16,7 +16,15 @@ from app.core.security import (
 )
 from app.db.session import get_db_session
 from app.models.erp import Warehouse
-from app.models.identity import Branch, Business, Permission, Role, User, role_permissions, user_roles
+from app.models.identity import (
+    Branch,
+    Business,
+    Permission,
+    Role,
+    User,
+    role_permissions,
+    user_roles,
+)
 from app.schemas.auth import (
     AuthenticatedUser,
     LoginRequest,
