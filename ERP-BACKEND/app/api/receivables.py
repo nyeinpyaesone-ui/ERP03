@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
