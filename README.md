@@ -136,6 +136,7 @@ Provision runtime secrets outside Git before applying any environment. The place
 ## Documentation
 
 - [Architecture Blueprint — November 2026](docs/ARCHITECTURE_BLUEPRINT_2026-11.md)
+- [Architecture Implementation Guidelines](docs/ARCHITECTURE_IMPLEMENTATION_GUIDELINES.md)
 - [Zero-Downtime Deployment and Runtime Configuration](docs/ZERO_DOWNTIME_DEPLOYMENT_2026-11.md)
 - [Configuration & Credentials Setup](CONFIGURATION_SETUP.md)
 - [Deployment Runbook](docs/DEPLOY_RUNBOOK.md)
