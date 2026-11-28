@@ -16,7 +16,11 @@ JSON="$PWD/$OUT/$STAMP.json"
 LOG="$PWD/$OUT/$STAMP.steps.log"
 
 set +e
-QUALIFY_LOG="$LOG" bash scripts/qualify.sh --json-out "$JSON"
+if [ "$AGENT_ENV_NAME" = "ci" ]; then
+  REQUIRE_POSTGRES=1 QUALIFY_LOG="$LOG" bash scripts/qualify.sh --json-out "$JSON"
+else
+  QUALIFY_LOG="$LOG" bash scripts/qualify.sh --json-out "$JSON"
+fi
 RC=$?
 set -e
 
