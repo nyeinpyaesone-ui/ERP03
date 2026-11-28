@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: erp03-ollama
+  namespace: erp03
+  labels:
+    app: erp03-ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: erp03-ollama
+  template:
+    metadata:
+      labels:
+        app: erp03-ollama
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ollama
+          image: ollama/ollama:0.5.4@sha256:REPLACE_WITH_REAL_DIGEST
+          ports:
+            - containerPort: 11434
+              name: http
+          env:
+            - name: OLLAMA_HOST
+              value: "0.0.0.0:11434"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 8Gi
+          livenessProbe:
+            httpGet:
+              path: /api/tags
+              port: 11434
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/tags
+              port: 11434
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: ollama-data
+              mountPath: /root/.ollama
+      volumes:
+        - name: ollama-data
+          persistentVolumeClaim:
+            claimName: erp03-ollama-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: erp03-ollama
+  namespace: erp03
+  labels:
+    app: erp03-ollama
+spec:
+  selector:
+    app: erp03-ollama
+  ports:
+    - port: 11434
+      targetPort: 11434
+      name: http
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: erp03-ollama-pvc
+  namespace: erp03
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: erp03-ollama-pdb
+  namespace: erp03
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      app: erp03-ollama

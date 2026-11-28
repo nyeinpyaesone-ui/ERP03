@@ -1,0 +1,213 @@
+name: Deploy staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "Full 40-character source commit SHA"
+        required: true
+        type: string
+      backend_digest:
+        description: "Published backend OCI digest (sha256:...)"
+        required: true
+        type: string
+      frontend_digest:
+        description: "Published frontend OCI digest (sha256:...)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: erp03-staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    name: Deploy selected GHCR digests to staging
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 25
+    steps:
+      - name: Validate source and image digests
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BACKEND_DIGEST: ${{ inputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::source_sha must be a full 40-character lowercase commit SHA"
+            exit 1
+          }
+          [[ "$BACKEND_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::backend_digest must be a sha256 OCI digest"
+            exit 1
+          }
+          [[ "$FRONTEND_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::frontend_digest must be a sha256 OCI digest"
+            exit 1
+          }
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Authenticate staging host to GHCR with read-only credentials
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_SSH_USER }}
+          STAGING_PORT: ${{ secrets.STAGING_SSH_PORT }}
+          GHCR_USERNAME: ${{ secrets.STAGING_GHCR_USERNAME }}
+          GHCR_READ_TOKEN: ${{ secrets.STAGING_GHCR_READ_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$STAGING_HOST"
+          test -n "$STAGING_USER"
+          test -n "$GHCR_USERNAME"
+          test -n "$GHCR_READ_TOKEN"
+          [[ "$GHCR_USERNAME" =~ ^[A-Za-z0-9-]+$ ]] || {
+            echo "::error::Invalid GHCR username format"
+            exit 1
+          }
+          port="${STAGING_PORT:-22}"
+          printf '%s' "$GHCR_READ_TOKEN" | ssh -i "$HOME/.ssh/id_ed25519" \
+            -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$STAGING_USER@$STAGING_HOST" \
+            "docker login ghcr.io --username $GHCR_USERNAME --password-stdin"
+
+      - name: Deploy immutable images, verify runtime health, and rollback on failure
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_SSH_USER }}
+          STAGING_PORT: ${{ secrets.STAGING_SSH_PORT }}
+          DEPLOY_PATH: ${{ vars.STAGING_DEPLOY_PATH }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BACKEND_DIGEST: ${{ inputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$STAGING_HOST"
+          test -n "$STAGING_USER"
+          test -n "$DEPLOY_PATH"
+          printf -v remote_args '%q %q %q %q' "$DEPLOY_PATH" "$SOURCE_SHA" "$BACKEND_DIGEST" "$FRONTEND_DIGEST"
+          port="${STAGING_PORT:-22}"
+          ssh -i "$HOME/.ssh/id_ed25519" -p "$port" \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$STAGING_USER@$STAGING_HOST" "bash -s -- $remote_args" <<'REMOTE'
+          set -Eeuo pipefail
+          deploy_path="$1"
+          source_sha="$2"
+          backend_digest="$3"
+          frontend_digest="$4"
+          cd "$deploy_path"
+
+          git rev-parse --is-inside-work-tree >/dev/null
+          test -f docker-compose.yml || test -f compose.yml || test -f compose.yaml || test -f docker-compose.yaml
+          test -z "$(git status --porcelain)" || {
+            echo "Staging checkout has local changes; refusing to overwrite them"
+            exit 1
+          }
+
+          backend_image="ghcr.io/nyeinpyaesone-ui/erp03-backend@$backend_digest"
+          frontend_image="ghcr.io/nyeinpyaesone-ui/erp03-frontend@$frontend_digest"
+          export ERP03_BACKEND_IMAGE="$backend_image"
+          export ERP03_FRONTEND_IMAGE="$frontend_image"
+
+          previous_backend_id="$(docker compose ps -q backend | head -n 1)"
+          previous_frontend_id="$(docker compose ps -q frontend | head -n 1)"
+          test -n "$previous_backend_id" && test -n "$previous_frontend_id" || {
+            echo "A prior running backend/frontend release is required for safe rollback"
+            exit 1
+          }
+          previous_backend_image="$(docker inspect --format '{{.Config.Image}}' "$previous_backend_id")"
+          previous_frontend_image="$(docker inspect --format '{{.Config.Image}}' "$previous_frontend_id")"
+          test -n "$previous_backend_image" && test -n "$previous_frontend_image"
+          docker image inspect "$previous_backend_image" >/dev/null
+          docker image inspect "$previous_frontend_image" >/dev/null
+
+          deployment_started=0
+
+          wait_for_health() {
+            for attempt in $(seq 1 36); do
+              all_healthy=1
+              for service in backend frontend; do
+                container_id="$(docker compose ps -q "$service" | head -n 1)"
+                if [ -z "$container_id" ]; then
+                  all_healthy=0
+                  continue
+                fi
+                state="$(docker inspect --format '{{.State.Status}}' "$container_id")"
+                health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$container_id")"
+                if [ "$state" != "running" ] || [ "$health" != "healthy" ]; then
+                  all_healthy=0
+                  echo "$service state=$state health=$health (attempt $attempt/36)"
+                fi
+              done
+              if [ "$all_healthy" -eq 1 ]; then
+                return 0
+              fi
+              sleep 5
+            done
+            return 1
+          }
+
+          rollback_on_exit() {
+            result=$?
+            trap - EXIT
+            if [ "$result" -ne 0 ] && [ "$deployment_started" -eq 1 ]; then
+              echo "Deployment failed; restoring the previous application images"
+              set +e
+              export ERP03_BACKEND_IMAGE="$previous_backend_image"
+              export ERP03_FRONTEND_IMAGE="$previous_frontend_image"
+              docker compose --profile full up -d --no-build backend frontend
+              if wait_for_health; then
+                echo "Previous staging release restored and healthy"
+              else
+                echo "ERROR: automatic rollback did not regain healthy status"
+              fi
+            fi
+            exit "$result"
+          }
+          trap rollback_on_exit EXIT
+
+          deployment_started=1
+          git fetch --no-tags origin main
+          git fetch --no-tags origin "$source_sha"
+          git merge-base --is-ancestor "$source_sha" origin/main || {
+            echo "Requested image commit is not reachable from origin/main"
+            exit 1
+          }
+          git checkout --detach "$source_sha"
+
+          docker compose pull backend frontend
+          backend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$backend_image")"
+          frontend_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$frontend_image")"
+          test "$backend_revision" = "$source_sha" || {
+            echo "Backend image revision label does not match source_sha"
+            exit 1
+          }
+          test "$frontend_revision" = "$source_sha" || {
+            echo "Frontend image revision label does not match source_sha"
+            exit 1
+          }
+
+          docker compose --profile full run --rm migrate
+          docker compose --profile full up -d --no-build backend frontend
+          wait_for_health
+          docker compose ps
+          trap - EXIT
+          echo "Staging deployment completed; backend and frontend health checks are healthy"
+          REMOTE

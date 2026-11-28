@@ -1,0 +1,37 @@
+{
+  "servers": {
+    "filesystem": {
+      "purpose": "Repository-scoped file access for reading and editing project files",
+      "allowed_tools": ["read", "write", "edit", "glob", "grep"],
+      "filesystem_scope": ["ERP-BACKEND/", "frontend/", "infra/", "scripts/", "docs/", "*.md", "*.yml", "*.json", "*.py", "*.toml"],
+      "network_scope": "none",
+      "environment_requirements": ["local filesystem access"],
+      "authentication_method": "none (local filesystem)",
+      "production_restrictions": "no production file writes without explicit approval",
+      "owner": "development agent",
+      "version_update_policy": "follow host application MCP filesystem server releases"
+    },
+    "source-control": {
+      "purpose": "Repository/PR/issue operations via GitHub CLI",
+      "allowed_tools": ["git status", "git diff", "git log", "gh pr list", "gh issue list"],
+      "filesystem_scope": ["repository root"],
+      "network_scope": "github.com (api and git endpoints)",
+      "environment_requirements": ["gh CLI authenticated", "git configured"],
+      "authentication_method": "gh auth token (OAuth)",
+      "production_restrictions": "no force-push, no history rewrite, no credential rotation without approval",
+      "owner": "development agent",
+      "version_update_policy": "follow GitHub CLI releases"
+    },
+    "browser": {
+      "purpose": "Approved web testing and research",
+      "allowed_tools": ["navigate", "screenshot", "extract"],
+      "filesystem_scope": "none",
+      "network_scope": "approved domains only (GitHub, npm, PyPI, Docker Hub documentation)",
+      "environment_requirements": ["browser automation capability"],
+      "authentication_method": "none (read-only public docs)",
+      "production_restrictions": "no production browser access without explicit approval",
+      "owner": "development agent",
+      "version_update_policy": "follow host application MCP browser server releases"
+    }
+  }
+}

@@ -1,0 +1,377 @@
+"""ERP03 FastAPI application with TypeSafe System One judgment integration.
+
+Code owns the workflow; TypeSafe supplies programmable common sense:
+- Error classification drives retry-after headers (code decision, model annotation).
+- Transaction risk scoring gates high-risk sales (code decision, model annotation).
+- TypeSafe client lifecycle is bound to the app lifespan.
+
+Production hardening:
+- Redis circuit breaker: rate limiter fails open when Redis is unreachable.
+- Per-tenant rate limiting: rate limit key includes business_id from JWT.
+- Audit logging: business operations are recorded for tamper-evident traceability.
+- Security headers: HSTS, Permissions-Policy, server header removal.
+"""
+
+import logging
+import time
+from contextlib import asynccontextmanager
+from typing import Any
+from uuid import uuid4
+
+import jwt as pyjwt
+import redis.asyncio as redis
+from fastapi import FastAPI, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.api.auth import router as auth_router
+from app.api.catalog import router as catalog_router
+from app.api.health import router as health_router
+from app.api.operations import router as operations_router
+from app.api.purchasing import router as purchasing_router
+from app.api.receivables import router as receivables_router
+from app.api.sales import router as sales_router
+from app.api.transactions import router as transactions_router
+from app.core.audit import AuditMiddleware
+from app.core.config import settings
+from app.core.errors import AppError
+from app.core.metrics import REQUEST_COUNT, REQUEST_LATENCY, metrics_app
+from app.core.typesafe import typesafe
+
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("erp03")
+
+
+class RedisRateLimitMiddleware:
+    """Redis-backed sliding window rate limiter with circuit breaker.
+
+    Uses Redis sorted sets for distributed rate limiting across workers.
+    Honours ``X-Forwarded-For`` only when the immediate peer is in
+    ``trusted_proxies`` (prevents spoofing).
+
+    Circuit breaker: if Redis is unavailable, the middleware fails open
+    (allows the request through) and logs the failure for alerting.
+    Per-tenant: rate limit key includes business_id from JWT claims when
+    available, falling back to client IP.
+    """
+
+    def __init__(
+        self,
+        app,
+        redis_url: str,
+        requests_per_window: int = 100,
+        window_seconds: int = 60,
+        trusted_proxies: set[str] | None = None,
+    ):
+        self.app = app
+        self.requests_per_window = requests_per_window
+        self.window_seconds = window_seconds
+        self.trusted_proxies = trusted_proxies or set()
+        self._circuit_open = False
+        self._circuit_opened_at: float | None = None
+        self._secret_key = settings.secret_key.get_secret_value()
+
+        # Handle fakeredis URL scheme for tests
+        self.redis: Any
+        if redis_url.startswith("fakeredis://"):
+            import fakeredis.aioredis
+
+            self.redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+        else:
+            self.redis = redis.from_url(
+                redis_url,
+                encoding="utf-8",
+                decode_responses=True,
+                max_connections=settings.redis_max_connections,
+                socket_connect_timeout=2.0,
+                socket_timeout=2.0,
+                health_check_interval=30,
+            )
+
+    async def close(self) -> None:
+        """Close the Redis connection pool during graceful application shutdown."""
+        close = getattr(self.redis, "aclose", None)
+        if close is not None:
+            await close()
+
+    def _circuit_available(self) -> bool:
+        """Return True if the circuit allows Redis calls."""
+        if not self._circuit_open:
+            return True
+        # Attempt half-open after 30 seconds
+        if self._circuit_opened_at and time.time() - self._circuit_opened_at > 30:
+            self._circuit_open = False
+            self._circuit_opened_at = None
+            return True
+        return False
+
+    def _trip_circuit(self) -> None:
+        """Open the circuit breaker."""
+        self._circuit_open = True
+        self._circuit_opened_at = time.time()
+        logger.warning("Rate limiter circuit opened: Redis unavailable, failing open")
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Get client IP, honouring X-Forwarded-For only from trusted peers.
+        peer_ip = scope.get("client", ("unknown", 0))[0] or "unknown"
+        client_ip = peer_ip
+        headers = dict(scope.get("headers", []))
+        if peer_ip in self.trusted_proxies:
+            forwarded = headers.get(b"x-forwarded-for", b"").decode().strip()
+            if forwarded:
+                client_ip = forwarded.split(",")[0].strip() or peer_ip
+
+        # Extract business_id from JWT for per-tenant rate limiting
+        business_id = None
+        auth_header = headers.get(b"authorization", b"").decode()
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1]
+            try:
+                payload = pyjwt.decode(
+                    token,
+                    self._secret_key,
+                    algorithms=["HS256"],
+                    options={"verify_exp": False, "verify_signature": False},
+                )
+                business_id = payload.get("business_id")
+            except Exception:
+                pass
+
+        # Per-tenant key: business_id if available, else client IP
+        key = f"ratelimit:{business_id or client_ip}"
+
+        now = time.time()
+
+        # Circuit breaker: if Redis is down, fail open
+        if not self._circuit_available():
+            await self.app(scope, receive, send)
+            return
+
+        try:
+            pipe = self.redis.pipeline()
+            await pipe.zremrangebyscore(key, 0, now - self.window_seconds)
+            await pipe.zcard(key)
+            await pipe.zadd(key, {str(now): now})
+            await pipe.expire(key, self.window_seconds)
+            results = await pipe.execute()
+        except Exception:
+            self._trip_circuit()
+            await self.app(scope, receive, send)
+            return
+
+        current_count = results[1]
+
+        # Check rate limit
+        if current_count >= self.requests_per_window:
+            response = JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content={"detail": "Rate limit exceeded"},
+                headers={"Retry-After": str(self.window_seconds)},
+            )
+            await response(scope, receive, send)
+            return
+
+        await self.app(scope, receive, send)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Bind TypeSafe client lifecycle to the app.
+
+    ``close()`` is guaranteed to run on shutdown so the SDK's HTTP client
+    and any buffered judgments are flushed cleanly. Also closes Redis
+    connections and DB engine on shutdown.
+    """
+    try:
+        yield
+    finally:
+        try:
+            if settings.typesafe_enabled:
+                await typesafe.close()
+        finally:
+            try:
+                # Starlette builds the middleware stack before entering lifespan.
+                # Walk it once to close the single Redis pool owned by the middleware.
+                middleware = app.middleware_stack
+                while middleware is not None:
+                    if isinstance(middleware, RedisRateLimitMiddleware):
+                        await middleware.close()
+                        break
+                    middleware = getattr(middleware, "app", None)
+            except Exception:
+                logger.exception("Failed to close Redis rate-limiter connection pool")
+            finally:
+                from app.db.session import engine
+
+                await engine.dispose()
+
+
+app = FastAPI(
+    title=settings.app_name,
+    description="ERP03 production ERP — modular foundation for multi-tenant retail operations.",
+    version=settings.version,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    contact={
+        "name": "ERP03 Support",
+        "url": "https://erp.example.com/support",
+        "email": "support@erp.example.com",
+    },
+    license_info={
+        "name": "Proprietary",
+        "url": "https://erp.example.com/license",
+    },
+    lifespan=lifespan,
+)
+
+
+@app.exception_handler(AppError)
+async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+    """Map typed domain errors to the stable error envelope exactly once.
+
+    TypeSafe classification is non-blocking: if it is unavailable or slow,
+    the HTTP error is still returned. When available and confident,
+    ``Retry-After`` is derived from the classification (code-owned decision).
+    """
+    request_id = request.headers.get("X-Request-ID") or uuid4().hex
+    headers = {"X-Request-ID": request_id}
+
+    classification = None
+    if settings.typesafe_enabled:
+        classification = await typesafe.classify_error(
+            error_code=exc.code,
+            error_message=exc.message,
+            endpoint=str(request.url.path),
+            method=request.method,
+            request_id=request_id,
+        )
+        if classification is not None:
+            # Confidence gates acting on the judgment.
+            if classification.confidence < 0.40:
+                logger.warning(
+                    "Low-confidence error classification request_id=%s "
+                    "selected=%s confidence=%.2f escalate=True",
+                    request_id,
+                    classification.selected,
+                    classification.confidence,
+                )
+            if classification.is_retryable and classification.retry_after_seconds is not None:
+                headers["Retry-After"] = str(classification.retry_after_seconds)
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        headers=headers,
+        content={
+            "error": {
+                "code": exc.code,
+                "message": exc.message,
+                "request_id": request_id,
+                "typesafe": (
+                    {
+                        "selected": classification.selected,
+                        "probability": classification.probability,
+                        "confidence": classification.confidence,
+                        "escalate": classification.escalate,
+                    }
+                    if classification is not None
+                    else None
+                ),
+            },
+        },
+    )
+
+
+app.mount("/metrics", metrics_app)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "X-Request-ID",
+        "X-Idempotency-Key",
+        "Retry-After",
+    ],
+)
+
+# Rate limiting middleware (respects settings.rate_limit_enabled)
+if settings.rate_limit_enabled:
+    app.add_middleware(
+        RedisRateLimitMiddleware,
+        redis_url=settings.redis_url or "redis://localhost:6379/0",
+        requests_per_window=settings.rate_limit_requests,
+        window_seconds=settings.rate_limit_window,
+        trusted_proxies={ip.strip() for ip in settings.trusted_proxies.split(",") if ip.strip()},
+    )
+
+# Audit logging middleware (captures business operations for traceability)
+app.add_middleware(AuditMiddleware)
+
+
+@app.middleware("http")
+async def request_context(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or uuid4().hex
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception(
+            "Unhandled request error request_id=%s path=%s", request_id, request.url.path
+        )
+        response = JSONResponse(
+            status_code=500,
+            headers={"X-Request-ID": request_id},
+            content={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Internal server error",
+                    "request_id": request_id,
+                }
+            },
+        )
+    duration = time.perf_counter() - started
+    route = request.scope.get("route")
+    route_name = getattr(route, "path", request.url.path)
+    REQUEST_COUNT.labels(request.method, route_name, str(response.status_code)).inc()
+    REQUEST_LATENCY.labels(request.method, route_name).observe(duration)
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    # Remove server header to reduce information leakage
+    response.headers.__delitem__("server") if "server" in response.headers else None
+    logger.info(
+        "request method=%s path=%s status=%s duration_ms=%.2f request_id=%s",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration * 1000,
+        request_id,
+    )
+    return response
+
+
+@app.get("/api/v1", tags=["system"])
+async def api_root() -> dict[str, str]:
+    return {"service": "erp03", "status": "ready", "version": settings.version}
+
+
+app.include_router(health_router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(sales_router, prefix="/api/v1")
+app.include_router(catalog_router, prefix="/api/v1")
+app.include_router(purchasing_router, prefix="/api/v1")
+app.include_router(receivables_router, prefix="/api/v1")
+app.include_router(transactions_router, prefix="/api/v1")
+app.include_router(operations_router, prefix="/api/v1")

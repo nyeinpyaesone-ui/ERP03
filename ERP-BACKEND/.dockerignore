@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+*.py~
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage/
+htmlcov/
+*.egg-info/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Local databases
+.local/
+*.db
+*.sqlite
+*.sqlite3
+
+# Tests
+tests/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docs
+*.md
+docs/
