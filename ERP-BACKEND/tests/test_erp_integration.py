@@ -499,7 +499,6 @@ async def test_unified_erp_onboarding_catalog_inventory_and_pos():
         assert final_stock.json()["items"][0]["quantity"] == "8.000"
 
 
-
 @pytest.mark.asyncio
 async def test_receivable_collection_is_atomic_and_idempotent():
     suffix = uuid4().hex[:12]
