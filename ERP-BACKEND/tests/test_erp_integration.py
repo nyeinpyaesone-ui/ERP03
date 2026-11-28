@@ -499,6 +499,7 @@ async def test_unified_erp_onboarding_catalog_inventory_and_pos():
         assert final_stock.json()["items"][0]["quantity"] == "8.000"
 
 
+
 @pytest.mark.asyncio
 async def test_receivable_collection_is_atomic_and_idempotent():
     suffix = uuid4().hex[:12]
@@ -511,7 +512,6 @@ async def test_receivable_collection_is_atomic_and_idempotent():
             name="Receivable Test Customer",
             active=True,
         )
-        session.add(customer)
         product = Product(
             business_id=business.id,
             branch_id=branch.id,
@@ -522,38 +522,81 @@ async def test_receivable_collection_is_atomic_and_idempotent():
             cost_price=Decimal("50.00"),
             active=True,
         )
-        session.add(product)
+        session.add_all([customer, product])
         await session.flush()
-        session.add(StockBalance(warehouse_id=warehouse.id, product_id=product.id, quantity=Decimal("5")))
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        login = await client.post("/api/v1/auth/login", json={
-            "business_code": business.code, "email": user.email, "password": "Correct-Horse-123"
-        })
+        session.add(
+            StockBalance(
+                warehouse_id=warehouse.id,
+                product_id=product.id,
+                quantity=Decimal("5"),
+            )
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        login = await client.post(
+            "/api/v1/auth/login",
+            json={
+                "business_code": business.code,
+                "email": user.email,
+                "password": "Correct-Horse-123",
+            },
+        )
         assert login.status_code == 200, login.text
         headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
-        sale = await client.post("/api/v1/sales", headers={**headers, "X-Idempotency-Key": f"rc-sale-{suffix}"}, json={
-            "branch_id": str(branch.id), "warehouse_id": str(warehouse.id),
-            "customer_id": str(customer.id), "currency": "MMK",
-            "lines": [{"product_id": str(product.id), "quantity": "1"}],
-            "payments": [{"method": "cash", "amount": "40.00", "currency": "MMK"}],
-        })
+        sale = await client.post(
+            "/api/v1/sales",
+            headers={**headers, "X-Idempotency-Key": f"rc-sale-{suffix}"},
+            json={
+                "branch_id": str(branch.id),
+                "warehouse_id": str(warehouse.id),
+                "customer_id": str(customer.id),
+                "currency": "MMK",
+                "lines": [{"product_id": str(product.id), "quantity": "1"}],
+                "payments": [{"method": "cash", "amount": "40.00", "currency": "MMK"}],
+            },
+        )
         assert sale.status_code == 201, sale.text
         invoice_id = sale.json()["invoice_id"]
         key = f"rc-collect-{suffix}"
         collect_headers = {**headers, "X-Idempotency-Key": key}
-        payload = {"invoice_id": invoice_id, "amount": "30.00", "method": "cash", "currency": "MMK"}
-        first = await client.post("/api/v1/receivables/collect", headers=collect_headers, json=payload)
+        payload = {
+            "invoice_id": invoice_id,
+            "amount": "30.00",
+            "method": "cash",
+            "currency": "MMK",
+        }
+        first = await client.post(
+            "/api/v1/receivables/collect",
+            headers=collect_headers,
+            json=payload,
+        )
         assert first.status_code == 201, first.text
-        replay = await client.post("/api/v1/receivables/collect", headers=collect_headers, json=payload)
+        replay = await client.post(
+            "/api/v1/receivables/collect",
+            headers=collect_headers,
+            json=payload,
+        )
         assert replay.status_code == 201, replay.text
         assert replay.json()["payment_id"] == first.json()["payment_id"]
         assert replay.json()["idempotent_replay"] is True
         assert first.json()["balance"] == "30.00"
+
         outstanding = await client.get("/api/v1/receivables/outstanding", headers=headers)
         assert outstanding.status_code == 200, outstanding.text
         assert outstanding.json()["items"][0]["invoice_id"] == invoice_id
         assert outstanding.json()["items"][0]["balance"] == "30.00"
-        overpay = await client.post("/api/v1/receivables/collect", headers={**headers, "X-Idempotency-Key": f"over-{suffix}"}, json={
-            "invoice_id": invoice_id, "amount": "31.00", "method": "cash", "currency": "MMK"
-        })
+
+        overpay = await client.post(
+            "/api/v1/receivables/collect",
+            headers={**headers, "X-Idempotency-Key": f"over-{suffix}"},
+            json={
+                "invoice_id": invoice_id,
+                "amount": "31.00",
+                "method": "cash",
+                "currency": "MMK",
+            },
+        )
         assert overpay.status_code == 422
