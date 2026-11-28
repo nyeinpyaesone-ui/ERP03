@@ -153,11 +153,17 @@ check_toolchain() {
 
 CONTAINER_ENGINE=""
 
+runtime_probe() {
+  if command -v timeout >/dev/null 2>&1; then timeout 5 "$@"
+  else "$@"
+  fi
+}
+
 detect_container_runtime() {
   CONTAINER_ENGINE=""
-  if command -v docker >/dev/null 2>&1 && timeout 5 docker info >/dev/null 2>&1; then
+  if command -v docker >/dev/null 2>&1 && runtime_probe docker info >/dev/null 2>&1; then
     CONTAINER_ENGINE="docker"
-  elif command -v podman >/dev/null 2>&1 && timeout 5 podman info >/dev/null 2>&1; then
+  elif command -v podman >/dev/null 2>&1 && runtime_probe podman info >/dev/null 2>&1; then
     CONTAINER_ENGINE="podman"
   fi
 }
@@ -619,7 +625,8 @@ setup_frontend() {
     return
   fi
   log "Installing frontend dependencies"
-  (cd "$FRONTEND_DIR" && npm ci --no-audit --no-fund --silent && npm run build)
+  (cd "$FRONTEND_DIR" && npm ci --no-audit --no-fund --silent)
+  if ! $QUALIFY; then (cd "$FRONTEND_DIR" && npm run build); fi
 }
 
 # ---------------------------------------------------------------------------
