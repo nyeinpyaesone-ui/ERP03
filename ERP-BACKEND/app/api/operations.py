@@ -65,10 +65,14 @@ async def get_business_context(
 
     warehouses = []
     if branch_ids:
-        warehouse_stmt = select(Warehouse).where(
-            Warehouse.branch_id.in_(branch_ids),
-            Warehouse.active.is_(True),
-        ).order_by(Warehouse.name)
+        warehouse_stmt = (
+            select(Warehouse)
+            .where(
+                Warehouse.branch_id.in_(branch_ids),
+                Warehouse.active.is_(True),
+            )
+            .order_by(Warehouse.name)
+        )
         warehouses = list((await session.scalars(warehouse_stmt)).all())
 
     return {
@@ -200,9 +204,7 @@ async def list_sales(
         .offset(offset)
     )
     rows = (await session.execute(stmt)).all()
-    total = await session.scalar(
-        select(func.count(Invoice.id)).where(*conditions)
-    ) or 0
+    total = await session.scalar(select(func.count(Invoice.id)).where(*conditions)) or 0
 
     return {
         "items": [
@@ -243,9 +245,9 @@ async def dashboard_summary(
         local_now = datetime.now(ZoneInfo(business.timezone))
     except (ZoneInfoNotFoundError, ValueError):
         local_now = datetime.now(UTC)
-    month_start = local_now.replace(
-        day=1, hour=0, minute=0, second=0, microsecond=0
-    ).astimezone(UTC)
+    month_start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(
+        UTC
+    )
 
     invoice_conditions = [
         Invoice.business_id == business_id,
@@ -262,15 +264,15 @@ async def dashboard_summary(
     revenue = await session.scalar(
         select(func.coalesce(func.sum(Invoice.total), 0)).where(*invoice_conditions)
     ) or Decimal("0")
-    order_count = await session.scalar(
-        select(func.count(Invoice.id)).where(*invoice_conditions)
-    ) or 0
-    product_count = await session.scalar(
-        select(func.count(Product.id)).where(*product_conditions)
-    ) or 0
-    customer_count = await session.scalar(
-        select(func.count(Customer.id)).where(*customer_conditions)
-    ) or 0
+    order_count = (
+        await session.scalar(select(func.count(Invoice.id)).where(*invoice_conditions)) or 0
+    )
+    product_count = (
+        await session.scalar(select(func.count(Product.id)).where(*product_conditions)) or 0
+    )
+    customer_count = (
+        await session.scalar(select(func.count(Customer.id)).where(*customer_conditions)) or 0
+    )
 
     stock_totals = (
         select(
