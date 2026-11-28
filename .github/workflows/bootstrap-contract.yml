@@ -1,0 +1,44 @@
+name: Bootstrap Contract
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bootstrap-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scripts:
+    name: Validate bootstrap scripts and runtime contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Validate Bash syntax
+        run: bash -n scripts/setup.sh scripts/qualify.sh
+
+      - name: Validate frontend runtime metadata
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const pkg = JSON.parse(fs.readFileSync("frontend/package.json", "utf8"));
+          const lock = JSON.parse(fs.readFileSync("frontend/package-lock.json", "utf8"));
+          const expected = { node: ">=22.12.0 <23", npm: ">=10" };
+          for (const [key, value] of Object.entries(expected)) {
+            if (pkg.engines?.[key] !== value || lock.packages?.[""]?.engines?.[key] !== value) {
+              throw new Error(`frontend ${key} engine mismatch between package.json and package-lock.json`);
+            }
+          }
+          console.log("Frontend engine metadata is synchronized.");
+          NODE

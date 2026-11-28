@@ -79,7 +79,7 @@ GitHub image publishing needs `GITHUB_TOKEN`; the manual staging deploy workflow
 
 ## 4. Build and pin immutable images
 
-1. Merge the source change through review and require CI, Quality, Security, Container, Docker, Type Check, Coverage and Policy Enforcement to complete.
+1. Merge the source change through review and require CI, Quality, Security, Container, Docker, Type Check and Coverage to complete.
 2. Publish backend and frontend on the intended release tag.
 3. Capture the exact image digest for each image from its successful workflow summary.
 4. Set each target overlay to the exact digest; do not use `latest` for production.

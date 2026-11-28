@@ -32,8 +32,10 @@ else
   printf '[SKIP] docker        reason=no-daemon (%s)\n' "$AGENT_ENV_NAME"
 fi
 
-if grep -q '"used_pg": *false' "$JSON"; then
-  echo "[SKIP] postgres      reason=sqlite-fallback"
+if grep -q '"database": *"sqlite"' "$JSON"; then
+  echo "[SKIP] postgres      reason=explicit-sqlite-smoke-only"
+elif grep -q '"used_pg": *false' "$JSON"; then
+  echo "[FAIL] postgres      reason=required-database-unavailable"
 else
   echo "[PASS] postgres      reachable"
 fi

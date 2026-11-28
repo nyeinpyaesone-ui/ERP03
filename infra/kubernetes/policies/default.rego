@@ -3,8 +3,8 @@ package main
 import future.keywords.in
 
 # Default deny-all policy set when no external policies repo is reachable.
-# This local fallback keeps the Policy Enforcement workflow green while the
-# dedicated external policies repository (erp03/policies) is being established.
+# Local default-deny fallback policy. The dedicated external policies
+# repository (erp03/policies) has not yet been established.
 
 default allow = false
 

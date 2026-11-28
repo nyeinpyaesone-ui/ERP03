@@ -89,7 +89,6 @@ Never infer a digest from a tag or an earlier build. Keep the production web ima
 ## 6. Verification checklist
 
 - [ ] CI, Quality, Security, Container, Docker, Type Check and Coverage pass for the exact release commit.
-- [ ] Policy Enforcement completes with a successful job (not `startup_failure` / no jobs).
 - [ ] Both GHCR images exist and include AMD64 + ARM64 manifests.
 - [ ] Image digests are copied from the exact successful build.
 - [ ] Staging Environment secrets and `STAGING_DEPLOY_PATH` are configured for the manual staging workflow.

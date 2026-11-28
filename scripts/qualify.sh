@@ -14,6 +14,9 @@ QUALIFY_JSON=""
 QUALIFY_STEPS=()
 QUALIFY_CURRENT="init"
 QUALIFY_USED_PG="false"
+ALLOW_SQLITE_SMOKE=false
+QUALIFY_MODE="full"
+QUALIFY_DATABASE="unknown"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -22,6 +25,7 @@ while [ $# -gt 0 ]; do
       QUALIFY_JSON="$2"
       shift 2
       ;;
+    --allow-sqlite-smoke) ALLOW_SQLITE_SMOKE=true ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -41,10 +45,10 @@ write_evidence() {
   fi
   [ -n "$QUALIFY_JSON" ] || return 0
   {
-    printf '{"env":"%s","arch":"%s","commit":"%s","used_pg":%s,"steps":[' \
+    printf '{"env":"%s","arch":"%s","commit":"%s","used_pg":%s,"database":"%s","qualification":"%s","steps":[' \
       "${AGENT_ENV_NAME:-local}" "$(uname -m)" \
       "$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo none)" \
-      "$QUALIFY_USED_PG"
+      "$QUALIFY_USED_PG" "$QUALIFY_DATABASE" "$QUALIFY_MODE"
     local first=1
     for s in "${QUALIFY_STEPS[@]}"; do
       [ "$first" -eq 1 ] && first=0 || printf ','
@@ -75,33 +79,41 @@ fi
 # shellcheck disable=SC1091
 source "$VENV_DIR/bin/activate"
 
-command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 2; }
+python -c 'import sys; assert sys.version_info[:2] == (3, 12), f"Python 3.12 required, found {sys.version.split()[0]}"' || die "Qualification requires the Python 3.12 virtualenv used by CI."
 command -v node >/dev/null || { echo "node is required" >&2; exit 2; }
 command -v npm >/dev/null || { echo "npm is required" >&2; exit 2; }
+node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major === 22 && minor >= 12 ? 0 : 1)' || die "Qualification requires Node.js 22.12+ to match CI."
 
 # ---------------------------------------------------------------------------
-# Database URL resolution with precondition probe.
-# Prefer PostgreSQL when reachable; otherwise fall back to hermetic SQLite
-# with a clear warning instead of an opaque asyncpg connection error.
+# Database qualification is strict by default. SQLite is an explicit smoke
+# mode only and must never be reported as PostgreSQL/full qualification.
 # ---------------------------------------------------------------------------
 DEFAULT_PG_URL="postgresql+asyncpg://erp03:erp03@127.0.0.1:5432/erp03"
 SQLITE_URL="sqlite+aiosqlite:////tmp/erp03-qualify.sqlite3"
-
 : "${DATABASE_URL:=$DEFAULT_PG_URL}"
 
 probe_postgres() {
   local url="$1"
   [[ "$url" == postgresql+asyncpg://* ]] || return 1
-  python3 - <<EOF >/dev/null 2>&1
-import asyncio, asyncpg, sys
+  DATABASE_URL_TO_PROBE="$url" python - <<'PY' >/dev/null 2>&1
+import asyncio
+import os
+import asyncpg
+
 async def main():
     try:
-        conn = await asyncpg.connect("${url}", timeout=2)
+        # SQLAlchemy's asyncpg dialect URL is not accepted by asyncpg.connect().
+        # Normalize only the driver marker while preserving credentials/options.
+        database_url = os.environ["DATABASE_URL_TO_PROBE"].replace(
+            "postgresql+asyncpg://", "postgresql://", 1
+        )
+        conn = await asyncpg.connect(database_url, timeout=3)
         await conn.close()
     except Exception:
         raise SystemExit(1)
+
 asyncio.run(main())
-EOF
+PY
 }
 
 USE_PG=false
@@ -109,16 +121,20 @@ QUALIFY_USED_PG="false"
 if probe_postgres "$DATABASE_URL"; then
   USE_PG=true
   QUALIFY_USED_PG="true"
-  log "PostgreSQL reachable at $DATABASE_URL — qualification will run against it"
+  QUALIFY_DATABASE="postgresql"
+  QUALIFY_MODE="full"
+  log "PostgreSQL is reachable; running full database qualification."
 else
-  warn "PostgreSQL not reachable at $DATABASE_URL"
-  warn "Falling back to hermetic SQLite: $SQLITE_URL"
-  warn "To run against PostgreSQL, set DATABASE_URL to a reachable instance."
+  if ! $ALLOW_SQLITE_SMOKE; then
+    die "PostgreSQL is unavailable. Full qualification requires PostgreSQL; start the dev database or set DATABASE_URL. Use --allow-sqlite-smoke only for a clearly labelled, non-production smoke run."
+  fi
+  warn "Running SQLite smoke-only mode. PostgreSQL migrations and row-lock concurrency are NOT qualified."
   DATABASE_URL="$SQLITE_URL"
   export DATABASE_URL
-  # Must also set ENVIRONMENT=development to avoid production validation error
   ENVIRONMENT=development
   export ENVIRONMENT
+  QUALIFY_DATABASE="sqlite"
+  QUALIFY_MODE="smoke-only"
 fi
 
 log "Validate repository foundations"
@@ -135,9 +151,9 @@ ruff format --check app tests alembic
 step_done
 
 step_begin "compile"
-python3 -m compileall -q app alembic
+python -m compileall -q app alembic
 if $USE_PG; then
-  ENVIRONMENT=production SECRET_KEY="qualification-secret-key-with-at-least-32-bytes" CORS_ORIGINS="https://erp.example.invalid" DATABASE_URL="$DATABASE_URL" DATABASE_PATH="/tmp/erp03-qualification.sqlite3" python3 -c "
+  ENVIRONMENT=production SECRET_KEY="qualification-secret-key-with-at-least-32-bytes" CORS_ORIGINS="https://erp.example.invalid" DATABASE_URL="$DATABASE_URL" DATABASE_PATH="/tmp/erp03-qualification.sqlite3" python -c "
 from app.main import app
 def _collect_paths(routes, out):
     for r in routes:
@@ -155,7 +171,7 @@ assert any('/api/v1/sales' in p or p == '/sales' for p in paths), paths
 print('production configuration and critical routes: OK')
 "
 else
-  ENVIRONMENT=development SECRET_KEY="qualification-secret-key-with-at-least-32-bytes" CORS_ORIGINS="http://localhost:3000,http://localhost:5173" DATABASE_PATH="/tmp/erp03-qualification.sqlite3" python3 -c "
+  ENVIRONMENT=development SECRET_KEY="qualification-secret-key-with-at-least-32-bytes" CORS_ORIGINS="http://localhost:3000,http://localhost:5173" DATABASE_PATH="/tmp/erp03-qualification.sqlite3" python -c "
 from app.main import app
 def _collect_paths(routes, out):
     for r in routes:
@@ -187,4 +203,8 @@ npm ci --no-audit --no-fund
 npm run build
 step_done
 
-log "ERP03 qualification passed"
+if [[ "$QUALIFY_MODE" == "smoke-only" ]]; then
+  log "ERP03 SQLite smoke checks passed; PostgreSQL/full qualification remains pending"
+else
+  log "ERP03 PostgreSQL qualification passed"
+fi
