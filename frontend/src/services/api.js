@@ -74,6 +74,8 @@ export const api = {
   listBusinesses: () => request('/businesses'),
   createSale: (payload, idempotencyKey) => request('/sales', { method: 'POST', headers: { 'X-Idempotency-Key': idempotencyKey }, body: JSON.stringify(payload) }),
   listSales: (params = {}) => request(`/sales?${new URLSearchParams(params)}`),
+  listOutstandingReceivables: (params = {}) => request(`/receivables/outstanding?${new URLSearchParams(params)}`),
+  collectReceivable: (payload, idempotencyKey) => request('/receivables/collect', { method: 'POST', headers: { 'X-Idempotency-Key': idempotencyKey }, body: JSON.stringify(payload) }),
   getBusinessContext: () => request('/context'),
   getStockBalances: (params = {}) => request(`/inventory/stock?${new URLSearchParams(params)}`),
   getDashboardSummary: () => request('/dashboard/summary'),
