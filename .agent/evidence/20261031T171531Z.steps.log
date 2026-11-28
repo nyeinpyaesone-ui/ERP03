@@ -1,4 +1,0 @@
-PASS	ruff
-PASS	migrate
-PASS	tests
-PASS	frontend

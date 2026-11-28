@@ -29,6 +29,7 @@ from app.api.catalog import router as catalog_router
 from app.api.health import router as health_router
 from app.api.operations import router as operations_router
 from app.api.purchasing import router as purchasing_router
+from app.api.receivables import router as receivables_router
 from app.api.sales import router as sales_router
 from app.api.transactions import router as transactions_router
 from app.core.audit import AuditMiddleware
@@ -371,5 +372,6 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(sales_router, prefix="/api/v1")
 app.include_router(catalog_router, prefix="/api/v1")
 app.include_router(purchasing_router, prefix="/api/v1")
+app.include_router(receivables_router, prefix="/api/v1")
 app.include_router(transactions_router, prefix="/api/v1")
 app.include_router(operations_router, prefix="/api/v1")

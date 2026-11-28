@@ -197,6 +197,10 @@ class Payment(Base):
     __table_args__ = (
         Index("ix_payments_branch_created", "branch_id", "created_at"),
         Index("ix_payments_invoice", "invoice_id"),
+        UniqueConstraint(
+            "business_id", "branch_id", "invoice_id", "idempotency_key",
+            name="uq_payments_invoice_idempotency",
+        ),
     )
     id: Mapped[UUID] = uuid_pk()
     business_id: Mapped[UUID] = mapped_column(
@@ -209,6 +213,8 @@ class Payment(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     reference: Mapped[str | None] = mapped_column(String(120))
     note: Mapped[str | None] = mapped_column(Text)
+    idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    request_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
