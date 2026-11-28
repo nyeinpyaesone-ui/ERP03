@@ -1,7 +1,13 @@
 /**
- * API Client — typed fetch wrapper with auth token injection.
- * All requests go through /api which Vite proxies to the backend /api/v1.
+ * API Client — ERP JWT remains supported; a linked Supabase session may also
+ * authenticate requests. The backend maps Supabase subjects to ERP users.
  */
+import {
+  getActiveAuthProvider,
+  getSupabaseAccessToken,
+  hasSupabaseSession,
+  selectSupabaseProvider,
+} from './supabaseAuth';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -15,25 +21,35 @@ class ApiError extends Error {
 }
 
 async function request(path, options = {}) {
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('erp03_token') : null;
+  const { authToken, preferErpToken = false, ...fetchOptions } = options;
+  let token = authToken || null;
+  if (!token && !preferErpToken) {
+    const activeProvider = getActiveAuthProvider();
+    const useSupabase = activeProvider === 'supabase'
+      || (!activeProvider && hasSupabaseSession());
+
+    if (useSupabase) {
+      // Persist legacy session provider choice before refresh can reject and
+      // clear its credentials; never switch silently to a stored ERP token.
+      if (activeProvider !== 'supabase') selectSupabaseProvider();
+      token = await getSupabaseAccessToken();
+    } else if (typeof localStorage !== 'undefined') {
+      token = localStorage.getItem('erp03_token');
+    }
+  } else if (!token && preferErpToken && typeof localStorage !== 'undefined') {
+    token = localStorage.getItem('erp03_token');
+  }
+
   const headers = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...options.headers,
+    ...fetchOptions.headers,
   };
-
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
-
-  let data;
+  const res = await fetch(`${API_BASE}${path}`, { ...fetchOptions, headers });
   const contentType = res.headers.get('content-type') || '';
-  if (contentType.includes('application/json')) {
-    data = await res.json();
-  } else {
-    data = { message: await res.text() };
-  }
+  const data = contentType.includes('application/json')
+    ? await res.json()
+    : { message: await res.text() };
 
   if (!res.ok) {
     throw new ApiError(
@@ -42,42 +58,31 @@ async function request(path, options = {}) {
       data
     );
   }
-
   return data;
 }
 
 export const api = {
-  // Auth
-  login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
-  register: (payload) => request('/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
-  me: () => request('/auth/me'),
-
-  // Business
+  login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify(payload), preferErpToken: true }),
+  register: (payload) => request('/auth/register', { method: 'POST', body: JSON.stringify(payload), preferErpToken: true }),
+  me: (options = {}) => request('/auth/me', options),
+  linkSupabase: (accessToken) => request('/auth/supabase/link', {
+    method: 'POST',
+    preferErpToken: true,
+    body: JSON.stringify({ access_token: accessToken }),
+  }),
   createBusiness: (payload) => request('/businesses', { method: 'POST', body: JSON.stringify(payload) }),
   listBusinesses: () => request('/businesses'),
-
-  // Sales
-  createSale: (payload) => request('/sales', { method: 'POST', body: JSON.stringify(payload) }),
-  listSales: (params) => {
-    const qs = new URLSearchParams(params).toString();
-    return request(`/sales?${qs}`);
-  },
-
-  // Products
-  listProducts: (params) => {
-    const qs = new URLSearchParams(params).toString();
-    return request(`/products?${qs}`);
-  },
+  createSale: (payload, idempotencyKey) => request('/sales', { method: 'POST', headers: { 'X-Idempotency-Key': idempotencyKey }, body: JSON.stringify(payload) }),
+  listSales: (params = {}) => request(`/sales?${new URLSearchParams(params)}`),
+  listOutstandingReceivables: (params = {}) => request(`/receivables/outstanding?${new URLSearchParams(params)}`),
+  collectReceivable: (payload, idempotencyKey) => request('/receivables/collect', { method: 'POST', headers: { 'X-Idempotency-Key': idempotencyKey }, body: JSON.stringify(payload) }),
+  getBusinessContext: () => request('/context'),
+  getStockBalances: (params = {}) => request(`/inventory/stock?${new URLSearchParams(params)}`),
+  getDashboardSummary: () => request('/dashboard/summary'),
+  listProducts: (params) => request(`/products?${new URLSearchParams(params)}`),
   createProduct: (payload) => request('/products', { method: 'POST', body: JSON.stringify(payload) }),
-
-  // Customers
-  listCustomers: (params) => {
-    const qs = new URLSearchParams(params).toString();
-    return request(`/customers?${qs}`);
-  },
+  listCustomers: (params) => request(`/customers?${new URLSearchParams(params)}`),
   createCustomer: (payload) => request('/customers', { method: 'POST', body: JSON.stringify(payload) }),
-
-  // Health
   health: () => request('/healthz'),
 };
 

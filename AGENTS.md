@@ -49,11 +49,11 @@ CI uses Python 3.12 / Node 22; local Python may be 3.14 (asyncpg 0.32.0 works on
 Two `.env` files — never mix:
 
 - `ERP-BACKEND/.env` — backend runtime (`SECRET_KEY`, `DATABASE_URL`, `CORS_ORIGINS`, `REDIS_URL`)
-- `.env.compose` — Docker Compose only (`POSTGRES_PASSWORD`, `DOCKERHUB_IMAGE_*`, `SECRET_KEY`)
+- `.env.compose` — Docker Compose only (`POSTGRES_PASSWORD`, `ERP03_BACKEND_IMAGE`, `ERP03_FRONTEND_IMAGE`, `SECRET_KEY`)
 
 The compose file is **not** read by the backend (Settings uses `extra="forbid"`).
 
-Docker Hub images (multi-arch amd64/arm64): `nyeinpyaesone-ui/erp03-backend`, `nyeinpyaesone-ui/erp03-frontend` (`IMAGE_TAG=latest`).
+GHCR images (multi-arch amd64/arm64): `ghcr.io/nyeinpyaesone-ui/erp03-backend`, `ghcr.io/nyeinpyaesone-ui/erp03-frontend` (`IMAGE_TAG=latest`).
 
 Never commit real credentials, `.env` files, or anything under `secrets/` or `.agent/`. All three are gitignored.
 
@@ -99,11 +99,12 @@ Add a DB column: modify `app/models/*.py` → `alembic revision --autogenerate -
 | `ci.yml` | push/PR `main`, `feat/**`, `fix/**` | PG + Redis services → compile → migrate (5 retries) → pytest (3 retries) → frontend build |
 | `quality.yml` | push/PR | ruff check/format + compileall + frontend build |
 | `security.yml` | schedule/PR | pip-audit + CodeQL |
-| `container.yml` | push tag/main/release | Docker Hub multi-arch (amd64/arm64) + provenance + SBOM |
+| `docker-publish.yml` | push main/tags | GHCR multi-arch backend image + provenance, SBOM and cosign signature |
+| `devcontainer.yml` | push/PR | GHCR multi-arch development images |
 | `iac.yml` | push/PR | terraform fmt/validate/plan |
 | `release.yml` | push tags `v*` | SemVer tag → GitHub Release → PyPI |
 
-All GitHub Actions references pinned to 40-char commit SHAs. Concurrency groups (`ci-${{ github.ref }}`, `quality-${{ github.ref }}`) cancel in-progress runs. CI secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`; `PYPI_TOKEN` (release).
+All GitHub Actions references pinned to 40-char commit SHAs. Concurrency groups (`ci-${{ github.ref }}`, `quality-${{ github.ref }}`) cancel in-progress runs. GHCR publishing uses the scoped Actions `GITHUB_TOKEN` with `packages: write`; no Docker Hub secret is required. `PYPI_TOKEN` is used only for release publishing. Staging and production deployment use their respective environment-scoped SSH and GHCR read credentials.
 
 ## Local development quirks (verified)
 

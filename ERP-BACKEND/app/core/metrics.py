@@ -5,11 +5,12 @@ Adds database pool gauges so pool exhaustion is detectable at scrape time.
 
 from __future__ import annotations
 
+import jwt
 from fastapi import status
 from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
 from starlette.responses import JSONResponse
 
-from app.core.security import decode_access_token
+from app.core.config import settings
 
 REQUEST_COUNT = Counter(
     "erp03_http_requests_total",
@@ -23,7 +24,6 @@ REQUEST_LATENCY = Histogram(
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10),
 )
 
-# Database connection-pool gauges
 DB_POOL_ACTIVE = Gauge(
     "erp03_db_pool_active_connections",
     "Number of checked-out database connections in the pool",
@@ -39,7 +39,7 @@ DB_POOL_OVERFLOW = Gauge(
 
 
 def _metrics_auth_middleware(app):
-    """Wrap the Prometheus ASGI app so /metrics requires authentication."""
+    """Wrap the Prometheus ASGI app so /metrics requires an ERP JWT."""
 
     async def middleware(scope, receive, send):
         if scope["type"] == "http":
@@ -54,8 +54,12 @@ def _metrics_auth_middleware(app):
                 return
             token = auth_header.split(" ", 1)[1]
             try:
-                decode_access_token(token)
-            except Exception:
+                jwt.decode(
+                    token,
+                    settings.secret_key.get_secret_value(),
+                    algorithms=["HS256"],
+                )
+            except jwt.PyJWTError:
                 response = JSONResponse(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     content={"detail": "Invalid or expired access token"},

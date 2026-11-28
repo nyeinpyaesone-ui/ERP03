@@ -14,6 +14,7 @@ from app.models.erp import (
 )
 from app.models.identity import Branch, Business, Permission, Role, User
 from app.models.operations import Operation
+from app.models.transaction_journal import TransactionJournal
 
 __all__ = [
     "AuditLog",
@@ -32,4 +33,5 @@ __all__ = [
     "InvoiceItem",
     "Payment",
     "Operation",
+    "TransactionJournal",
 ]

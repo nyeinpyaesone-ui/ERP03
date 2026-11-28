@@ -137,15 +137,8 @@ if $GH_AUTH; then
   SECRET_COUNT=$(echo "$GH_SECRETS" | python3 -c "import sys, json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
   log "  Available secrets: $SECRET_COUNT"
   
-  # List critical secrets
-  CRITICAL_SECRETS=("DOCKERHUB_USERNAME" "DOCKERHUB_TOKEN" "POSTGRES_PASSWORD" "SECRET_KEY")
-  for secret in "${CRITICAL_SECRETS[@]}"; do
-    if echo "$GH_SECRETS" | grep -q "\"$secret\""; then
-      log "  ✓ $secret: configured in GitHub"
-    else
-      warn "  ⚠ $secret: NOT configured in GitHub (required for CI/CD)"
-    fi
-  done
+  log "  GHCR publishing uses the scoped GITHUB_TOKEN; no Docker Hub PAT is required."
+  log "  Staging and production deploy credentials are configured as environment-scoped secrets."
 else
   warn "Skipping GitHub secrets sync (gh not authenticated)"
 fi

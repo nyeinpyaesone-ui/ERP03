@@ -6,7 +6,7 @@
 
 ## Overview
 
-ERP03 is a multi-tenant business ERP implemented as a modular monolith. The frontend is React/Vite; the API and domain services run in FastAPI. PostgreSQL is the authoritative relational store, Redis supports distributed rate limiting, and the current transaction-intent journal is a separate SQLite component with a documented multi-replica limitation.
+ERP03 is a multi-tenant business ERP implemented as a modular monolith. The frontend is React/Vite; the API and domain services run in FastAPI. PostgreSQL is the authoritative relational store and hosts the shared tenant-scoped transaction journal in staging and production; SQLite remains a local-development/standalone compatibility path. Redis supports distributed rate limiting. The transaction-journal API records an accepted, idempotent intent only—it does not execute the associated sales, inventory, or payment domain operation.
 
 ## Current technology baseline
 
@@ -89,7 +89,7 @@ The application remains a modular monolith. Add queues or independently deployed
 
 - Tenant-scoped authentication and authorization.
 - Sales, catalog, purchasing and inventory domain operations.
-- Idempotent transaction orchestration and journal records.
+- Tenant-scoped idempotent transaction-intent journal (PostgreSQL in staging/production; SQLite for local development).
 - PostgreSQL transactions, migrations and row-level concurrency controls.
 - Redis sorted-set distributed rate limiting with fail-open circuit-breaker behavior.
 - Request IDs, structured logs, audit records and protected Prometheus metrics.
@@ -134,6 +134,8 @@ Provision runtime secrets outside Git before applying any environment. The place
 **Production is not yet zero-downtime qualified.** The current SQLite journal uses a ReadWriteOnce volume while the backend scales to multiple replicas; PostgreSQL and Redis manifests are also single-instance. See the deployment runbook before applying production resources.
 
 ## Documentation
+
+- [Transaction Integrity and Journal Migration](docs/TRANSACTION_INTEGRITY.md)
 
 - [Architecture Blueprint — November 2026](docs/ARCHITECTURE_BLUEPRINT_2026-11.md)
 - [Zero-Downtime Deployment and Runtime Configuration](docs/ZERO_DOWNTIME_DEPLOYMENT_2026-11.md)

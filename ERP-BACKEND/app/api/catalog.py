@@ -45,11 +45,13 @@ async def create_product(
     session: AsyncSession = Depends(get_db_session),
     _auth: dict = Depends(permission_dependency("products.manage")),
 ) -> ProductResponse:
-    product = await catalog.create_product(
-        session,
-        business_id=UUID(claims["business_id"]),
-        **payload.model_dump(),
-    )
+    async with session.begin():
+        product = await catalog.create_product(
+            session,
+            business_id=UUID(claims["business_id"]),
+            claims=claims,
+            **payload.model_dump(),
+        )
     return ProductResponse.model_validate(product)
 
 
@@ -66,6 +68,7 @@ async def list_products(
     page = await catalog.list_products(
         session,
         business_id=UUID(claims["business_id"]),
+        branch_id=UUID(claims["branch_id"]) if claims.get("branch_id") else None,
         search=search,
         include_inactive=include_inactive,
         limit=limit,
@@ -82,12 +85,14 @@ async def set_product_active(
     session: AsyncSession = Depends(get_db_session),
     _auth: dict = Depends(permission_dependency("products.manage")),
 ) -> ProductResponse:
-    product = await catalog.set_product_active(
-        session,
-        business_id=UUID(claims["business_id"]),
-        product_id=product_id,
-        active=payload.active,
-    )
+    async with session.begin():
+        product = await catalog.set_product_active(
+            session,
+            business_id=UUID(claims["business_id"]),
+            product_id=product_id,
+            active=payload.active,
+            claims=claims,
+        )
     return ProductResponse.model_validate(product)
 
 
@@ -98,12 +103,13 @@ async def create_customer(
     session: AsyncSession = Depends(get_db_session),
     _auth: dict = Depends(permission_dependency("customers.manage")),
 ) -> CustomerResponse:
-    customer = await catalog.create_customer(
-        session,
-        claims=claims,
-        business_id=UUID(claims["business_id"]),
-        **payload.model_dump(),
-    )
+    async with session.begin():
+        customer = await catalog.create_customer(
+            session,
+            claims=claims,
+            business_id=UUID(claims["business_id"]),
+            **payload.model_dump(),
+        )
     return CustomerResponse.model_validate(customer)
 
 
@@ -120,6 +126,7 @@ async def list_customers(
     page = await catalog.list_customers(
         session,
         business_id=UUID(claims["business_id"]),
+        branch_id=UUID(claims["branch_id"]) if claims.get("branch_id") else None,
         search=search,
         include_inactive=include_inactive,
         limit=limit,
@@ -135,12 +142,13 @@ async def create_supplier(
     session: AsyncSession = Depends(get_db_session),
     _auth: dict = Depends(permission_dependency("suppliers.manage")),
 ) -> SupplierResponse:
-    supplier = await catalog.create_supplier(
-        session,
-        claims=claims,
-        business_id=UUID(claims["business_id"]),
-        **payload.model_dump(),
-    )
+    async with session.begin():
+        supplier = await catalog.create_supplier(
+            session,
+            claims=claims,
+            business_id=UUID(claims["business_id"]),
+            **payload.model_dump(),
+        )
     return SupplierResponse.model_validate(supplier)
 
 
@@ -157,6 +165,7 @@ async def list_suppliers(
     page = await catalog.list_suppliers(
         session,
         business_id=UUID(claims["business_id"]),
+        branch_id=UUID(claims["branch_id"]) if claims.get("branch_id") else None,
         search=search,
         include_inactive=include_inactive,
         limit=limit,

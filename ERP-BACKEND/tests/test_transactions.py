@@ -4,9 +4,11 @@ from uuid import uuid4
 
 import pytest
 from app.api.transactions import get_store, reset_store
+from app.core.config import settings
 from app.core.security import current_claims
 from app.core.transaction_store import TransactionStore
 from app.main import app
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 pytestmark = (
@@ -371,3 +373,12 @@ def test_idempotency_fingerprint_ignores_metadata_key_order(tmp_path):
     )
     assert replay.transaction_id == first.transaction_id
     assert replay.idempotent_replay is True
+
+
+def test_production_disables_local_sqlite_transaction_journal(monkeypatch):
+    monkeypatch.setattr(settings, "environment", "production")
+    with pytest.raises(HTTPException) as exc:
+        get_store()
+
+    assert exc.value.status_code == 503
+    assert exc.value.detail["code"] == "TRANSACTION_JOURNAL_UNAVAILABLE"

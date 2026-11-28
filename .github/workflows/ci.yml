@@ -96,10 +96,64 @@ jobs:
             fi
             sleep $((i * 5))
           done
+      - name: Verify migration downgrade and re-upgrade
+        run: |
+          set -euo pipefail
+          alembic downgrade 0009_invoice_numbering_index
+          alembic upgrade head
       - name: Run test suite
         run: |
           set -euo pipefail
           pytest -q
+
+  supabase-auth-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13
+        with:
+          version: 3.2.0
+      - name: Start isolated local Supabase Auth stack
+        run: |
+          supabase start -x studio,imgproxy,storage-api,realtime,postgrest,edge-runtime,logflare,vector,postgres-meta,supavisor
+      - name: Export only local Auth URL and publishable key
+        shell: bash
+        run: |
+          set -euo pipefail
+          status_json="$(supabase status --output json)"
+          api_url="$(jq -r '.API_URL // empty' <<< "$status_json")"
+          publishable_key="$(jq -r '.PUBLISHABLE_KEY // empty' <<< "$status_json")"
+          test -n "$api_url"
+          test -n "$publishable_key"
+          {
+            printf 'SUPABASE_URL=%s\n' "$api_url"
+            printf 'SUPABASE_PUBLISHABLE_KEY=%s\n' "$publishable_key"
+            printf 'SUPABASE_AUTH_INTEGRATION=true\n'
+          } >> "$GITHUB_ENV"
+          unset status_json publishable_key
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            ERP-BACKEND/requirements.txt
+            ERP-BACKEND/dev-requirements.txt
+      - name: Install backend dependencies
+        working-directory: ERP-BACKEND
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r dev-requirements.txt
+      - name: Verify live Supabase Auth integration
+        working-directory: ERP-BACKEND
+        run: pytest -q --no-cov tests/test_supabase_auth.py
+      - name: Stop isolated Supabase stack
+        if: always()
+        run: supabase stop --no-backup || true
 
   frontend:
     runs-on: ubuntu-latest

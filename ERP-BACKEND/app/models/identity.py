@@ -1,7 +1,16 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, String, Table, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Table,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import GUID, Base, utcnow, uuid_pk
@@ -9,29 +18,13 @@ from app.db.base import GUID, Base, utcnow, uuid_pk
 user_roles = Table(
     "user_roles",
     Base.metadata,
-    Column(
-        "user_id",
-        GUID(),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
-    Column(
-        "role_id",
-        GUID(),
-        ForeignKey("roles.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
+    Column("user_id", GUID(), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("role_id", GUID(), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
 )
-
 role_permissions = Table(
     "role_permissions",
     Base.metadata,
-    Column(
-        "role_id",
-        GUID(),
-        ForeignKey("roles.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
+    Column("role_id", GUID(), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
     Column(
         "permission_id",
         GUID(),
@@ -58,7 +51,6 @@ class Business(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
     )
-
     branches: Mapped[list["Branch"]] = relationship(
         back_populates="business", cascade="all, delete-orphan"
     )
@@ -85,7 +77,6 @@ class Branch(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
     )
-
     business: Mapped[Business] = relationship(back_populates="branches")
 
 
@@ -115,6 +106,7 @@ class User(Base):
     __table_args__ = (
         UniqueConstraint("business_id", "email", name="uq_users_business_email"),
         Index("ix_users_business_active", "business_id", "active"),
+        UniqueConstraint("supabase_user_id", name="uq_users_supabase_user_id"),
     )
 
     id: Mapped[UUID] = uuid_pk()
@@ -127,5 +119,6 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    supabase_user_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     roles: Mapped[list[Role]] = relationship(secondary=user_roles)
