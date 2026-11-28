@@ -16,7 +16,7 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import jwt as pyjwt
 import redis.asyncio as redis
@@ -132,13 +132,18 @@ class RedisRateLimitMiddleware:
         if auth_header.startswith("Bearer "):
             token = auth_header.split(" ", 1)[1]
             try:
+                # Tenant identity is trusted only when the token signature and
+                # expiry are valid. Require the claims issued by create_access_token;
+                # malformed identities fall back to the IP bucket.
                 payload = pyjwt.decode(
                     token,
                     self._secret_key,
                     algorithms=["HS256"],
-                    options={"verify_exp": False, "verify_signature": False},
+                    options={"require": ["exp", "business_id"]},
                 )
-                business_id = payload.get("business_id")
+                candidate_business_id = payload.get("business_id")
+                if isinstance(candidate_business_id, str):
+                    business_id = str(UUID(candidate_business_id))
             except Exception:
                 pass
 
