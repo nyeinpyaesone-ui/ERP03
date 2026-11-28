@@ -67,6 +67,7 @@ def test_operational_read_models_require_authentication(client, path):
     assert response.status_code == 401
 
 
+@pytest.mark.integration
 def test_unified_erp_onboarding_catalog_inventory_and_pos(client):
     suffix = uuid4().hex[:12]
     business_code = f"TEST-{suffix}"
