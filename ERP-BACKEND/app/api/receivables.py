@@ -91,18 +91,21 @@ async def list_outstanding_receivables(
         .offset(offset)
     )
     rows = (await session.execute(statement)).all()
-    total = await session.scalar(
-        select(func.count(Invoice.id))
-        .join(
-            Customer,
-            and_(
-                Customer.id == Invoice.customer_id,
-                Customer.business_id == business_id,
-                Customer.branch_id == Invoice.branch_id,
-            ),
+    total = (
+        await session.scalar(
+            select(func.count(Invoice.id))
+            .join(
+                Customer,
+                and_(
+                    Customer.id == Invoice.customer_id,
+                    Customer.business_id == business_id,
+                    Customer.branch_id == Invoice.branch_id,
+                ),
+            )
+            .where(*conditions)
         )
-        .where(*conditions)
-    ) or 0
+        or 0
+    )
     outstanding = await session.scalar(
         select(func.coalesce(func.sum(Invoice.total - Invoice.paid), 0))
         .select_from(Invoice)
