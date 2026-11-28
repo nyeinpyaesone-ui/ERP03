@@ -93,7 +93,7 @@ async def list_products(
     """Paginated product listing scoped to one business and optional branch."""
     conditions = [Product.business_id == business_id]
     if branch_id is not None:
-        conditions.append(Product.branch_id == branch_id]
+        conditions.append(Product.branch_id == branch_id)
     if not include_inactive:
         conditions.append(Product.active.is_(True))
     if search:
@@ -171,7 +171,7 @@ async def list_customers(
     """Paginated customer listing scoped to one business and optional branch."""
     conditions = [Customer.business_id == business_id]
     if branch_id is not None:
-        conditions.append(Customer.branch_id == branch_id]
+        conditions.append(Customer.branch_id == branch_id)
     if not include_inactive:
         conditions.append(Customer.active.is_(True))
     if search:
@@ -234,7 +234,7 @@ async def list_suppliers(
     """Paginated supplier listing scoped to one business and optional branch."""
     conditions = [Supplier.business_id == business_id]
     if branch_id is not None:
-        conditions.append(Supplier.branch_id == branch_id]
+        conditions.append(Supplier.branch_id == branch_id)
     if not include_inactive:
         conditions.append(Supplier.active.is_(True))
     if search:
