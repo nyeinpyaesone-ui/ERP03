@@ -51,3 +51,17 @@ def test_metrics_accepts_valid_token(client):
     )
     response = client.get("/metrics", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/context",
+        "/api/v1/inventory/stock",
+        "/api/v1/sales",
+        "/api/v1/dashboard/summary",
+    ],
+)
+def test_operational_read_models_require_authentication(client, path):
+    response = client.get(path)
+    assert response.status_code == 401
