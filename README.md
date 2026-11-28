@@ -105,7 +105,7 @@ The application remains a modular monolith. Add queues or independently deployed
 | `GET /metrics` | Protected Prometheus metrics |
 | `GET /docs` | OpenAPI documentation |
 
-Redis is intentionally not part of the readiness probe while its current rate-limiter integration can fail open. The backend now bounds each Redis client pool with `REDIS_MAX_CONNECTIONS` (default 50), uses explicit 2-second connect/operation timeouts and a 30-second health check, and closes the pool during graceful shutdown. Redis degradation must be monitored and alerted separately.
+Redis is intentionally not part of the readiness probe while its current rate-limiter integration can fail open. Redis degradation must be monitored and alerted separately.
 
 ## CI, container publishing and staging deployment
 
@@ -136,6 +136,7 @@ Provision runtime secrets outside Git before applying any environment. The place
 ## Documentation
 
 - [Architecture Blueprint — November 2026](docs/ARCHITECTURE_BLUEPRINT_2026-11.md)
+- [Architecture Implementation Guidelines](docs/ARCHITECTURE_IMPLEMENTATION_GUIDELINES.md)
 - [Zero-Downtime Deployment and Runtime Configuration](docs/ZERO_DOWNTIME_DEPLOYMENT_2026-11.md)
 - [Configuration & Credentials Setup](CONFIGURATION_SETUP.md)
 - [Deployment Runbook](docs/DEPLOY_RUNBOOK.md)
