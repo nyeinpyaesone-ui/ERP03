@@ -1,7 +1,9 @@
 """Coverage for the Redis-backed rate limiter's IP resolution and hygiene."""
 
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import jwt
 import pytest
 from app.core.config import settings
 from app.main import RedisRateLimitMiddleware
@@ -9,6 +11,32 @@ from app.main import RedisRateLimitMiddleware
 
 async def _noop_app(scope, receive, send):
     return None
+
+
+def _middleware_with_mocked_redis():
+    redis_client = AsyncMock()
+    pipeline = MagicMock()
+    pipeline.zremrangebyscore = AsyncMock()
+    pipeline.zcard = AsyncMock()
+    pipeline.zadd = AsyncMock()
+    pipeline.expire = AsyncMock()
+    pipeline.execute = AsyncMock(return_value=[None, 0])
+    redis_client.pipeline = MagicMock(return_value=pipeline)
+    middleware = RedisRateLimitMiddleware(_noop_app, redis_url="redis://localhost:6379/0")
+    middleware.redis = redis_client
+    return middleware, pipeline
+
+
+async def _rate_limit_key_for_token(token: str) -> str:
+    middleware, pipeline = _middleware_with_mocked_redis()
+    scope = {
+        "type": "http",
+        "client": ("192.0.2.10", 0),
+        "headers": [(b"authorization", f"Bearer {token}".encode())],
+    }
+    await middleware(scope, None, None)
+    return pipeline.zadd.call_args.args[0]
+
 
 
 def test_redis_client_uses_bounded_pool_and_fail_fast_timeouts():
@@ -135,3 +163,65 @@ async def test_rate_limit_returns_429_after_threshold():
         statuses.clear()
         await mw(scope, None, capture_send)
         assert 429 in statuses
+
+
+@pytest.mark.asyncio
+async def test_verified_unexpired_jwt_selects_canonical_tenant_bucket():
+    tenant_id = "11111111-1111-1111-1111-111111111111"
+    token = jwt.encode(
+        {"business_id": tenant_id, "exp": int(time.time()) + 300},
+        settings.secret_key.get_secret_value(),
+        algorithm="HS256",
+    )
+
+    assert await _rate_limit_key_for_token(token) == f"ratelimit:{tenant_id}"
+
+
+@pytest.mark.asyncio
+async def test_forged_jwt_falls_back_to_client_ip_bucket():
+    token = jwt.encode(
+        {
+            "business_id": "11111111-1111-1111-1111-111111111111",
+            "exp": int(time.time()) + 300,
+        },
+        "attacker-controlled-key",
+        algorithm="HS256",
+    )
+
+    assert await _rate_limit_key_for_token(token) == "ratelimit:192.0.2.10"
+
+
+@pytest.mark.asyncio
+async def test_expired_jwt_falls_back_to_client_ip_bucket():
+    token = jwt.encode(
+        {
+            "business_id": "11111111-1111-1111-1111-111111111111",
+            "exp": int(time.time()) - 60,
+        },
+        settings.secret_key.get_secret_value(),
+        algorithm="HS256",
+    )
+
+    assert await _rate_limit_key_for_token(token) == "ratelimit:192.0.2.10"
+
+
+@pytest.mark.asyncio
+async def test_jwt_without_expiry_falls_back_to_client_ip_bucket():
+    token = jwt.encode(
+        {"business_id": "11111111-1111-1111-1111-111111111111"},
+        settings.secret_key.get_secret_value(),
+        algorithm="HS256",
+    )
+
+    assert await _rate_limit_key_for_token(token) == "ratelimit:192.0.2.10"
+
+
+@pytest.mark.asyncio
+async def test_jwt_with_malformed_tenant_id_falls_back_to_client_ip_bucket():
+    token = jwt.encode(
+        {"business_id": "not-a-uuid", "exp": int(time.time()) + 300},
+        settings.secret_key.get_secret_value(),
+        algorithm="HS256",
+    )
+
+    assert await _rate_limit_key_for_token(token) == "ratelimit:192.0.2.10"
