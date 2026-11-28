@@ -172,9 +172,7 @@ def test_unified_erp_onboarding_catalog_inventory_and_pos(client):
                     "unit_price": "1200.00",
                 }
             ],
-            "payments": [
-                {"method": "cash", "amount": "1000.00", "currency": "MMK"}
-            ],
+            "payments": [{"method": "cash", "amount": "1000.00", "currency": "MMK"}],
         },
     )
     assert sale.status_code == 201, sale.text
