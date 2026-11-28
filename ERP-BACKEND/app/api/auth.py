@@ -112,18 +112,22 @@ async def register(
     session: AsyncSession = Depends(get_db_session),
 ) -> RegisterResponse:
     """Register a new business and an owner user through the existing ERP identity system."""
-    existing_business = await session.scalar(
-        select(Business).where(Business.code == payload.business_code.strip())
-    )
-    if existing_business:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Business code already exists"
-        )
-    existing_user = await session.scalar(select(User).where(User.email == payload.email.lower()))
-    if existing_user:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
-
     async with session.begin():
+        existing_business = await session.scalar(
+            select(Business).where(Business.code == payload.business_code.strip())
+        )
+        if existing_business:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Business code already exists"
+            )
+        existing_user = await session.scalar(
+            select(User).where(User.email == payload.email.lower())
+        )
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
+            )
+
         business = Business(
             id=uuid4(),
             name=payload.business_name or payload.business_code,
