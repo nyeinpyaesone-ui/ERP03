@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.validation import validate_idempotency_key
@@ -77,7 +77,14 @@ async def list_outstanding_receivables(
 
     statement = (
         select(Invoice, Customer.name)
-        .join(Customer, Customer.id == Invoice.customer_id)
+        .join(
+            Customer,
+            and_(
+                Customer.id == Invoice.customer_id,
+                Customer.business_id == business_id,
+                Customer.branch_id == Invoice.branch_id,
+            ),
+        )
         .where(*conditions)
         .order_by(Invoice.created_at.asc(), Invoice.id.asc())
         .limit(limit)
@@ -85,11 +92,28 @@ async def list_outstanding_receivables(
     )
     rows = (await session.execute(statement)).all()
     total = await session.scalar(
-        select(func.count(Invoice.id)).join(Customer, Customer.id == Invoice.customer_id)
+        select(func.count(Invoice.id))
+        .join(
+            Customer,
+            and_(
+                Customer.id == Invoice.customer_id,
+                Customer.business_id == business_id,
+                Customer.branch_id == Invoice.branch_id,
+            ),
+        )
         .where(*conditions)
     ) or 0
     outstanding = await session.scalar(
         select(func.coalesce(func.sum(Invoice.total - Invoice.paid), 0))
+        .select_from(Invoice)
+        .join(
+            Customer,
+            and_(
+                Customer.id == Invoice.customer_id,
+                Customer.business_id == business_id,
+                Customer.branch_id == Invoice.branch_id,
+            ),
+        )
         .where(*conditions)
     ) or Decimal("0")
 
