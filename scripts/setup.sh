@@ -194,7 +194,9 @@ require_infra_runtime() {
   detect_container_runtime
   [[ -n "$CONTAINER_ENGINE" ]] || die "--with-infra requires a running Docker or Podman runtime; install/start one, or omit --with-infra for native mode"
   compose_available || die "$CONTAINER_ENGINE is available but its Compose provider is missing; install Docker Compose or podman-compose"
-  [[ -f "$ROOT_DIR/.env.compose" ]] || die "$ROOT_DIR/.env.compose is missing; generate the Compose environment before starting infrastructure"
+  if [[ -f "$BACKEND_DIR/.env" && ! -f "$ROOT_DIR/.env.compose" ]]; then
+    die "$ROOT_DIR/.env.compose is missing while an existing backend .env is present; create the Compose environment before starting infrastructure"
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -626,7 +628,7 @@ setup_frontend() {
 start_infra() {
   require_infra_runtime
   log "Starting Compose stack with $CONTAINER_ENGINE using .env.compose..."
-  (cd "$ROOT_DIR" && compose_cmd --env-file .env.compose up -d --build)
+  (cd "$ROOT_DIR" && compose_cmd --profile full --env-file .env.compose up -d --build)
   log "Compose stack started: API http://localhost:8000/docs · UI http://localhost:3000"
 }
 
