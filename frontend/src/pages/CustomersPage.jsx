@@ -7,6 +7,11 @@ const money = (value, currency) => Number(value || 0).toLocaleString() + ' ' + (
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState([]);
+  const [receivables, setReceivables] = useState([]);
+  const [collection, setCollection] = useState(null);
+  const [collectionAmount, setCollectionAmount] = useState('');
+  const [collectionMethod, setCollectionMethod] = useState('cash');
+  const [collectionSaving, setCollectionSaving] = useState(false);
   const [branches, setBranches] = useState([]);
   const [branchId, setBranchId] = useState('');
   const [currency, setCurrency] = useState('MMK');
@@ -22,14 +27,16 @@ export default function CustomersPage() {
     setLoading(true);
     setError('');
     try {
-      const [context, result] = await Promise.all([
+      const [context, result, debt] = await Promise.all([
         api.getBusinessContext(),
         api.listCustomers({ limit: 200, offset: 0 }),
+        api.listOutstandingReceivables({ limit: 200, offset: 0 }),
       ]);
       setBranches(context.branches || []);
       setBranchId((current) => current || context.branches?.[0]?.id || '');
       setCurrency(context.business?.currency || 'MMK');
       setCustomers(result.items || []);
+      setReceivables(debt.items || []);
     } catch (err) {
       setError(err.message || 'Unable to load customers.');
     } finally {
@@ -46,6 +53,33 @@ export default function CustomersPage() {
   });
 
   const updateForm = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+
+  const collectPayment = async (event) => {
+    event.preventDefault();
+    if (!collection) return;
+    setCollectionSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      await api.collectReceivable(
+        {
+          invoice_id: collection.invoice_id,
+          amount: collectionAmount,
+          method: collectionMethod,
+          currency: collection.currency,
+        },
+        crypto.randomUUID(),
+      );
+      setCollection(null);
+      setCollectionAmount('');
+      setNotice('Customer payment recorded.');
+      await load();
+    } catch (err) {
+      setError(err.message || 'Payment could not be recorded.');
+    } finally {
+      setCollectionSaving(false);
+    }
+  };
 
   const createCustomer = async (event) => {
     event.preventDefault();
@@ -130,6 +164,60 @@ export default function CustomersPage() {
           </select>
         </label>
       </div>
+
+      <section className="space-y-3 rounded-lg border bg-white p-5">
+        <div>
+          <h2 className="font-semibold text-gray-900">Outstanding customer balances</h2>
+          <p className="text-sm text-gray-600">Collect payments against existing customer invoices.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+              <tr><th className="px-3 py-2">Invoice</th><th className="px-3 py-2">Customer</th><th className="px-3 py-2 text-right">Outstanding</th><th className="px-3 py-2">Action</th></tr>
+            </thead>
+            <tbody className="divide-y">
+              {loading ? <tr><td colSpan="4" className="p-5 text-center text-gray-500">Loading balances…</td></tr>
+                : receivables.filter((item) => !branchId || item.branch_id === branchId).length === 0
+                  ? <tr><td colSpan="4" className="p-5 text-center text-gray-500">No outstanding customer invoices.</td></tr>
+                  : receivables.filter((item) => !branchId || item.branch_id === branchId).map((item) => (
+                    <tr key={item.invoice_id}>
+                      <td className="px-3 py-3 font-medium">{item.invoice_no}</td>
+                      <td className="px-3 py-3">{item.customer_name}</td>
+                      <td className="px-3 py-3 text-right tabular-nums">{money(item.balance, item.currency)}</td>
+                      <td className="px-3 py-3">
+                        <button type="button" onClick={() => { setCollection(item); setCollectionAmount(item.balance); }} className="rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-gray-50">Collect</button>
+                      </td>
+                    </tr>
+                  ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {collection && (
+        <div role="dialog" aria-modal="true" aria-labelledby="collect-title" className="rounded-lg border border-blue-200 bg-blue-50 p-5">
+          <form onSubmit={collectPayment} className="grid gap-3 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <h2 id="collect-title" className="font-semibold">Collect payment · {collection.invoice_no}</h2>
+              <p className="text-sm text-gray-600">{collection.customer_name} · Balance {money(collection.balance, collection.currency)}</p>
+            </div>
+            <label className="text-sm">Amount ({collection.currency})
+              <input aria-label="Collection amount" type="number" min="0.01" max={collection.balance} step="0.01" required value={collectionAmount} onChange={(e) => setCollectionAmount(e.target.value)} className="mt-1 w-full rounded-md border p-2" />
+            </label>
+            <label className="text-sm">Payment method
+              <select value={collectionMethod} onChange={(e) => setCollectionMethod(e.target.value)} className="mt-1 w-full rounded-md border p-2">
+                <option value="cash">Cash</option>
+                <option value="mobile_wallet">Mobile wallet</option>
+                <option value="bank_transfer">Bank transfer</option>
+              </select>
+            </label>
+            <div className="flex justify-end gap-2 md:col-span-2">
+              <button type="button" onClick={() => setCollection(null)} className="rounded-md border px-4 py-2 text-sm">Cancel</button>
+              <button disabled={collectionSaving} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{collectionSaving ? 'Recording…' : 'Record payment'}</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-lg border bg-white">
         <table className="w-full text-sm">
