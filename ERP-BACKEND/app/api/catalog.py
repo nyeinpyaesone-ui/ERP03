@@ -48,6 +48,7 @@ async def create_product(
     product = await catalog.create_product(
         session,
         business_id=UUID(claims["business_id"]),
+        claims=claims,
         **payload.model_dump(),
     )
     return ProductResponse.model_validate(product)
@@ -66,6 +67,7 @@ async def list_products(
     page = await catalog.list_products(
         session,
         business_id=UUID(claims["business_id"]),
+        branch_id=UUID(claims["branch_id"]) if claims.get("branch_id") else None,
         search=search,
         include_inactive=include_inactive,
         limit=limit,
@@ -120,6 +122,7 @@ async def list_customers(
     page = await catalog.list_customers(
         session,
         business_id=UUID(claims["business_id"]),
+        branch_id=UUID(claims["branch_id"]) if claims.get("branch_id") else None,
         search=search,
         include_inactive=include_inactive,
         limit=limit,
@@ -157,6 +160,7 @@ async def list_suppliers(
     page = await catalog.list_suppliers(
         session,
         business_id=UUID(claims["business_id"]),
+        branch_id=UUID(claims["branch_id"]) if claims.get("branch_id") else None,
         search=search,
         include_inactive=include_inactive,
         limit=limit,
