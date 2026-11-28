@@ -112,12 +112,18 @@ async def list_products(
 
 
 async def set_product_active(
-    session: AsyncSession, *, business_id: UUID, product_id: UUID, active: bool
+    session: AsyncSession,
+    *,
+    business_id: UUID,
+    product_id: UUID,
+    active: bool,
+    claims: dict | None = None,
 ) -> Product:
     """Activate or deactivate a product without deleting its history."""
-    product = await session.scalar(
-        select(Product).where(Product.id == product_id, Product.business_id == business_id)
-    )
+    conditions = [Product.id == product_id, Product.business_id == business_id]
+    if claims and claims.get("branch_id"):
+        conditions.append(Product.branch_id == UUID(str(claims["branch_id"])))
+    product = await session.scalar(select(Product).where(*conditions))
     if product is None:
         raise NotFoundError("Product not found")
     product.active = active
