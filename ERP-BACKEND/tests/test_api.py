@@ -65,4 +65,3 @@ def test_metrics_accepts_valid_token(client):
 def test_operational_read_models_require_authentication(client, path):
     response = client.get(path)
     assert response.status_code == 401
-
