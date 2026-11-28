@@ -16,6 +16,7 @@
 #                    after bootstrap completes.
 #   --qualify        Run scripts/qualify.sh at the end (full CI-equivalent gate).
 #   --skip-frontend  Do not install frontend npm dependencies.
+#   --allow-sqlite-smoke  Permit explicitly limited SQLite-only qualification.
 #   --sync-secrets   Sync GitHub secrets availability (values not readable via API).
 #   --env-type       Target environment: development (default) | production.
 #   --force          Overwrite existing .env files when regenerating.
@@ -264,8 +265,11 @@ auto_configure_all() {
   log "🔧 Auto-configuring environment ($ENV_TYPE)..."
 
   # 1. Ensure venv exists for later use (but generate secrets with system python)
+  local py; py="$(python_cmd)"
+  if [[ -x "$VENV_DIR/bin/python" ]] && ! "$VENV_DIR/bin/python" -c 'import sys; sys.exit(0 if sys.version_info[:2] == (3, 12) else 1)'; then
+    die "Existing virtualenv at $VENV_DIR is not Python 3.12. Preserve it and set VENV_DIR to a fresh path, or move it aside before retrying."
+  fi
   if [[ ! -d "$VENV_DIR" ]]; then
-    local py; py="$(python_cmd)"
     "$py" -m venv "$VENV_DIR"
   fi
   "$VENV_DIR/bin/pip" install --quiet --upgrade pip
@@ -613,7 +617,7 @@ setup_frontend() {
     return
   fi
   log "Installing frontend dependencies"
-  (cd "$FRONTEND_DIR" && npm ci --no-audit --no-fund --silent)
+  (cd "$FRONTEND_DIR" && npm ci --no-audit --no-fund --silent && npm run build)
 }
 
 # ---------------------------------------------------------------------------
