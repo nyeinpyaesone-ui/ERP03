@@ -265,9 +265,7 @@ async def create_pos_sale(
             if raw_price < 0:
                 raise SaleValidationError("Unit price cannot be negative")
             price = raw_price.quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
-            line_subtotal = (price * line.quantity).quantize(
-                MONEY_QUANTUM, rounding=ROUND_HALF_UP
-            )
+            line_subtotal = (price * line.quantity).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
             line_discount = line.discount.quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
             line_tax = line.tax.quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
             line_total = line_subtotal - line_discount + line_tax
